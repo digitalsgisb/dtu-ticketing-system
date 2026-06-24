@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly DTU Control Centre backup
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

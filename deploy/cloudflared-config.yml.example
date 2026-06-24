@@ -1,0 +1,9 @@
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: /etc/cloudflared/REPLACE_WITH_TUNNEL_ID.json
+
+ingress:
+  - hostname: report.example.com
+    service: http://127.0.0.1:3100
+    originRequest:
+      httpHostHeader: report.example.com
+  - service: http_status:404

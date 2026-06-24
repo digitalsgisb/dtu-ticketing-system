@@ -1,0 +1,25 @@
+[Unit]
+Description=Encrypted DTU Control Centre backup
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/var/lib/dtu-control
+
+[Service]
+Type=oneshot
+User=dtu
+Group=dtu
+WorkingDirectory=/opt/dtu-control/current
+EnvironmentFile=/etc/dtu-control.env
+ExecStart=/usr/bin/node /opt/dtu-control/current/dist-server/scripts/backup.js
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/dtu-control
+UMask=0027
+TimeoutStartSec=30min

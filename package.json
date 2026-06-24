@@ -1,0 +1,57 @@
+{
+  "name": "dtu-ticketing-control-centre",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite --host 0.0.0.0\"",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.server.json",
+    "build": "npm run typecheck && vite build",
+    "start": "node dist-server/server/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "backup": "tsx scripts/backup.ts",
+    "restore": "tsx scripts/restore.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.828.0",
+    "argon2": "^0.43.0",
+    "better-sqlite3": "^12.2.0",
+    "cookie-parser": "^1.4.7",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "multer": "^2.0.1",
+    "nodemailer": "^9.0.1",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
+    "tar": "^7.4.3",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.3",
+    "@types/multer": "^1.4.13",
+    "@types/node": "^24.0.3",
+    "@types/nodemailer": "^6.4.17",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.5.2",
+    "concurrently": "^9.1.2",
+    "jsdom": "^26.1.0",
+    "supertest": "^7.1.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.2.4"
+  }
+}

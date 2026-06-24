@@ -1,0 +1,28 @@
+[Unit]
+Description=DTU Ticketing and Project Control Centre
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dtu
+Group=dtu
+WorkingDirectory=/opt/dtu-control/current
+EnvironmentFile=/etc/dtu-control.env
+ExecStart=/usr/bin/node /opt/dtu-control/current/dist-server/server/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/dtu-control
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
