@@ -138,4 +138,12 @@ describe("DTU Control Centre API", () => {
     expect(intake.status).toBe(200);
     expect(wallboard.status).toBe(404);
   });
+
+  it("serves public branding while keeping staff login private", async () => {
+    const logo = await request(app).get("/sugihara-grand-logo.png").set("Host", "report.example.com");
+    const login = await request(app).get("/login").set("Host", "report.example.com");
+    expect(logo.status).toBe(200);
+    expect(logo.headers["content-type"]).toContain("image/png");
+    expect(login.status).toBe(404);
+  });
 });
