@@ -7,6 +7,8 @@ let cookie = "";
 let csrf = "";
 let managedUserId = 0;
 let adminUserId = 0;
+let managedCookie = "";
+let managedCsrf = "";
 
 beforeAll(async () => {
   resetDatabaseForTests();
@@ -77,6 +79,8 @@ describe("DTU Control Centre API", () => {
       .send({ username: "managed.user", password: "Replacement123!" });
     expect(login.status).toBe(200);
     expect(login.body.mustChangePassword).toBe(true);
+    managedCookie = login.headers["set-cookie"][0].split(";")[0];
+    managedCsrf = login.body.csrfToken;
   });
 
   it("creates a project and accepts a QR issue report", async () => {
@@ -95,6 +99,37 @@ describe("DTU Control Centre API", () => {
     const storedIssue = db.prepare("SELECT reporter_department, reporter_email FROM work_items WHERE ticket_no = ?").get(issue.body.ticketNo) as { reporter_department: string; reporter_email: string | null };
     expect(storedIssue.reporter_department).toBe("Quality");
     expect(storedIssue.reporter_email).toBeNull();
+  });
+
+  it("lets the project owner publish a progress update", async () => {
+    const created = await request(app).post("/api/staff/projects")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "Owner Progress Project", departmentName: "DTU", ownerId: managedUserId, priority: "high" });
+    expect(created.status).toBe(201);
+
+    const updated = await request(app).patch(`/api/staff/projects/${created.body.id}/progress`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
+      .send({ status: "in_progress", progress: 45, currentUpdate: "Prototype approved; integration work is now underway." });
+    expect(updated.status).toBe(200);
+
+    const row = db.prepare("SELECT status, progress, current_update, progress_updated_by FROM projects WHERE id = ?").get(created.body.id) as {
+      status: string;
+      progress: number;
+      current_update: string;
+      progress_updated_by: number;
+    };
+    expect(row.status).toBe("in_progress");
+    expect(row.progress).toBe(45);
+    expect(row.current_update).toContain("integration work");
+    expect(row.progress_updated_by).toBe(managedUserId);
+  });
+
+  it("blocks members from updating projects they do not own", async () => {
+    const project = db.prepare("SELECT id FROM projects WHERE owner_id IS NULL ORDER BY id LIMIT 1").get() as { id: number };
+    const response = await request(app).patch(`/api/staff/projects/${project.id}/progress`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
+      .send({ progress: 50, currentUpdate: "This update should not be accepted." });
+    expect(response.status).toBe(403);
   });
 
   it("reports unread notifications and marks them all as read", async () => {
@@ -120,6 +155,7 @@ describe("DTU Control Centre API", () => {
   });
 
   it("includes completed projects on the wallboard without counting them as active", async () => {
+    const activeBefore = (db.prepare("SELECT COUNT(*) AS count FROM projects WHERE status IN ('planned','in_progress','on_hold')").get() as { count: number }).count;
     db.prepare(`
       INSERT INTO projects(project_no, name, description, department_name, status, priority, progress, qr_token)
       VALUES (?, ?, '', ?, 'completed', 'medium', 100, ?)
@@ -129,7 +165,7 @@ describe("DTU Control Centre API", () => {
     expect(response.body.projects.some((project: { project_no: string; status: string }) =>
       project.project_no === "PRJ-COMPLETE" && project.status === "completed"
     )).toBe(true);
-    expect(response.body.stats.activeProjects).toBe(1);
+    expect(response.body.stats.activeProjects).toBe(activeBefore);
   });
 
   it("allows public intake but blocks the wallboard on the public hostname", async () => {

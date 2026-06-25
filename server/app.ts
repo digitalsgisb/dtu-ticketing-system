@@ -55,13 +55,13 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
     completedMonth: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE status IN ('resolved','closed') AND resolved_at >= datetime(?)").get(malaysiaMonthStartUtc()) as { n: number }).n
   };
   const projects = db.prepare(`
-    SELECT p.id, p.project_no, p.name, p.status, p.priority, p.progress, p.due_date, u.name AS owner_name
+    SELECT p.id, p.project_no, p.name, p.status, p.priority, p.progress, p.due_date,
+      p.current_update, p.progress_updated_at, u.name AS owner_name
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id
     WHERE p.status IN ('planned','in_progress','on_hold','completed')
     ORDER BY CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END,
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       CASE WHEN p.status = 'completed' THEN p.updated_at END DESC, p.due_date
-    LIMIT 10
   `).all();
   const tickets = db.prepare(`
     SELECT w.id, w.ticket_no, w.title, w.status, w.priority, w.due_date, p.name AS project_name, u.name AS assignee_name
@@ -69,7 +69,6 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
     WHERE w.status NOT IN ('resolved','closed')
     ORDER BY CASE WHEN w.due_date < ? THEN 0 ELSE 1 END,
       CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, w.due_date
-    LIMIT 12
   `).all(today);
   res.json({ stats, projects, tickets, generatedAt: new Date().toISOString() });
 });

@@ -86,7 +86,11 @@ staffRouter.post("/projects", requireRole("admin", "lead"), (req, res) => {
 
 staffRouter.get("/projects/:id", (req, res) => {
   const project = db.prepare(`
-    SELECT p.*, u.name AS owner_name FROM projects p LEFT JOIN users u ON u.id = p.owner_id WHERE p.id = ?
+    SELECT p.*, u.name AS owner_name, updater.name AS progress_updated_by_name
+    FROM projects p
+    LEFT JOIN users u ON u.id = p.owner_id
+    LEFT JOIN users updater ON updater.id = p.progress_updated_by
+    WHERE p.id = ?
   `).get(req.params.id);
   if (!project) return res.status(404).json({ error: "Project not found" });
   const workItems = db.prepare(`
@@ -94,6 +98,38 @@ staffRouter.get("/projects/:id", (req, res) => {
     WHERE w.project_id = ? ORDER BY w.updated_at DESC
   `).all(req.params.id);
   res.json({ project, workItems });
+});
+
+staffRouter.patch("/projects/:id/progress", (req, res) => {
+  const authReq = req as unknown as AuthenticatedRequest;
+  const existing = db.prepare("SELECT id, owner_id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
+    id: number;
+    owner_id: number | null;
+    status: string;
+    progress: number;
+  } | undefined;
+  if (!existing) return res.status(404).json({ error: "Project not found" });
+  const canUpdate = authReq.user.role === "admin" || authReq.user.role === "lead" || existing.owner_id === authReq.user.id;
+  if (!canUpdate) return res.status(403).json({ error: "Only the project owner or a lead can update progress" });
+  const parsed = z.object({
+    status: z.enum(["planned", "in_progress", "on_hold", "completed"]).optional(),
+    progress: z.number().int().min(0).max(100).optional(),
+    currentUpdate: z.string().trim().min(3).max(1000)
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Add a progress update between 3 and 1000 characters" });
+  const status = parsed.data.status ?? existing.status;
+  const progress = status === "completed" ? 100 : (parsed.data.progress ?? existing.progress);
+  db.prepare(`
+    UPDATE projects SET status = ?, progress = ?, current_update = ?,
+      progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(status, progress, cleanText(parsed.data.currentUpdate, 1000), authReq.user.id, existing.id);
+  audit(authReq.user, "project_progress_updated", "project", existing.id, {
+    status,
+    progress,
+    currentUpdate: parsed.data.currentUpdate
+  }, req.ip);
+  res.json({ ok: true });
 });
 
 staffRouter.patch("/projects/:id", requireRole("admin", "lead"), (req, res) => {

@@ -5,11 +5,14 @@ import { Badge, Loading, StatCard } from "../components/UI";
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 
+type WallboardView = "overview" | "projects" | "tickets";
+
 export function WallboardPage() {
   const { t, lang, setLang } = useI18n();
   const [data, setData] = useState<any>(null);
   const [now, setNow] = useState(new Date());
   const [newTicketIds, setNewTicketIds] = useState<Set<number>>(() => new Set());
+  const [view, setView] = useState<WallboardView>("overview");
   const previousTicketIds = useRef<Set<number> | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const load = async () => {
@@ -45,7 +48,7 @@ export function WallboardPage() {
   const time = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(now);
   const totalLive = data.stats.activeProjects + data.stats.openIssues;
 
-  return <div className="wallboard">
+  return <div className={`wallboard wallboard-view-${view}`}>
     <div className="wallboard-atmosphere"><i /><i /><i /></div>
     <header className="wallboard-header">
       <div className="brand company-brand wallboard-brand"><CompanyLogo /><small>DTU Control Centre · {t("controlCentre")}</small></div>
@@ -53,52 +56,122 @@ export function WallboardPage() {
       <button className="language-button" onClick={() => setLang(lang === "en" ? "ms" : "en")}>{t("language")}</button>
     </header>
 
-    <section className="wallboard-command">
-      <div className="wallboard-command-copy"><span>Operations overview</span><h1>Digital Transformation Unit Task Board</h1><p>Live delivery, service demand, and priority work across the unit.</p></div>
-      <div className="wallboard-command-summary"><small>Live workload</small><strong>{totalLive}</strong><span>items in motion</span></div>
-      <div className="wallboard-command-readout">
-        <span>Next refresh</span>
-        <div className="refresh-track" key={data.generatedAt}><i /></div>
-        <small>Automatic · 30 seconds</small>
+    {view === "overview"
+      ? <div className="wallboard-shell">
+        <main className="wallboard-main">
+          <WallboardCommand totalLive={totalLive} generatedAt={data.generatedAt} />
+          <WallboardStats data={data} t={t} />
+          <WallboardTicker data={data} />
+          <section className="wall-panel wall-priority-panel">
+            <WallHeading index="01" eyebrow="OPERATIONS" title={t("criticalWork")} count={`${data.tickets.length} queued`} actionLabel="View all →" onClick={() => setView("tickets")} />
+            {data.tickets.length
+              ? <div className="wall-priority-grid">{data.tickets.slice(0, 10).map((item: any, index: number) => <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />)}</div>
+              : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
+          </section>
+        </main>
+
+        <aside className="wall-panel wall-portfolio-panel">
+          <WallHeading index="02" eyebrow="PORTFOLIO" title={t("projectPortfolio")} count={`${data.projects.length} tracked`} actionLabel="View all →" onClick={() => setView("projects")} />
+          {data.projects.length
+            ? <div className="wall-project-rail">{data.projects.slice(0, 10).map((project: any) => <WallProject key={project.id} project={project} />)}</div>
+            : <WallClearState label="Portfolio clear" body="No active or completed projects require display." />}
+        </aside>
       </div>
-    </section>
-
-    <section className="stat-grid wallboard-stats">
-      <StatCard label={t("activeProjects")} value={data.stats.activeProjects} tone="blue" note="Delivery portfolio" index={0} icon={<ProjectIcon />} />
-      <StatCard label={t("openIssues")} value={data.stats.openIssues} tone="amber" note="Service demand" index={1} icon={<AlertIcon />} />
-      <StatCard label={t("overdue")} value={data.stats.overdue} tone="red" note="Needs attention" index={2} icon={<ClockIcon />} />
-      <StatCard label="Completed this month" value={data.stats.completedMonth} tone="green" note="Monthly output" index={3} icon={<CheckIcon />} />
-    </section>
-
-    <div className="wallboard-ticker"><div><span>LIVE</span><b>{data.stats.activeProjects} active projects</b><i /><b>{data.stats.openIssues} open issues</b><i /><b>{data.stats.overdue} overdue items</b><i /><b>{data.stats.completedMonth} completed this month</b><i /><b>DTU operations online</b></div></div>
-
-    <div className="wallboard-grid">
-      <section className="wall-panel">
-        <div className="wall-heading"><span>01</span><div><small>PORTFOLIO</small><h2>{t("projectPortfolio")}</h2></div><b>{data.projects.length} tracked</b></div>
-        {data.projects.length ? <div className="wall-projects">{data.projects.map((project: any) => {
-          const displayedProgress = project.status === "completed" ? 100 : project.progress;
-          return <article key={project.id} className={project.status === "completed" ? "wall-project-completed" : ""}>
-            <div><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
-            <h3>{project.name}</h3>
-            <div className="wall-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
-            <footer><span>{project.owner_name || "Unassigned"}</span><strong>{displayedProgress}%</strong><span>{formatDate(project.due_date)}</span></footer>
-          </article>;
-        })}</div> : <WallClearState label="Portfolio clear" body="No active or completed projects require display." />}
-      </section>
-
-      <section className="wall-panel">
-        <div className="wall-heading"><span>02</span><div><small>OPERATIONS</small><h2>{t("criticalWork")}</h2></div><b>{data.tickets.length} queued</b></div>
-        {data.tickets.length ? <div className="wall-tickets">{data.tickets.map((item: any, index: number) => <article key={item.id} className={newTicketIds.has(Number(item.id)) ? "wall-ticket-new" : ""}>
-          <div className="wall-rank">{String(index + 1).padStart(2, "0")}</div>
-          <div><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><h3>{item.title}</h3><p>{item.project_name || "General DTU work"}</p></div>
-          <div className="wall-ticket-meta"><Badge value={item.status} /><strong>{item.assignee_name || "Unassigned"}</strong><span>{formatDate(item.due_date)}</span></div>
-        </article>)}</div> : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
-      </section>
-    </div>
+      : <WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} />}
 
     <footer className="wallboard-footer"><span className="status-dot" /> Systems operational <span>•</span> {t("refreshes")} <span>•</span> Secure local display</footer>
     <div className="wallboard-watermark">© DIGITAL TRANSFORMATION UNIT</div>
   </div>;
+}
+
+function WallboardCommand({ totalLive, generatedAt }: { totalLive: number; generatedAt: string }) {
+  return <section className="wallboard-command">
+    <div className="wallboard-command-copy"><span>Operations overview</span><h1>Digital Transformation Unit Task Board</h1><p>Live delivery, service demand, and priority work across the unit.</p></div>
+    <div className="wallboard-command-summary"><small>Live workload</small><strong>{totalLive}</strong><span>items in motion</span></div>
+    <div className="wallboard-command-readout">
+      <span>Next refresh</span>
+      <div className="refresh-track" key={generatedAt}><i /></div>
+      <small>Automatic · 30 seconds</small>
+    </div>
+  </section>;
+}
+
+function WallboardStats({ data, t }: { data: any; t: ReturnType<typeof useI18n>["t"] }) {
+  return <section className="stat-grid wallboard-stats">
+    <StatCard label={t("activeProjects")} value={data.stats.activeProjects} tone="blue" note="Delivery portfolio" index={0} icon={<ProjectIcon />} />
+    <StatCard label={t("openIssues")} value={data.stats.openIssues} tone="amber" note="Service demand" index={1} icon={<AlertIcon />} />
+    <StatCard label={t("overdue")} value={data.stats.overdue} tone="red" note="Needs attention" index={2} icon={<ClockIcon />} />
+    <StatCard label="Completed this month" value={data.stats.completedMonth} tone="green" note="Monthly output" index={3} icon={<CheckIcon />} />
+  </section>;
+}
+
+function WallboardTicker({ data }: { data: any }) {
+  return <div className="wallboard-ticker"><div><span>LIVE</span><b>{data.stats.activeProjects} active projects</b><i /><b>{data.stats.openIssues} open issues</b><i /><b>{data.stats.overdue} overdue items</b><i /><b>{data.stats.completedMonth} completed this month</b><i /><b>DTU operations online</b></div></div>;
+}
+
+function WallboardFullView({ view, data, t, newTicketIds, onBack }: {
+  view: Exclude<WallboardView, "overview">;
+  data: any;
+  t: ReturnType<typeof useI18n>["t"];
+  newTicketIds: Set<number>;
+  onBack: () => void;
+}) {
+  const projects = view === "projects";
+  return <main className="wallboard-full-view">
+    <section className="wallboard-command wallboard-focus-command">
+      <div className="wallboard-command-copy"><span>{projects ? "PORTFOLIO VIEW" : "OPERATIONS VIEW"}</span><h1>{projects ? t("projectPortfolio") : t("criticalWork")}</h1><p>{projects ? "Every DTU project in one live delivery view." : "Every open issue and task ordered by urgency."}</p></div>
+      <div className="wallboard-command-summary"><small>{projects ? "Tracked projects" : "Queued work"}</small><strong>{projects ? data.projects.length : data.tickets.length}</strong><span>{projects ? "across the portfolio" : "items requiring action"}</span></div>
+      <button className="wallboard-back-button" onClick={onBack}><span>←</span><div><small>Return to</small><strong>Overview</strong></div></button>
+    </section>
+
+    <section className="wall-panel wallboard-full-panel">
+      <div className="wallboard-full-heading">
+        <div><small>{projects ? "COMPLETE PORTFOLIO" : "COMPLETE PRIORITY QUEUE"}</small><h2>{projects ? t("projectPortfolio") : t("criticalWork")}</h2></div>
+        <b>{projects
+          ? `${data.projects.length} ${data.projects.length === 1 ? "project" : "projects"}`
+          : `${data.tickets.length} ${data.tickets.length === 1 ? "work item" : "work items"}`}</b>
+      </div>
+      {projects
+        ? data.projects.length
+          ? <div className="wallboard-all-projects">{data.projects.map((project: any) => <WallProject key={project.id} project={project} expanded />)}</div>
+          : <WallClearState label="Portfolio clear" body="No projects require display." />
+        : data.tickets.length
+          ? <div className="wallboard-all-tickets">{data.tickets.map((item: any, index: number) => <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />)}</div>
+          : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
+    </section>
+  </main>;
+}
+
+function WallHeading({ index, eyebrow, title, count, actionLabel, onClick }: {
+  index: string;
+  eyebrow: string;
+  title: string;
+  count: string;
+  actionLabel: string;
+  onClick: () => void;
+}) {
+  return <button type="button" className="wall-heading wall-heading-action" onClick={onClick}>
+    <span>{index}</span><div><small>{eyebrow}</small><h2>{title}</h2></div><b>{count}<em>{actionLabel}</em></b>
+  </button>;
+}
+
+function WallProject({ project, expanded = false }: { project: any; expanded?: boolean }) {
+  const displayedProgress = project.status === "completed" ? 100 : project.progress;
+  return <article className={`${project.status === "completed" ? "wall-project-completed" : ""}${expanded ? " wall-project-expanded" : ""}`}>
+    <div><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
+    <h3>{project.name}</h3>
+    {project.current_update && <p>{project.current_update}</p>}
+    <div className="wall-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
+    <footer><span>{project.owner_name || "Unassigned"}</span><strong>{displayedProgress}%</strong><span>{formatDate(project.due_date)}</span></footer>
+  </article>;
+}
+
+function WallTicket({ item, index, isNew }: { item: any; index: number; isNew: boolean }) {
+  return <article className={isNew ? "wall-ticket-new" : ""}>
+    <div className="wall-rank">{String(index + 1).padStart(2, "0")}</div>
+    <div className="wall-ticket-copy"><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><h3>{item.title}</h3><p>{item.project_name || "General DTU work"}</p></div>
+    <div className="wall-ticket-meta"><Badge value={item.status} /><strong>{item.assignee_name || "Unassigned"}</strong><span>{formatDate(item.due_date)}</span></div>
+  </article>;
 }
 
 function WallClearState({ label, body }: { label: string; body: string }) {

@@ -201,6 +201,17 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id);
 `);
 
+function ensureColumn(table: string, column: string, definition: string) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some(item => item.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+ensureColumn("projects", "current_update", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("projects", "progress_updated_at", "TEXT");
+ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
+
 export function nextIdentifier(kind: "REQ" | "PRJ" | "TKT") {
   const year = kind === "PRJ" ? 0 : malaysiaYear();
   const row = db.prepare("SELECT value FROM counters WHERE name = ? AND year = ?").get(kind, year) as { value: number } | undefined;

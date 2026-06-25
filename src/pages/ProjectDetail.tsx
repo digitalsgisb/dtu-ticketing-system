@@ -13,16 +13,19 @@ export function ProjectDetailPage() {
   const [data, setData] = useState<any>(null);
   const [qr, setQr] = useState<any>(null);
   const [editing, setEditing] = useState(false);
+  const [updatingProgress, setUpdatingProgress] = useState(false);
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/projects/${id}`).then(setData).catch(e => setError(e.message));
   useEffect(() => { void load(); }, [id]);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const { project, workItems } = data;
+  const canUpdateProgress = project.status !== "cancelled" && Boolean(user && (user.role !== "member" || project.owner_id === user.id));
 
   return <>
     <PageHeader eyebrow={project.project_no} title={project.name} description={project.description || "No description has been added."} actions={<>
       <button className="button button-secondary" onClick={() => void api(`/api/staff/projects/${id}/qr`).then(setQr)}>QR label</button>
+      {canUpdateProgress && <button className="button button-secondary" onClick={() => setUpdatingProgress(true)}>Update progress</button>}
       {user?.role !== "member" && <button className="button button-primary" onClick={() => setEditing(true)}>Edit project</button>}
     </>} />
     <section className="detail-hero">
@@ -35,6 +38,15 @@ export function ProjectDetailPage() {
       </div>
       <div className="hero-progress"><i style={{ width: `${project.progress}%` }} /></div>
     </section>
+    <section className="project-update-panel">
+      <div className="project-update-heading">
+        <div><span className="eyebrow">Owner update</span><h2>Current progress</h2></div>
+        {project.progress_updated_at && <time>{formatDate(project.progress_updated_at, true)}</time>}
+      </div>
+      {project.current_update
+        ? <><p>{project.current_update}</p><small>Updated by {project.progress_updated_by_name || project.owner_name || "project owner"}</small></>
+        : <p className="project-update-empty">No progress note yet. The project owner can add the first delivery update here.</p>}
+    </section>
     <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">Delivery & support</span><h2>Project work</h2></div><Link className="button button-secondary" to={`/tickets?projectId=${project.id}`}>Open full queue</Link></div>
       {workItems.length ? <div className="data-table">
@@ -43,8 +55,46 @@ export function ProjectDetailPage() {
       </div> : <Empty body="Create the first task or issue for this project." />}
     </section>
     {editing && <EditProject project={project} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
+    {updatingProgress && <ProgressUpdate project={project} onClose={() => setUpdatingProgress(false)} onSaved={() => { setUpdatingProgress(false); void load(); }} />}
     {qr && <QrModal qr={qr} onClose={() => setQr(null)} />}
   </>;
+}
+
+function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n();
+  const [form, setForm] = useState({ status: project.status, progress: project.progress, currentUpdate: "" });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      await api(`/api/staff/projects/${project.id}/progress`, json("PATCH", {
+        ...form,
+        progress: Number(form.progress)
+      }));
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+      setSaving(false);
+    }
+  };
+  return <Modal title="Update project progress" onClose={onClose}>
+    <form className="form-stack" onSubmit={save}>
+      <ErrorNotice message={error} />
+      <div className="progress-update-summary"><span className="mono">{project.project_no}</span><strong>{project.name}</strong><small>Share a concise update that the team can understand at a glance.</small></div>
+      <div className="form-grid">
+        <label>{t("status")}<select value={form.status} onChange={e => {
+          const status = e.target.value;
+          setForm({ ...form, status, progress: status === "completed" ? 100 : form.progress });
+        }}><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select></label>
+        <label>{t("progress")} ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={form.status === "completed"} value={form.progress} onChange={e => setForm({ ...form, progress: Number(e.target.value) })} /></label>
+      </div>
+      <label>Current update<textarea required minLength={3} maxLength={1000} rows={5} value={form.currentUpdate} onChange={e => setForm({ ...form, currentUpdate: e.target.value })} placeholder="What has moved forward, what is next, and is anything blocked?" /></label>
+      <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose}>{t("cancel")}</button><button className="button button-primary" disabled={saving}>{saving ? "Saving…" : "Publish update"}</button></div>
+    </form>
+  </Modal>;
 }
 
 function EditProject({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {
