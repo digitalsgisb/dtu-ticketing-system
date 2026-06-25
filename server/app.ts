@@ -34,6 +34,7 @@ app.use((req, res, next) => {
   if (req.path === "/") return res.redirect("/request");
   const allowed = req.path === "/" || req.path === "/request"
     || req.path === "/sugihara-grand-logo.png"
+    || req.path === "/dtu-favicon.svg"
     || req.path.startsWith("/p/") || req.path.startsWith("/track/")
     || req.path.startsWith("/api/public/") || req.path.startsWith("/assets/");
   if (!allowed) return res.status(404).send("Not found");

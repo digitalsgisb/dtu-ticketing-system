@@ -149,6 +149,27 @@ CREATE TABLE IF NOT EXISTS attachments (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS project_updates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  author_name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('planned','in_progress','on_hold','completed','cancelled')),
+  progress INTEGER NOT NULL CHECK(progress BETWEEN 0 AND 100),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS project_update_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_update_id INTEGER NOT NULL REFERENCES project_updates(id) ON DELETE CASCADE,
+  original_name TEXT NOT NULL,
+  stored_name TEXT NOT NULL UNIQUE,
+  mime_type TEXT NOT NULL CHECK(mime_type IN ('image/jpeg','image/png','image/webp')),
+  size INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS public_tracking_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash TEXT NOT NULL UNIQUE,
@@ -197,6 +218,8 @@ CREATE INDEX IF NOT EXISTS idx_work_status ON work_items(status);
 CREATE INDEX IF NOT EXISTS idx_work_assignee ON work_items(assignee_id);
 CREATE INDEX IF NOT EXISTS idx_work_project ON work_items(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_project_updates_project ON project_updates(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_project_update_images_update ON project_update_images(project_update_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id);
 `);
@@ -242,7 +265,7 @@ export async function seedDatabase() {
 export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== "test") return;
   for (const table of [
-    "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
+    "project_update_images", "project_updates", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
     "work_items", "projects", "project_requests", "sessions", "login_attempts",
     "import_batches", "users", "departments", "counters"
   ]) {

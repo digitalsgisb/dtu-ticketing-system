@@ -15,8 +15,10 @@ import { malaysiaDate } from "../time.js";
 
 export const staffRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 3 } });
+const progressUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 4 } });
 const statuses = ["new", "triaged", "assigned", "in_progress", "waiting", "resolved", "closed"] as const;
 const priorities = ["low", "medium", "high", "critical"] as const;
+const projectStatuses = ["planned", "in_progress", "on_hold", "completed", "cancelled"] as const;
 const staffPassword = z.string().min(12).max(200).regex(/[A-Z]/).regex(/[a-z]/).regex(/[0-9]/);
 
 staffRouter.get("/dashboard", (req, res) => {
@@ -119,17 +121,163 @@ staffRouter.patch("/projects/:id/progress", (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Add a progress update between 3 and 1000 characters" });
   const status = parsed.data.status ?? existing.status;
   const progress = status === "completed" ? 100 : (parsed.data.progress ?? existing.progress);
-  db.prepare(`
-    UPDATE projects SET status = ?, progress = ?, current_update = ?,
-      progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(status, progress, cleanText(parsed.data.currentUpdate, 1000), authReq.user.id, existing.id);
+  const body = cleanText(parsed.data.currentUpdate, 1000);
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE projects SET status = ?, progress = ?, current_update = ?,
+        progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(status, progress, body, authReq.user.id, existing.id);
+    db.prepare(`
+      INSERT INTO project_updates(project_id, author_user_id, author_name, body, status, progress)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(existing.id, authReq.user.id, authReq.user.name, body, status, progress);
+  })();
   audit(authReq.user, "project_progress_updated", "project", existing.id, {
     status,
     progress,
     currentUpdate: parsed.data.currentUpdate
   }, req.ip);
   res.json({ ok: true });
+});
+
+staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => {
+  const projects = db.prepare(`
+    SELECT p.*, owner.name AS owner_name, updater.name AS progress_updated_by_name,
+      (SELECT COUNT(*) FROM work_items w WHERE w.project_id = p.id AND w.status NOT IN ('resolved','closed')) AS open_work_count,
+      (SELECT COUNT(*) FROM project_updates pu WHERE pu.project_id = p.id) AS update_count,
+      (SELECT pui.id FROM project_update_images pui
+        JOIN project_updates pu ON pu.id = pui.project_update_id
+        WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id
+    FROM projects p
+    LEFT JOIN users owner ON owner.id = p.owner_id
+    LEFT JOIN users updater ON updater.id = p.progress_updated_by
+    WHERE p.status != 'cancelled'
+    ORDER BY CASE p.status WHEN 'in_progress' THEN 0 WHEN 'on_hold' THEN 1 WHEN 'planned' THEN 2 ELSE 3 END,
+      CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+      p.updated_at DESC
+  `).all();
+  const storage = await fs.promises.statfs(paths.uploads);
+  const imageStats = db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes FROM project_update_images").get() as { count: number; bytes: number };
+  res.json({
+    projects,
+    stats: {
+      total: projects.length,
+      active: projects.filter((project: any) => project.status === "in_progress").length,
+      onHold: projects.filter((project: any) => project.status === "on_hold").length,
+      completed: projects.filter((project: any) => project.status === "completed").length,
+      imageCount: imageStats.count,
+      imageBytes: imageStats.bytes,
+      freeBytes: Number(storage.bavail) * Number(storage.bsize)
+    }
+  });
+});
+
+staffRouter.get("/briefing/projects/:id", requireRole("admin", "lead"), (req, res) => {
+  const project = db.prepare(`
+    SELECT p.*, owner.name AS owner_name, updater.name AS progress_updated_by_name
+    FROM projects p
+    LEFT JOIN users owner ON owner.id = p.owner_id
+    LEFT JOIN users updater ON updater.id = p.progress_updated_by
+    WHERE p.id = ?
+  `).get(req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  const updates = db.prepare(`
+    SELECT pu.*, COUNT(pui.id) AS image_count
+    FROM project_updates pu
+    LEFT JOIN project_update_images pui ON pui.project_update_id = pu.id
+    WHERE pu.project_id = ?
+    GROUP BY pu.id
+    ORDER BY pu.created_at DESC, pu.id DESC
+  `).all(req.params.id) as any[];
+  const images = db.prepare(`
+    SELECT pui.id, pui.project_update_id, pui.original_name, pui.mime_type, pui.size, pui.created_at
+    FROM project_update_images pui
+    JOIN project_updates pu ON pu.id = pui.project_update_id
+    WHERE pu.project_id = ?
+    ORDER BY pui.created_at DESC, pui.id DESC
+  `).all(req.params.id);
+  const workItems = db.prepare(`
+    SELECT w.id, w.ticket_no, w.title, w.type, w.status, w.priority, w.due_date, u.name AS assignee_name
+    FROM work_items w LEFT JOIN users u ON u.id = w.assignee_id
+    WHERE w.project_id = ?
+    ORDER BY CASE WHEN w.status IN ('resolved','closed') THEN 1 ELSE 0 END,
+      CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+      w.due_date
+  `).all(req.params.id);
+  res.json({
+    project,
+    updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
+    workItems
+  });
+});
+
+staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"), progressUpload.array("images", 4), async (req, res, next) => {
+  const storedNames: string[] = [];
+  try {
+    const authReq = req as unknown as AuthenticatedRequest;
+    const project = db.prepare("SELECT id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
+      id: number; status: typeof projectStatuses[number]; progress: number;
+    } | undefined;
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const parsed = z.object({
+      currentUpdate: z.string().trim().min(3).max(3000),
+      status: z.enum(projectStatuses),
+      progress: z.coerce.number().int().min(0).max(100)
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Check the progress update details" });
+    const files = (req.files as Express.Multer.File[]) ?? [];
+    if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file))) {
+      return res.status(400).json({ error: "Progress photos must be valid JPG, PNG, or WebP images" });
+    }
+    if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) {
+      return res.status(507).json({ error: "Storage capacity is too low for these progress photos" });
+    }
+    const status = parsed.data.status;
+    const progress = status === "completed" ? 100 : parsed.data.progress;
+    const body = cleanText(parsed.data.currentUpdate, 3000);
+    for (const file of files) {
+      const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
+      const storedName = `${crypto.randomUUID()}${ext}`;
+      await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
+      storedNames.push(storedName);
+    }
+    const updateId = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO project_updates(project_id, author_user_id, author_name, body, status, progress)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(project.id, authReq.user.id, authReq.user.name, body, status, progress);
+      const id = Number(result.lastInsertRowid);
+      files.forEach((file, index) => {
+        db.prepare(`
+          INSERT INTO project_update_images(project_update_id, original_name, stored_name, mime_type, size)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(id, cleanText(file.originalname, 255), storedNames[index], file.mimetype, file.size);
+      });
+      db.prepare(`
+        UPDATE projects SET status = ?, progress = ?, current_update = ?,
+          progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(status, progress, body, authReq.user.id, project.id);
+      return id;
+    })();
+    audit(authReq.user, "briefing_update_created", "project", project.id, { updateId, status, progress, images: files.length }, req.ip);
+    res.status(201).json({ id: updateId });
+  } catch (error) {
+    await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
+    next(error);
+  }
+});
+
+staffRouter.get("/briefing/images/:id", requireRole("admin", "lead"), (req, res) => {
+  const image = db.prepare("SELECT stored_name, original_name, mime_type FROM project_update_images WHERE id = ?").get(req.params.id) as {
+    stored_name: string; original_name: string; mime_type: string;
+  } | undefined;
+  if (!image) return res.status(404).end();
+  res.setHeader("Content-Type", image.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.sendFile(path.resolve(paths.uploads, image.stored_name));
 });
 
 staffRouter.patch("/projects/:id", requireRole("admin", "lead"), (req, res) => {
@@ -296,6 +444,17 @@ staffRouter.get("/attachments/:id", (req, res) => {
 
 staffRouter.get("/requests", (_req, res) => {
   res.json(db.prepare("SELECT * FROM project_requests ORDER BY updated_at DESC").all());
+});
+
+staffRouter.get("/requests/intake-qr", async (_req, res) => {
+  const url = `${config.publicBaseUrl.replace(/\/$/, "")}/request`;
+  const dataUrl = await QRCode.toDataURL(url, {
+    width: 720,
+    margin: 2,
+    errorCorrectionLevel: "H",
+    color: { dark: "#081a2b", light: "#ffffff" }
+  });
+  res.json({ dataUrl, url });
 });
 
 staffRouter.get("/requests/:id", (req, res) => {

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
-import { BellIcon, GridIcon, ProjectIcon, RequestIcon, ScreenIcon, SettingsIcon, TicketIcon } from "./Icons";
+import { BellIcon, GridIcon, PresentationIcon, ProjectIcon, RequestIcon, ScreenIcon, SettingsIcon, TicketIcon } from "./Icons";
 import { api, json } from "../api";
 import { ErrorNotice, Modal } from "./UI";
 import { CompanyLogo } from "./CompanyLogo";
@@ -42,6 +42,7 @@ export function Layout() {
     ["/projects", t("projects"), <ProjectIcon key="project" />],
     ["/tickets", t("tickets"), <TicketIcon key="ticket" />],
     ["/requests", t("requests"), <RequestIcon key="request" />],
+    ...(user?.role !== "member" ? [["/briefing", t("briefing"), <PresentationIcon key="briefing" />] as const] : []),
     ...(user?.role === "admin" ? [["/admin", t("admin"), <SettingsIcon key="settings" />] as const] : [])
   ] as const;
   const currentSection = location.pathname.startsWith("/notifications")

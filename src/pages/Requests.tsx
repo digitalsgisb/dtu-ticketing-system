@@ -1,24 +1,57 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
-import { Badge, Empty, ErrorNotice, Loading, PageHeader } from "../components/UI";
+import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
 
 export function RequestsPage() {
   const { t } = useI18n();
   const [items, setItems] = useState<any[] | null>(null);
   const [status, setStatus] = useState("");
+  const [qr, setQr] = useState<any>(null);
+  const [qrError, setQrError] = useState("");
   useEffect(() => { void api<any[]>("/api/staff/requests").then(setItems); }, []);
+  const showQr = async () => {
+    setQrError("");
+    try { setQr(await api("/api/staff/requests/intake-qr")); }
+    catch (error) { setQrError((error as Error).message); }
+  };
   const filtered = useMemo(() => (items ?? []).filter(i => !status || i.status === status), [items, status]);
   if (!items) return <Loading />;
   return <>
-    <PageHeader eyebrow="Demand intake" title={t("requests")} description="Triage new digitalization opportunities before they enter the active portfolio." />
+    <PageHeader eyebrow="Demand intake" title={t("requests")} description="Triage new digitalization opportunities before they enter the active portfolio." actions={<button className="button button-primary" onClick={() => void showQr()}>Show employee request QR</button>} />
+    <ErrorNotice message={qrError} />
     <div className="toolbar"><select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}><option value="">All stages</option>{["submitted","triage","needs_information","approved","rejected"].map(s => <option value={s} key={s}>{s.replaceAll("_"," ")}</option>)}</select><div className="result-count">{filtered.length} requests</div></div>
     {filtered.length ? <div className="request-list">{filtered.map(item => <Link to={`/requests/${item.id}`} className="request-card" key={item.id}>
       <div><span className="mono">{item.request_no}</span><Badge value={item.status} /></div><h2>{item.title}</h2><p>{item.current_problem}</p>
       <footer><span><small>{t("department")}</small>{item.department_name}</span><span><small>Requested by</small>{item.requester_name}</span><span><small>{t("submitted")}</small>{formatDate(item.created_at)}</span><Badge value={item.urgency} kind="priority" /></footer>
     </Link>)}</div> : <Empty title="No project requests in this stage" />}
+    {qr && <EmployeeRequestQrModal qr={qr} onClose={() => setQr(null)} />}
   </>;
+}
+
+function EmployeeRequestQrModal({ qr, onClose }: { qr: any; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(qr.url);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+  return <Modal title="Employee project request QR" onClose={onClose} wide>
+    <div className="request-qr-label" id="qr-label">
+      <div className="request-qr-brand"><img src="/dtu-favicon.svg" alt="" /><div><strong>Digital Transformation Unit</strong><span>Project Request Portal</span></div></div>
+      <div className="request-qr-content">
+        <div><span className="eyebrow">Scan to submit</span><h2>Have an idea for a digitalization project?</h2><p>Employees can describe the current problem, expected outcome, urgency, and target date—no staff account required.</p><div className="request-qr-steps"><span><b>01</b>Submit request</span><span><b>02</b>Save tracking link</span><span><b>03</b>Follow DTU updates</span></div></div>
+        <div className="request-qr-code-wrap"><img className="qr-code" src={qr.dataUrl} alt="Employee project request QR code" /><strong>Scan with your phone</strong></div>
+      </div>
+      <small>{qr.url}</small>
+    </div>
+    <div className="request-qr-actions">
+      <a className="button button-secondary" href={qr.url} target="_blank" rel="noreferrer">Open employee form</a>
+      <button className="button button-secondary" onClick={() => void copy()}>{copied ? "Link copied" : "Copy link"}</button>
+      <button className="button button-primary" onClick={() => window.print()}>Print QR poster</button>
+    </div>
+  </Modal>;
 }
 
 export function RequestDetailPage() {

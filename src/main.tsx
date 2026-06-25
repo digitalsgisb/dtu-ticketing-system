@@ -16,6 +16,7 @@ import { AdminPage } from "./pages/Admin";
 import { NotificationsPage } from "./pages/Notifications";
 import { PublicIssuePage, PublicRequestPage, TrackingPage } from "./pages/Public";
 import { WallboardPage } from "./pages/Wallboard";
+import { BriefingProjectPage, ProgressBriefingPage } from "./pages/Briefing";
 import "./styles.css";
 
 function Protected() {
@@ -28,6 +29,11 @@ function LoginRoute() {
   const { user, loading } = useAuth();
   if (loading) return <Loading />;
   return user ? <Navigate to="/" replace /> : <LoginPage />;
+}
+
+function LeadProtected() {
+  const { user } = useAuth();
+  return user?.role === "admin" || user?.role === "lead" ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 function App() {
@@ -45,6 +51,10 @@ function App() {
       <Route path="tickets/:id" element={<TicketDetailPage />} />
       <Route path="requests" element={<RequestsPage />} />
       <Route path="requests/:id" element={<RequestDetailPage />} />
+      <Route element={<LeadProtected />}>
+        <Route path="briefing" element={<ProgressBriefingPage />} />
+        <Route path="briefing/:id" element={<BriefingProjectPage />} />
+      </Route>
       <Route path="admin" element={<AdminPage />} />
       <Route path="notifications" element={<NotificationsPage />} />
     </Route></Route>
