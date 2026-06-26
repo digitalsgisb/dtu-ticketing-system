@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS projects (
   department_id INTEGER REFERENCES departments(id),
   department_name TEXT NOT NULL,
   owner_id INTEGER REFERENCES users(id),
-  status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned','in_progress','on_hold','completed','cancelled')),
+  status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned','in_progress','on_hold','complete_monitoring','completed','cancelled')),
   priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high','critical')),
   start_date TEXT,
   due_date TEXT,
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS project_updates (
   author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   author_name TEXT NOT NULL,
   body TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('planned','in_progress','on_hold','completed','cancelled')),
+  status TEXT NOT NULL CHECK(status IN ('planned','in_progress','on_hold','complete_monitoring','completed','cancelled')),
   progress INTEGER NOT NULL CHECK(progress BETWEEN 0 AND 100),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -231,9 +231,91 @@ function ensureColumn(table: string, column: string, definition: string) {
   }
 }
 
+function tableDefinition(table: string) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { sql: string } | undefined;
+  return row?.sql ?? "";
+}
+
+function ensureProjectStatusCheckAllowsMonitoring() {
+  const needsProjects = !tableDefinition("projects").includes("'complete_monitoring'");
+  const needsUpdates = !tableDefinition("project_updates").includes("'complete_monitoring'");
+  if (!needsProjects && !needsUpdates) return;
+
+  db.pragma("foreign_keys = OFF");
+  db.pragma("legacy_alter_table = ON");
+  try {
+    db.transaction(() => {
+      if (needsProjects) {
+        db.exec(`
+          ALTER TABLE projects RENAME TO __projects_status_migration_old;
+          CREATE TABLE projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_no TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            department_id INTEGER REFERENCES departments(id),
+            department_name TEXT NOT NULL,
+            owner_id INTEGER REFERENCES users(id),
+            status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned','in_progress','on_hold','complete_monitoring','completed','cancelled')),
+            priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high','critical')),
+            start_date TEXT,
+            due_date TEXT,
+            progress INTEGER NOT NULL DEFAULT 0 CHECK(progress BETWEEN 0 AND 100),
+            qr_token TEXT NOT NULL UNIQUE,
+            source_request_id INTEGER REFERENCES project_requests(id),
+            current_update TEXT NOT NULL DEFAULT '',
+            progress_updated_at TEXT,
+            progress_updated_by INTEGER REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+          INSERT INTO projects(
+            id, project_no, name, description, department_id, department_name, owner_id, status, priority,
+            start_date, due_date, progress, qr_token, source_request_id, current_update,
+            progress_updated_at, progress_updated_by, created_at, updated_at
+          )
+          SELECT id, project_no, name, description, department_id, department_name, owner_id, status, priority,
+            start_date, due_date, progress, qr_token, source_request_id, current_update,
+            progress_updated_at, progress_updated_by, created_at, updated_at
+          FROM __projects_status_migration_old;
+          DROP TABLE __projects_status_migration_old;
+        `);
+      }
+      if (needsUpdates) {
+        db.exec(`
+          ALTER TABLE project_updates RENAME TO __project_updates_status_migration_old;
+          CREATE TABLE project_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            author_name TEXT NOT NULL,
+            body TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('planned','in_progress','on_hold','complete_monitoring','completed','cancelled')),
+            progress INTEGER NOT NULL CHECK(progress BETWEEN 0 AND 100),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+          INSERT INTO project_updates(id, project_id, author_user_id, author_name, body, status, progress, created_at)
+          SELECT id, project_id, author_user_id, author_name, body, status, progress, created_at
+          FROM __project_updates_status_migration_old;
+          DROP TABLE __project_updates_status_migration_old;
+        `);
+      }
+    })();
+  } finally {
+    db.pragma("legacy_alter_table = OFF");
+    db.pragma("foreign_keys = ON");
+  }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_project_status ON projects(status);
+    CREATE INDEX IF NOT EXISTS idx_project_updates_project ON project_updates(project_id, created_at DESC);
+  `);
+}
+
 ensureColumn("projects", "current_update", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
+ensureProjectStatusCheckAllowsMonitoring();
 
 export function nextIdentifier(kind: "REQ" | "PRJ" | "TKT") {
   const year = kind === "PRJ" ? 0 : malaysiaYear();

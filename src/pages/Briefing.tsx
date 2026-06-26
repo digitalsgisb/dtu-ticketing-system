@@ -4,9 +4,24 @@ import { api, formatDate } from "../api";
 import { ArrowIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader, StatCard } from "../components/UI";
 
+const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
+const projectStatusOptions = [
+  ["planned", "Planned"],
+  ["in_progress", "In progress"],
+  ["on_hold", "On hold"],
+  ["complete_monitoring", "Complete and Monitoring"],
+  ["completed", "Completed"]
+] as const;
+const briefingStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"]] as const;
+const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
 export function ProgressBriefingPage() {
   const [data, setData] = useState<any>(null);
   const [filter, setFilter] = useState("all");
+  const [progressFilter, setProgressFilter] = useState("all");
+  const [deadlineFilter, setDeadlineFilter] = useState("all");
+  const [freshnessFilter, setFreshnessFilter] = useState("all");
+  const [sort, setSort] = useState("updated_desc");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
@@ -14,11 +29,31 @@ export function ProgressBriefingPage() {
     void api("/api/staff/briefing").then(setData).catch(err => setError(err.message));
     return () => { document.title = "DTU Control Centre"; };
   }, []);
-  const projects = useMemo(() => (data?.projects ?? []).filter((project: any) => {
-    const matchesFilter = filter === "all" || project.status === filter;
-    const haystack = `${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.current_update ?? ""}`.toLowerCase();
-    return matchesFilter && haystack.includes(search.toLowerCase());
-  }), [data, filter, search]);
+  const projects = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return [...(data?.projects ?? [])].filter((project: any) => {
+      const progress = projectProgress(project);
+      const matchesStatus = filter === "all" || project.status === filter;
+      const matchesProgress = progressFilter === "all"
+        || (progressFilter === "early" && progress < 35)
+        || (progressFilter === "mid" && progress >= 35 && progress < 75)
+        || (progressFilter === "late" && progress >= 75 && progress < 100)
+        || (progressFilter === "done" && progress === 100);
+      const dueDays = daysUntil(project.due_date);
+      const matchesDeadline = deadlineFilter === "all"
+        || (deadlineFilter === "overdue" && dueDays !== null && dueDays < 0)
+        || (deadlineFilter === "next14" && dueDays !== null && dueDays >= 0 && dueDays <= 14)
+        || (deadlineFilter === "next30" && dueDays !== null && dueDays >= 0 && dueDays <= 30)
+        || (deadlineFilter === "none" && dueDays === null);
+      const updateAge = ageInDays(project.progress_updated_at || project.updated_at || project.created_at);
+      const matchesFreshness = freshnessFilter === "all"
+        || (freshnessFilter === "updated7" && updateAge !== null && updateAge <= 7)
+        || (freshnessFilter === "stale14" && (updateAge === null || updateAge > 14))
+        || (freshnessFilter === "no_update" && !project.current_update);
+      const haystack = `${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.department_name ?? ""} ${project.current_update ?? ""}`.toLowerCase();
+      return matchesStatus && matchesProgress && matchesDeadline && matchesFreshness && haystack.includes(query);
+    }).sort((left: any, right: any) => compareProjects(left, right, sort));
+  }, [data, filter, progressFilter, deadlineFilter, freshnessFilter, sort, search]);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
 
@@ -30,14 +65,30 @@ export function ProgressBriefingPage() {
     </section>
     <section className="stat-grid briefing-stats">
       <StatCard label="Portfolio projects" value={data.stats.total} tone="blue" note="Management view" icon={<ProjectIcon />} />
-      <StatCard label="In progress" value={data.stats.active} tone="green" note="Currently moving" icon={<ArrowIcon />} />
+      <StatCard label="In progress" value={data.stats.inProgress ?? data.stats.active} tone="amber" note="Currently moving" icon={<ArrowIcon />} />
+      <StatCard label="Monitoring" value={data.stats.monitoring ?? 0} tone="green" note="Complete & observing" icon={<CheckIcon />} />
       <StatCard label="On hold" value={data.stats.onHold} tone="amber" note="Needs discussion" icon={<ClockIcon />} />
-      <StatCard label="Completed" value={data.stats.completed} tone="green" note="Delivered" icon={<CheckIcon />} />
+      <StatCard label="Completed" value={data.stats.completed} tone="green" note="Closed delivery" icon={<CheckIcon />} />
     </section>
     <div className="briefing-toolbar">
       <div className="briefing-filters">
-        {["all", "in_progress", "on_hold", "planned", "completed"].map(value => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value.replaceAll("_", " ")}</button>)}
+        {briefingStatusFilters.map(([value, label]) => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>)}
       </div>
+      <div className="briefing-advanced-filters">
+        <label>Progress<select value={progressFilter} onChange={event => setProgressFilter(event.target.value)}>
+          <option value="all">Any progress</option><option value="early">0-34%</option><option value="mid">35-74%</option><option value="late">75-99%</option><option value="done">100%</option>
+        </select></label>
+        <label>Deadline<select value={deadlineFilter} onChange={event => setDeadlineFilter(event.target.value)}>
+          <option value="all">Any deadline</option><option value="overdue">Overdue</option><option value="next14">Next 14 days</option><option value="next30">Next 30 days</option><option value="none">No deadline</option>
+        </select></label>
+        <label>Update age<select value={freshnessFilter} onChange={event => setFreshnessFilter(event.target.value)}>
+          <option value="all">Any update age</option><option value="updated7">Updated 7 days</option><option value="stale14">Stale 14+ days</option><option value="no_update">No management update</option>
+        </select></label>
+        <label>Sort by<select value={sort} onChange={event => setSort(event.target.value)}>
+          <option value="updated_desc">Latest update</option><option value="created_desc">Newest project</option><option value="deadline_asc">Nearest deadline</option><option value="progress_desc">Highest progress</option><option value="progress_asc">Lowest progress</option><option value="priority">Priority first</option>
+        </select></label>
+      </div>
+      <div className="briefing-result-summary"><strong>{projects.length}</strong> of {data.stats.total} projects shown</div>
       <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search projects or updates…" />
     </div>
     {projects.length ? <div className="briefing-project-grid">{projects.map((project: any) => <BriefingProjectCard project={project} key={project.id} />)}</div> : <Empty title="No projects match this view" />}
@@ -45,7 +96,7 @@ export function ProgressBriefingPage() {
 }
 
 function BriefingProjectCard({ project }: { project: any }) {
-  const progress = project.status === "completed" ? 100 : project.progress;
+  const progress = projectProgress(project);
   return <Link to={`/briefing/${project.id}`} className="briefing-project-card">
     <div className="briefing-project-image">
       {project.latest_image_id
@@ -79,7 +130,7 @@ export function BriefingProjectPage() {
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const { project, updates, workItems } = data;
-  const progress = project.status === "completed" ? 100 : project.progress;
+  const progress = projectProgress(project);
   const allImages = updates.flatMap((update: any) => update.images.map((image: any) => ({ ...image, update })));
   const openWork = workItems.filter((item: any) => !["resolved", "closed"].includes(item.status));
 
@@ -160,9 +211,9 @@ function BriefingUpdateModal({ project, onClose, onSaved }: { project: any; onCl
     <div className="progress-update-summary"><span className="mono">{project.project_no}</span><strong>{project.name}</strong><small>This update becomes the current management position and is added to the project history.</small></div>
     <div className="form-grid"><label>Status<select value={form.status} onChange={event => {
       const status = event.target.value;
-      setForm({ ...form, status, progress: status === "completed" ? 100 : form.progress });
-    }}><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select></label>
-      <label>Progress ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={form.status === "completed"} value={form.progress} onChange={event => setForm({ ...form, progress: Number(event.target.value) })} /></label></div>
+      setForm({ ...form, status, progress: completeLikeProjectStatuses.has(status) ? 100 : form.progress });
+    }}>{projectStatusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+      <label>Progress ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={completeLikeProjectStatuses.has(form.status)} value={form.progress} onChange={event => setForm({ ...form, progress: Number(event.target.value) })} /></label></div>
     <label>Management update<textarea required minLength={3} maxLength={3000} rows={6} value={form.currentUpdate} onChange={event => setForm({ ...form, currentUpdate: event.target.value })} placeholder="What moved forward, what is next, what decision is needed, and what is blocked?" /></label>
     <label className="briefing-photo-picker">Progress photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={event => void chooseFiles(event.target.files)} /><small>Up to 4 images. Large photos are compressed to presentation size before upload.</small></label>
     {previews.length > 0 && <div className="briefing-upload-previews">{previews.map((preview, index) => <img src={preview} alt={`Selected progress ${index + 1}`} key={preview} />)}</div>}
@@ -185,6 +236,56 @@ async function compressProgressImage(file: File) {
   if (!blob) throw new Error(`Could not prepare ${file.name}.`);
   if (blob.size > 4 * 1024 * 1024) throw new Error(`${file.name} is still too large after compression.`);
   return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", { type: "image/webp" });
+}
+
+function projectProgress(project: any) {
+  return completeLikeProjectStatuses.has(project.status) ? 100 : Number(project.progress ?? 0);
+}
+
+function parseProjectDate(value?: string | null) {
+  if (!value) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value}T00:00:00`
+    : value.includes(" ") && !value.includes("T")
+      ? `${value.replace(" ", "T")}Z`
+      : value;
+  const time = new Date(normalized).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function daysUntil(value?: string | null) {
+  const time = parseProjectDate(value);
+  if (time === null) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.floor((time - today.getTime()) / 86_400_000);
+}
+
+function ageInDays(value?: string | null) {
+  const time = parseProjectDate(value);
+  if (time === null) return null;
+  return Math.floor((Date.now() - time) / 86_400_000);
+}
+
+function compareProjects(left: any, right: any, sort: string) {
+  if (sort === "created_desc") return compareDateDesc(left.created_at, right.created_at);
+  if (sort === "deadline_asc") return compareDateAsc(left.due_date, right.due_date) || comparePriority(left, right);
+  if (sort === "progress_desc") return projectProgress(right) - projectProgress(left) || comparePriority(left, right);
+  if (sort === "progress_asc") return projectProgress(left) - projectProgress(right) || comparePriority(left, right);
+  if (sort === "priority") return comparePriority(left, right) || compareDateAsc(left.due_date, right.due_date);
+  return compareDateDesc(left.progress_updated_at || left.updated_at || left.created_at, right.progress_updated_at || right.updated_at || right.created_at);
+}
+
+function compareDateAsc(left?: string | null, right?: string | null) {
+  return (parseProjectDate(left) ?? Number.MAX_SAFE_INTEGER) - (parseProjectDate(right) ?? Number.MAX_SAFE_INTEGER);
+}
+
+function compareDateDesc(left?: string | null, right?: string | null) {
+  return (parseProjectDate(right) ?? 0) - (parseProjectDate(left) ?? 0);
+}
+
+function comparePriority(left: any, right: any) {
+  return (priorityRank[left.priority] ?? 9) - (priorityRank[right.priority] ?? 9);
 }
 
 function formatBytes(value: number) {

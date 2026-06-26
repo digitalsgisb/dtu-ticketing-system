@@ -50,7 +50,7 @@ app.use("/api/staff/imports", blockStaffOnPublicHost, authenticate, requireCsrf,
 app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
   const today = malaysiaDate();
   const stats = {
-    activeProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE status IN ('planned','in_progress','on_hold')").get() as { n: number }).n,
+    activeProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE status IN ('planned','in_progress','on_hold','complete_monitoring')").get() as { n: number }).n,
     openIssues: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE type = 'issue' AND status NOT IN ('resolved','closed')").get() as { n: number }).n,
     overdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE due_date < ? AND status NOT IN ('resolved','closed')").get(today) as { n: number }).n,
     completedMonth: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE status IN ('resolved','closed') AND resolved_at >= datetime(?)").get(malaysiaMonthStartUtc()) as { n: number }).n
@@ -59,8 +59,9 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
     SELECT p.id, p.project_no, p.name, p.status, p.priority, p.progress, p.due_date,
       p.current_update, p.progress_updated_at, u.name AS owner_name
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id
-    WHERE p.status IN ('planned','in_progress','on_hold','completed')
+    WHERE p.status IN ('planned','in_progress','on_hold','complete_monitoring','completed')
     ORDER BY CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END,
+      CASE p.status WHEN 'in_progress' THEN 0 WHEN 'complete_monitoring' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'planned' THEN 3 ELSE 4 END,
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       CASE WHEN p.status = 'completed' THEN p.updated_at END DESC, p.due_date
   `).all();

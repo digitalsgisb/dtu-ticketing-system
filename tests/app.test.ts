@@ -173,6 +173,24 @@ describe("DTU Control Centre API", () => {
     expect(memberImage.status).toBe(403);
   });
 
+  it("accepts complete and monitoring as a project status", async () => {
+    const response = await request(app).post(`/api/staff/briefing/projects/${briefingProjectId}/updates`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("status", "complete_monitoring")
+      .field("progress", "65")
+      .field("currentUpdate", "Rollout is complete; DTU is monitoring the live usage window.");
+    expect(response.status).toBe(201);
+
+    const project = db.prepare("SELECT status, progress, current_update FROM projects WHERE id = ?").get(briefingProjectId) as {
+      status: string;
+      progress: number;
+      current_update: string;
+    };
+    expect(project.status).toBe("complete_monitoring");
+    expect(project.progress).toBe(100);
+    expect(project.current_update).toContain("monitoring");
+  });
+
   it("reports unread notifications and marks them all as read", async () => {
     const summary = await request(app).get("/api/staff/notifications/summary")
       .set("Cookie", cookie);
@@ -196,7 +214,7 @@ describe("DTU Control Centre API", () => {
   });
 
   it("includes completed projects on the wallboard without counting them as active", async () => {
-    const activeBefore = (db.prepare("SELECT COUNT(*) AS count FROM projects WHERE status IN ('planned','in_progress','on_hold')").get() as { count: number }).count;
+    const activeBefore = (db.prepare("SELECT COUNT(*) AS count FROM projects WHERE status IN ('planned','in_progress','on_hold','complete_monitoring')").get() as { count: number }).count;
     db.prepare(`
       INSERT INTO projects(project_no, name, description, department_name, status, priority, progress, qr_token)
       VALUES (?, ?, '', ?, 'completed', 'medium', 100, ?)

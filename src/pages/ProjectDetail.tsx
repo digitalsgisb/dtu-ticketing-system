@@ -6,6 +6,15 @@ import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../compon
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 
+const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
+const projectStatusOptions = [
+  ["planned", "Planned"],
+  ["in_progress", "In progress"],
+  ["on_hold", "On hold"],
+  ["complete_monitoring", "Complete and Monitoring"],
+  ["completed", "Completed"]
+] as const;
+
 export function ProjectDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -20,6 +29,7 @@ export function ProjectDetailPage() {
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const { project, workItems } = data;
+  const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
   const canUpdateProgress = project.status !== "cancelled" && Boolean(user && (user.role !== "member" || project.owner_id === user.id));
 
   return <>
@@ -34,9 +44,9 @@ export function ProjectDetailPage() {
         <div><small>{t("department")}</small><strong>{project.department_name}</strong></div>
         <div><small>{t("owner")}</small><strong>{project.owner_name || "Unassigned"}</strong></div>
         <div><small>{t("dueDate")}</small><strong>{formatDate(project.due_date)}</strong></div>
-        <div><small>{t("progress")}</small><strong>{project.progress}%</strong></div>
+        <div><small>{t("progress")}</small><strong>{displayedProgress}%</strong></div>
       </div>
-      <div className="hero-progress"><i style={{ width: `${project.progress}%` }} /></div>
+      <div className="hero-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
     </section>
     <section className="project-update-panel">
       <div className="project-update-heading">
@@ -87,9 +97,9 @@ function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: 
       <div className="form-grid">
         <label>{t("status")}<select value={form.status} onChange={e => {
           const status = e.target.value;
-          setForm({ ...form, status, progress: status === "completed" ? 100 : form.progress });
-        }}><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="on_hold">On hold</option><option value="completed">Completed</option></select></label>
-        <label>{t("progress")} ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={form.status === "completed"} value={form.progress} onChange={e => setForm({ ...form, progress: Number(e.target.value) })} /></label>
+          setForm({ ...form, status, progress: completeLikeProjectStatuses.has(status) ? 100 : form.progress });
+        }}>{projectStatusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label>{t("progress")} ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={completeLikeProjectStatuses.has(form.status)} value={form.progress} onChange={e => setForm({ ...form, progress: Number(e.target.value) })} /></label>
       </div>
       <label>Current update<textarea required minLength={3} maxLength={1000} rows={5} value={form.currentUpdate} onChange={e => setForm({ ...form, currentUpdate: e.target.value })} placeholder="What has moved forward, what is next, and is anything blocked?" /></label>
       <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose}>{t("cancel")}</button><button className="button button-primary" disabled={saving}>{saving ? "Saving…" : "Publish update"}</button></div>
@@ -110,7 +120,10 @@ function EditProject({ project, onClose, onSaved }: { project: any; onClose: () 
     <label>{t("title")}<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
     <label>{t("description")}<textarea rows={4} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
     <div className="form-grid">
-      <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="on_hold">On hold</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      <label>{t("status")}<select value={form.status} onChange={e => {
+        const status = e.target.value;
+        setForm({ ...form, status, progress: completeLikeProjectStatuses.has(status) ? 100 : form.progress });
+      }}>{projectStatusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}<option value="cancelled">Cancelled</option></select></label>
       <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
       <label>{t("dueDate")}<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
       <label>{t("progress")} ({form.progress}%)<input type="range" min="0" max="100" step="5" value={form.progress} onChange={e => setForm({ ...form, progress: Number(e.target.value) })} /></label>

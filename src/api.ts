@@ -43,5 +43,6 @@ export function formatDate(value?: string | null, withTime = false) {
 }
 
 export function humanize(value?: string | null) {
+  if (value === "complete_monitoring") return "Complete and Monitoring";
   return value ? value.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase()) : "—";
 }

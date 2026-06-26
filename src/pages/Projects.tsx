@@ -5,6 +5,8 @@ import { PlusIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
 
+const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
+
 export function ProjectsPage() {
   const { t } = useI18n();
   const [projects, setProjects] = useState<any[] | null>(null);
@@ -23,12 +25,15 @@ export function ProjectsPage() {
         <div className="search-box"><SearchIcon /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`${t("search")} projects…`} /></div>
         <div className="result-count">{filtered.length} projects</div>
       </div>
-      {filtered.length ? <div className="project-grid">{filtered.map(project => <Link to={`/projects/${project.id}`} className="project-card" key={project.id}>
-        <div className="project-card-top"><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
-        <div><h2>{project.name}</h2><p>{project.description || "No project description yet."}</p></div>
-        <div className="project-progress"><div><span>{t("progress")}</span><strong>{project.progress}%</strong></div><div className="bar"><i style={{ width: `${project.progress}%` }} /></div></div>
-        <div className="project-card-meta"><span><small>{t("department")}</small>{project.department_name}</span><span><small>{t("dueDate")}</small>{formatDate(project.due_date)}</span><span><small>Open work</small>{project.open_count || 0}</span></div>
-      </Link>)}</div> : <Empty title="No matching projects" />}
+      {filtered.length ? <div className="project-grid">{filtered.map(project => {
+        const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
+        return <Link to={`/projects/${project.id}`} className="project-card" key={project.id}>
+          <div className="project-card-top"><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
+          <div><h2>{project.name}</h2><p>{project.description || "No project description yet."}</p></div>
+          <div className="project-progress"><div><span>{t("progress")}</span><strong>{displayedProgress}%</strong></div><div className="bar"><i style={{ width: `${displayedProgress}%` }} /></div></div>
+          <div className="project-card-meta"><span><small>{t("department")}</small>{project.department_name}</span><span><small>{t("dueDate")}</small>{formatDate(project.due_date)}</span><span><small>Open work</small>{project.open_count || 0}</span></div>
+        </Link>;
+      })}</div> : <Empty title="No matching projects" />}
       {showCreate && <ProjectCreateModal users={users} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
     </>
   );

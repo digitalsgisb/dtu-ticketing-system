@@ -18,14 +18,17 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 const progressUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 4 } });
 const statuses = ["new", "triaged", "assigned", "in_progress", "waiting", "resolved", "closed"] as const;
 const priorities = ["low", "medium", "high", "critical"] as const;
-const projectStatuses = ["planned", "in_progress", "on_hold", "completed", "cancelled"] as const;
+const projectStatuses = ["planned", "in_progress", "on_hold", "complete_monitoring", "completed", "cancelled"] as const;
+const activeProjectStatuses = ["planned", "in_progress", "on_hold", "complete_monitoring"] as const;
+const mutableProjectStatuses = ["planned", "in_progress", "on_hold", "complete_monitoring", "completed"] as const;
+const completeLikeProjectStatuses = new Set<string>(["complete_monitoring", "completed"]);
 const staffPassword = z.string().min(12).max(200).regex(/[A-Z]/).regex(/[a-z]/).regex(/[0-9]/);
 
 staffRouter.get("/dashboard", (req, res) => {
   const user = (req as AuthenticatedRequest).user;
   const today = malaysiaDate();
   const stats = {
-    activeProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE status IN ('planned','in_progress','on_hold')").get() as { n: number }).n,
+    activeProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE status IN ('planned','in_progress','on_hold','complete_monitoring')").get() as { n: number }).n,
     openIssues: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE type = 'issue' AND status NOT IN ('resolved','closed')").get() as { n: number }).n,
     overdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE due_date < ? AND status NOT IN ('resolved','closed')").get(today) as { n: number }).n,
     untriaged: (db.prepare("SELECT COUNT(*) AS n FROM project_requests WHERE status IN ('submitted','triage')").get() as { n: number }).n
@@ -69,7 +72,7 @@ staffRouter.post("/projects", requireRole("admin", "lead"), (req, res) => {
     description: z.string().max(5000).default(""),
     departmentName: z.string().trim().min(2).max(150),
     ownerId: z.number().int().positive().nullable().optional(),
-    status: z.enum(["planned", "in_progress", "on_hold", "completed", "cancelled"]).default("planned"),
+    status: z.enum(projectStatuses).default("planned"),
     priority: z.enum(priorities).default("medium"),
     startDate: z.string().nullable().optional(),
     dueDate: z.string().nullable().optional()
@@ -114,13 +117,13 @@ staffRouter.patch("/projects/:id/progress", (req, res) => {
   const canUpdate = authReq.user.role === "admin" || authReq.user.role === "lead" || existing.owner_id === authReq.user.id;
   if (!canUpdate) return res.status(403).json({ error: "Only the project owner or a lead can update progress" });
   const parsed = z.object({
-    status: z.enum(["planned", "in_progress", "on_hold", "completed"]).optional(),
+    status: z.enum(mutableProjectStatuses).optional(),
     progress: z.number().int().min(0).max(100).optional(),
     currentUpdate: z.string().trim().min(3).max(1000)
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Add a progress update between 3 and 1000 characters" });
   const status = parsed.data.status ?? existing.status;
-  const progress = status === "completed" ? 100 : (parsed.data.progress ?? existing.progress);
+  const progress = completeLikeProjectStatuses.has(status) ? 100 : (parsed.data.progress ?? existing.progress);
   const body = cleanText(parsed.data.currentUpdate, 1000);
   db.transaction(() => {
     db.prepare(`
@@ -153,7 +156,7 @@ staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => 
     LEFT JOIN users owner ON owner.id = p.owner_id
     LEFT JOIN users updater ON updater.id = p.progress_updated_by
     WHERE p.status != 'cancelled'
-    ORDER BY CASE p.status WHEN 'in_progress' THEN 0 WHEN 'on_hold' THEN 1 WHEN 'planned' THEN 2 ELSE 3 END,
+    ORDER BY CASE p.status WHEN 'in_progress' THEN 0 WHEN 'complete_monitoring' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'planned' THEN 3 ELSE 4 END,
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       p.updated_at DESC
   `).all();
@@ -163,7 +166,9 @@ staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => 
     projects,
     stats: {
       total: projects.length,
-      active: projects.filter((project: any) => project.status === "in_progress").length,
+      active: projects.filter((project: any) => activeProjectStatuses.includes(project.status)).length,
+      inProgress: projects.filter((project: any) => project.status === "in_progress").length,
+      monitoring: projects.filter((project: any) => project.status === "complete_monitoring").length,
       onHold: projects.filter((project: any) => project.status === "on_hold").length,
       completed: projects.filter((project: any) => project.status === "completed").length,
       imageCount: imageStats.count,
@@ -234,7 +239,7 @@ staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"),
       return res.status(507).json({ error: "Storage capacity is too low for these progress photos" });
     }
     const status = parsed.data.status;
-    const progress = status === "completed" ? 100 : parsed.data.progress;
+    const progress = completeLikeProjectStatuses.has(status) ? 100 : parsed.data.progress;
     const body = cleanText(parsed.data.currentUpdate, 3000);
     for (const file of files) {
       const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
@@ -289,7 +294,7 @@ staffRouter.patch("/projects/:id", requireRole("admin", "lead"), (req, res) => {
     description: z.string().max(5000).optional(),
     departmentName: z.string().trim().min(2).max(150).optional(),
     ownerId: z.number().int().positive().nullable().optional(),
-    status: z.enum(["planned", "in_progress", "on_hold", "completed", "cancelled"]).optional(),
+    status: z.enum(projectStatuses).optional(),
     priority: z.enum(priorities).optional(),
     startDate: z.string().nullable().optional(),
     dueDate: z.string().nullable().optional(),
@@ -297,13 +302,15 @@ staffRouter.patch("/projects/:id", requireRole("admin", "lead"), (req, res) => {
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid project data" });
   const d = parsed.data;
+  const status = String(d.status ?? existing.status);
+  const progress = completeLikeProjectStatuses.has(status) ? 100 : (d.progress ?? Number(existing.progress));
   db.prepare(`
     UPDATE projects SET name = ?, description = ?, department_name = ?, owner_id = ?, status = ?,
       priority = ?, start_date = ?, due_date = ?, progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(d.name ?? existing.name, d.description ?? existing.description, d.departmentName ?? existing.department_name,
-    d.ownerId === undefined ? existing.owner_id : d.ownerId, d.status ?? existing.status, d.priority ?? existing.priority,
+    d.ownerId === undefined ? existing.owner_id : d.ownerId, status, d.priority ?? existing.priority,
     d.startDate === undefined ? existing.start_date : d.startDate, d.dueDate === undefined ? existing.due_date : d.dueDate,
-    d.progress ?? existing.progress, req.params.id);
+    progress, req.params.id);
   audit(authReq.user, "project_updated", "project", Number(req.params.id), d, req.ip);
   res.json({ ok: true });
 });

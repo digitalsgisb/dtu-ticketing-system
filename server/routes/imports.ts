@@ -16,7 +16,7 @@ const projectRow = z.object({
   name: z.string().trim().min(3).max(200),
   department: z.string().trim().min(2).max(150),
   description: z.string().max(5000).default(""),
-  status: z.enum(["planned", "in_progress", "on_hold", "completed", "cancelled"]).default("planned"),
+  status: z.enum(["planned", "in_progress", "on_hold", "complete_monitoring", "completed", "cancelled"]).default("planned"),
   priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   due_date: z.string().optional().default("")
 });

@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 
 type WallboardView = "overview" | "projects" | "tickets";
+const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 
 export function WallboardPage() {
   const { t, lang, setLang } = useI18n();
@@ -74,7 +75,7 @@ export function WallboardPage() {
           <WallHeading index="02" eyebrow="PORTFOLIO" title={t("projectPortfolio")} count={`${data.projects.length} tracked`} actionLabel="View all →" onClick={() => setView("projects")} />
           {data.projects.length
             ? <div className="wall-project-rail">{data.projects.slice(0, 10).map((project: any) => <WallProject key={project.id} project={project} />)}</div>
-            : <WallClearState label="Portfolio clear" body="No active or completed projects require display." />}
+            : <WallClearState label="Portfolio clear" body="No active, monitoring, or completed projects require display." />}
         </aside>
       </div>
       : <WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} />}
@@ -156,8 +157,8 @@ function WallHeading({ index, eyebrow, title, count, actionLabel, onClick }: {
 }
 
 function WallProject({ project, expanded = false }: { project: any; expanded?: boolean }) {
-  const displayedProgress = project.status === "completed" ? 100 : project.progress;
-  return <article className={`${project.status === "completed" ? "wall-project-completed" : ""}${expanded ? " wall-project-expanded" : ""}`}>
+  const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
+  return <article className={`${project.status === "complete_monitoring" ? "wall-project-monitoring" : ""}${project.status === "completed" ? " wall-project-completed" : ""}${expanded ? " wall-project-expanded" : ""}`}>
     <div><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
     <h3>{project.name}</h3>
     {project.current_update && <p>{project.current_update}</p>}
