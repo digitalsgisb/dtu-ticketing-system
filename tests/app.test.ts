@@ -103,6 +103,30 @@ describe("DTU Control Centre API", () => {
     expect(storedIssue.reporter_email).toBeNull();
   });
 
+  it("stores up to four titled system links for a project", async () => {
+    const updated = await request(app).patch(`/api/staff/projects/${briefingProjectId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({
+        links: [
+          { title: "Live system", url: "https://production.example.com" },
+          { title: "Admin console", url: "admin.example.com/console" },
+          { title: "", url: "" }
+        ]
+      });
+    expect(updated.status).toBe(200);
+
+    const detail = await request(app).get(`/api/staff/projects/${briefingProjectId}`).set("Cookie", cookie);
+    expect(detail.status).toBe(200);
+    expect(detail.body.links).toHaveLength(2);
+    expect(detail.body.links[0]).toMatchObject({ title: "Live system", url: "https://production.example.com/" });
+    expect(detail.body.links[1]).toMatchObject({ title: "Admin console", url: "https://admin.example.com/console" });
+
+    const tooMany = await request(app).patch(`/api/staff/projects/${briefingProjectId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ links: Array.from({ length: 5 }, (_, index) => ({ title: `Link ${index + 1}`, url: `https://example.com/${index + 1}` })) });
+    expect(tooMany.status).toBe(400);
+  });
+
   it("lets the project owner publish a progress update", async () => {
     const created = await request(app).post("/api/staff/projects")
       .set("Cookie", cookie).set("x-csrf-token", csrf)
@@ -111,7 +135,10 @@ describe("DTU Control Centre API", () => {
 
     const updated = await request(app).patch(`/api/staff/projects/${created.body.id}/progress`)
       .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
-      .send({ status: "in_progress", progress: 45, currentUpdate: "Prototype approved; integration work is now underway." });
+      .field("status", "in_progress")
+      .field("progress", "45")
+      .field("currentUpdate", "Prototype approved; integration work is now underway.")
+      .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "owner-progress.jpg", contentType: "image/jpeg" });
     expect(updated.status).toBe(200);
 
     const row = db.prepare("SELECT status, progress, current_update, progress_updated_by FROM projects WHERE id = ?").get(created.body.id) as {
@@ -124,6 +151,12 @@ describe("DTU Control Centre API", () => {
     expect(row.progress).toBe(45);
     expect(row.current_update).toContain("integration work");
     expect(row.progress_updated_by).toBe(managedUserId);
+    const imageCount = db.prepare(`
+      SELECT COUNT(*) AS count FROM project_update_images pui
+      JOIN project_updates pu ON pu.id = pui.project_update_id
+      WHERE pu.project_id = ?
+    `).get(created.body.id) as { count: number };
+    expect(imageCount.count).toBe(1);
   });
 
   it("blocks members from updating projects they do not own", async () => {

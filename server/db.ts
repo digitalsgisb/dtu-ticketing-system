@@ -170,6 +170,16 @@ CREATE TABLE IF NOT EXISTS project_update_images (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS project_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS public_tracking_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash TEXT NOT NULL UNIQUE,
@@ -220,6 +230,7 @@ CREATE INDEX IF NOT EXISTS idx_work_project ON work_items(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_project_updates_project ON project_updates(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_project_update_images_update ON project_update_images(project_update_id);
+CREATE INDEX IF NOT EXISTS idx_project_links_project ON project_links(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id);
 `);
@@ -347,7 +358,7 @@ export async function seedDatabase() {
 export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== "test") return;
   for (const table of [
-    "project_update_images", "project_updates", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
+    "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
     "work_items", "projects", "project_requests", "sessions", "login_attempts",
     "import_batches", "users", "departments", "counters"
   ]) {

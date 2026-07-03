@@ -1467,6 +1467,65 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .progress-update-summary { display: grid; gap: 5px; padding: 14px 16px; border-radius: 11px; background: #f3f8f9; }
 .progress-update-summary strong { color: var(--navy); font-size: 14px; }
 .progress-update-summary small { color: #83959f; font-size: 10px; line-height: 1.5; }
+.system-links-panel {
+  margin-bottom: 18px;
+  padding: 20px 22px;
+  border: 1px solid #dce9ec;
+  border-radius: 15px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(12, 49, 65, .04);
+}
+.system-links-panel .panel-heading { margin-bottom: 14px; }
+.system-link-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+.system-link-card {
+  min-width: 0;
+  min-height: 86px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid #dbe7eb;
+  border-radius: 12px;
+  background: #f8fbfc;
+  transition: border-color .18s, background .18s, transform .18s;
+}
+.system-link-card:hover { transform: translateY(-2px); border-color: #9fcac9; background: #f3fbfa; }
+.system-link-card small { color: #8b9da7; font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.system-link-card strong { min-width: 0; color: var(--navy); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.system-link-card span { min-width: 0; color: #607989; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.system-link-placeholder { border-style: dashed; color: #93a4ae; background: #fbfcfd; }
+.system-link-placeholder:hover { transform: none; border-color: #dbe7eb; background: #fbfcfd; }
+.system-link-placeholder strong, .system-link-placeholder span { color: #9aabb4; }
+.project-link-editor {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e0eaee;
+  border-radius: 12px;
+  background: #f8fbfc;
+}
+.project-link-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.project-link-editor-heading small { color: #8a9ba5; font-size: 10px; }
+.project-link-row {
+  display: grid;
+  grid-template-columns: minmax(150px, .8fr) minmax(0, 1.4fr);
+  gap: 10px;
+}
+@media (max-width: 1000px) {
+  .system-link-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .system-link-grid, .project-link-row { grid-template-columns: 1fr; }
+}
 
 /* Interactive, space-efficient wallboard */
 .wallboard-grid {

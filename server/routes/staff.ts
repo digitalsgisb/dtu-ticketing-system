@@ -23,6 +23,63 @@ const activeProjectStatuses = ["planned", "in_progress", "on_hold", "complete_mo
 const mutableProjectStatuses = ["planned", "in_progress", "on_hold", "complete_monitoring", "completed"] as const;
 const completeLikeProjectStatuses = new Set<string>(["complete_monitoring", "completed"]);
 const staffPassword = z.string().min(12).max(200).regex(/[A-Z]/).regex(/[a-z]/).regex(/[0-9]/);
+const maxProjectLinks = 4;
+
+const projectLinkSchema = z.object({
+  title: z.string().trim().max(80).optional().default(""),
+  url: z.string().trim().max(1000).optional().default("")
+});
+
+type ProjectLinkInput = {
+  title: string;
+  url: string;
+};
+
+function normalizeProjectUrl(value: string) {
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+  const url = new URL(candidate);
+  if (!["http:", "https:"].includes(url.protocol) || !url.hostname) {
+    throw new Error("Use a valid http or https link");
+  }
+  const normalized = url.toString();
+  if (normalized.length > 1000) throw new Error("System link URLs must be 1000 characters or fewer");
+  return normalized;
+}
+
+function parseProjectLinks(value: unknown) {
+  const parsed = z.array(projectLinkSchema).max(maxProjectLinks).safeParse(value ?? []);
+  if (!parsed.success) return { ok: false as const, error: "Add up to 4 system links" };
+  const links: ProjectLinkInput[] = [];
+  try {
+    for (const link of parsed.data) {
+      const title = cleanText(link.title, 80);
+      const rawUrl = cleanText(link.url, 1000);
+      if (!title && !rawUrl) continue;
+      if (!title || !rawUrl) return { ok: false as const, error: "Each system link needs both a title and URL" };
+      links.push({ title, url: normalizeProjectUrl(rawUrl) });
+    }
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Check the system links" };
+  }
+  return { ok: true as const, links };
+}
+
+function projectLinks(projectId: number | string) {
+  return db.prepare(`
+    SELECT id, title, url, sort_order FROM project_links
+    WHERE project_id = ? ORDER BY sort_order, id
+  `).all(projectId);
+}
+
+function replaceProjectLinks(projectId: number, links: ProjectLinkInput[]) {
+  db.prepare("DELETE FROM project_links WHERE project_id = ?").run(projectId);
+  links.forEach((link, index) => {
+    db.prepare(`
+      INSERT INTO project_links(project_id, title, url, sort_order)
+      VALUES (?, ?, ?, ?)
+    `).run(projectId, link.title, link.url, index);
+  });
+}
 
 staffRouter.get("/dashboard", (req, res) => {
   const user = (req as AuthenticatedRequest).user;
@@ -75,16 +132,23 @@ staffRouter.post("/projects", requireRole("admin", "lead"), (req, res) => {
     status: z.enum(projectStatuses).default("planned"),
     priority: z.enum(priorities).default("medium"),
     startDate: z.string().nullable().optional(),
-    dueDate: z.string().nullable().optional()
+    dueDate: z.string().nullable().optional(),
+    links: z.array(projectLinkSchema).max(maxProjectLinks).optional()
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid project data", details: parsed.error.flatten() });
+  const parsedLinks = parseProjectLinks(parsed.data.links);
+  if (!parsedLinks.ok) return res.status(400).json({ error: parsedLinks.error });
   const projectNo = nextIdentifier("PRJ");
-  const result = db.prepare(`
-    INSERT INTO projects(project_no, name, description, department_name, owner_id, status, priority, start_date, due_date, qr_token)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(projectNo, cleanText(parsed.data.name, 200), cleanText(parsed.data.description), cleanText(parsed.data.departmentName, 150),
-    parsed.data.ownerId ?? null, parsed.data.status, parsed.data.priority, parsed.data.startDate || null, parsed.data.dueDate || null, crypto.randomBytes(18).toString("base64url"));
-  const id = Number(result.lastInsertRowid);
+  const id = db.transaction(() => {
+    const result = db.prepare(`
+      INSERT INTO projects(project_no, name, description, department_name, owner_id, status, priority, start_date, due_date, qr_token)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(projectNo, cleanText(parsed.data.name, 200), cleanText(parsed.data.description), cleanText(parsed.data.departmentName, 150),
+      parsed.data.ownerId ?? null, parsed.data.status, parsed.data.priority, parsed.data.startDate || null, parsed.data.dueDate || null, crypto.randomBytes(18).toString("base64url"));
+    const projectId = Number(result.lastInsertRowid);
+    replaceProjectLinks(projectId, parsedLinks.links);
+    return projectId;
+  })();
   audit(authReq.user, "project_created", "project", id, { projectNo }, req.ip);
   res.status(201).json({ id, projectNo });
 });
@@ -102,46 +166,75 @@ staffRouter.get("/projects/:id", (req, res) => {
     SELECT w.*, u.name AS assignee_name FROM work_items w LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.project_id = ? ORDER BY w.updated_at DESC
   `).all(req.params.id);
-  res.json({ project, workItems });
+  res.json({ project, links: projectLinks(req.params.id), workItems });
 });
 
-staffRouter.patch("/projects/:id/progress", (req, res) => {
-  const authReq = req as unknown as AuthenticatedRequest;
-  const existing = db.prepare("SELECT id, owner_id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
-    id: number;
-    owner_id: number | null;
-    status: string;
-    progress: number;
-  } | undefined;
-  if (!existing) return res.status(404).json({ error: "Project not found" });
-  const canUpdate = authReq.user.role === "admin" || authReq.user.role === "lead" || existing.owner_id === authReq.user.id;
-  if (!canUpdate) return res.status(403).json({ error: "Only the project owner or a lead can update progress" });
-  const parsed = z.object({
-    status: z.enum(mutableProjectStatuses).optional(),
-    progress: z.number().int().min(0).max(100).optional(),
-    currentUpdate: z.string().trim().min(3).max(1000)
-  }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Add a progress update between 3 and 1000 characters" });
-  const status = parsed.data.status ?? existing.status;
-  const progress = completeLikeProjectStatuses.has(status) ? 100 : (parsed.data.progress ?? existing.progress);
-  const body = cleanText(parsed.data.currentUpdate, 1000);
-  db.transaction(() => {
-    db.prepare(`
-      UPDATE projects SET status = ?, progress = ?, current_update = ?,
-        progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(status, progress, body, authReq.user.id, existing.id);
-    db.prepare(`
-      INSERT INTO project_updates(project_id, author_user_id, author_name, body, status, progress)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(existing.id, authReq.user.id, authReq.user.name, body, status, progress);
-  })();
-  audit(authReq.user, "project_progress_updated", "project", existing.id, {
-    status,
-    progress,
-    currentUpdate: parsed.data.currentUpdate
-  }, req.ip);
-  res.json({ ok: true });
+staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), async (req, res, next) => {
+  const storedNames: string[] = [];
+  try {
+    const authReq = req as unknown as AuthenticatedRequest;
+    const existing = db.prepare("SELECT id, owner_id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
+      id: number;
+      owner_id: number | null;
+      status: string;
+      progress: number;
+    } | undefined;
+    if (!existing) return res.status(404).json({ error: "Project not found" });
+    const canUpdate = authReq.user.role === "admin" || authReq.user.role === "lead" || existing.owner_id === authReq.user.id;
+    if (!canUpdate) return res.status(403).json({ error: "Only the project owner or a lead can update progress" });
+    const parsed = z.object({
+      status: z.enum(mutableProjectStatuses).optional(),
+      progress: z.coerce.number().int().min(0).max(100).optional(),
+      currentUpdate: z.string().trim().min(3).max(1000)
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Add a progress update between 3 and 1000 characters" });
+    const files = (req.files as Express.Multer.File[]) ?? [];
+    if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file))) {
+      return res.status(400).json({ error: "Progress photos must be valid JPG, PNG, or WebP images" });
+    }
+    if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) {
+      return res.status(507).json({ error: "Storage capacity is too low for these progress photos" });
+    }
+    const status = parsed.data.status ?? existing.status;
+    const progress = completeLikeProjectStatuses.has(status) ? 100 : (parsed.data.progress ?? existing.progress);
+    const body = cleanText(parsed.data.currentUpdate, 1000);
+    for (const file of files) {
+      const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
+      const storedName = `${crypto.randomUUID()}${ext}`;
+      await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
+      storedNames.push(storedName);
+    }
+    const updateId = db.transaction(() => {
+      db.prepare(`
+        UPDATE projects SET status = ?, progress = ?, current_update = ?,
+          progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(status, progress, body, authReq.user.id, existing.id);
+      const result = db.prepare(`
+        INSERT INTO project_updates(project_id, author_user_id, author_name, body, status, progress)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(existing.id, authReq.user.id, authReq.user.name, body, status, progress);
+      const id = Number(result.lastInsertRowid);
+      files.forEach((file, index) => {
+        db.prepare(`
+          INSERT INTO project_update_images(project_update_id, original_name, stored_name, mime_type, size)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(id, cleanText(file.originalname, 255), storedNames[index], file.mimetype, file.size);
+      });
+      return id;
+    })();
+    audit(authReq.user, "project_progress_updated", "project", existing.id, {
+      updateId,
+      status,
+      progress,
+      currentUpdate: parsed.data.currentUpdate,
+      images: files.length
+    }, req.ip);
+    res.json({ ok: true, id: updateId });
+  } catch (error) {
+    await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
+    next(error);
+  }
 });
 
 staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => {
@@ -298,19 +391,25 @@ staffRouter.patch("/projects/:id", requireRole("admin", "lead"), (req, res) => {
     priority: z.enum(priorities).optional(),
     startDate: z.string().nullable().optional(),
     dueDate: z.string().nullable().optional(),
-    progress: z.number().int().min(0).max(100).optional()
+    progress: z.number().int().min(0).max(100).optional(),
+    links: z.array(projectLinkSchema).max(maxProjectLinks).optional()
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid project data" });
+  const parsedLinks = parsed.data.links === undefined ? undefined : parseProjectLinks(parsed.data.links);
+  if (parsedLinks && !parsedLinks.ok) return res.status(400).json({ error: parsedLinks.error });
   const d = parsed.data;
   const status = String(d.status ?? existing.status);
   const progress = completeLikeProjectStatuses.has(status) ? 100 : (d.progress ?? Number(existing.progress));
-  db.prepare(`
-    UPDATE projects SET name = ?, description = ?, department_name = ?, owner_id = ?, status = ?,
-      priority = ?, start_date = ?, due_date = ?, progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `).run(d.name ?? existing.name, d.description ?? existing.description, d.departmentName ?? existing.department_name,
-    d.ownerId === undefined ? existing.owner_id : d.ownerId, status, d.priority ?? existing.priority,
-    d.startDate === undefined ? existing.start_date : d.startDate, d.dueDate === undefined ? existing.due_date : d.dueDate,
-    progress, req.params.id);
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE projects SET name = ?, description = ?, department_name = ?, owner_id = ?, status = ?,
+        priority = ?, start_date = ?, due_date = ?, progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(d.name ?? existing.name, d.description ?? existing.description, d.departmentName ?? existing.department_name,
+      d.ownerId === undefined ? existing.owner_id : d.ownerId, status, d.priority ?? existing.priority,
+      d.startDate === undefined ? existing.start_date : d.startDate, d.dueDate === undefined ? existing.due_date : d.dueDate,
+      progress, req.params.id);
+    if (parsedLinks) replaceProjectLinks(Number(req.params.id), parsedLinks.links);
+  })();
   audit(authReq.user, "project_updated", "project", Number(req.params.id), d, req.ip);
   res.json({ ok: true });
 });
