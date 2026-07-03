@@ -54,7 +54,7 @@ export function ProjectDetailPage() {
   if (!data) return <Loading />;
   const { project, workItems, links = [] } = data;
   const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
-  const canUpdateProgress = project.status !== "cancelled" && Boolean(user && (user.role !== "member" || project.owner_id === user.id));
+  const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
 
   return <>
     <PageHeader eyebrow={project.project_no} title={project.name} description={project.description || "No description has been added."} actions={<>

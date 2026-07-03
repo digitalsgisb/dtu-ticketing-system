@@ -16,6 +16,15 @@ const projectStatusOptions = [
 const briefingStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"]] as const;
 const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
+function shortUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.host}${url.pathname === "/" ? "" : url.pathname}`;
+  } catch {
+    return value;
+  }
+}
+
 export function ProgressBriefingPage() {
   const [data, setData] = useState<any>(null);
   const [filter, setFilter] = useState("all");
@@ -51,7 +60,8 @@ export function ProgressBriefingPage() {
         || (freshnessFilter === "updated7" && updateAge !== null && updateAge <= 7)
         || (freshnessFilter === "stale14" && (updateAge === null || updateAge > 14))
         || (freshnessFilter === "no_update" && !project.current_update);
-      const haystack = `${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.department_name ?? ""} ${project.current_update ?? ""}`.toLowerCase();
+      const linkText = (project.links ?? []).map((link: any) => `${link.title} ${link.url}`).join(" ");
+      const haystack = `${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.department_name ?? ""} ${project.current_update ?? ""} ${linkText}`.toLowerCase();
       return matchesStatus && matchesProgress && matchesDeadline && matchesFreshness && haystack.includes(query);
     }).sort((left: any, right: any) => compareProjects(left, right, sort));
   }, [data, filter, progressFilter, deadlineFilter, freshnessFilter, sort, search]);
@@ -98,6 +108,7 @@ export function ProgressBriefingPage() {
 
 function BriefingProjectCard({ project }: { project: any }) {
   const progress = projectProgress(project);
+  const linkCount = project.links?.length ?? 0;
   return <Link to={`/briefing/${project.id}`} className="briefing-project-card">
     <div className="briefing-project-image">
       {project.latest_image_id
@@ -110,6 +121,7 @@ function BriefingProjectCard({ project }: { project: any }) {
       <h2>{project.name}</h2>
       <p>{project.current_update || "No current progress update has been published yet."}</p>
       <div className="briefing-progress"><div><span>Delivery progress</span><strong>{progress}%</strong></div><div className="bar"><i style={{ width: `${progress}%` }} /></div></div>
+      {linkCount > 0 && <div className="briefing-card-links"><span>System links</span><strong>{linkCount}</strong></div>}
       <footer><span><small>Owner</small>{project.owner_name || "Unassigned"}</span><span><small>Due</small>{formatDate(project.due_date)}</span><span><small>Open work</small>{project.open_work_count}</span></footer>
     </div>
   </Link>;
@@ -130,7 +142,7 @@ export function BriefingProjectPage() {
   }, [data]);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
-  const { project, updates, workItems } = data;
+  const { project, updates, workItems, links = [] } = data;
   const progress = projectProgress(project);
   const allImages = updates.flatMap((update: any) => update.images.map((image: any) => ({ ...image, update })));
   const openWork = workItems.filter((item: any) => !["resolved", "closed"].includes(item.status));
@@ -158,6 +170,7 @@ export function BriefingProjectPage() {
         </section>
       </main>
       <aside>
+        <BriefingSystemLinks links={links} />
         <section className="panel briefing-gallery-panel"><div className="panel-heading"><div><span className="eyebrow">Visual evidence</span><h2>Progress gallery</h2></div><b>{allImages.length}</b></div>
           {allImages.length ? <div className="briefing-gallery">{allImages.map((image: any) => <button key={image.id} onClick={() => setSelectedImage(image)}><img src={`/api/staff/briefing/images/${image.id}`} alt={image.original_name} /><span>{formatDate(image.created_at)}</span></button>)}</div> : <div className="briefing-gallery-empty"><ProjectIcon /><span>Add progress photos with the next update.</span></div>}
         </section>
@@ -169,6 +182,17 @@ export function BriefingProjectPage() {
     {showUpdate && <BriefingUpdateModal project={project} onClose={() => setShowUpdate(false)} onSaved={() => { setShowUpdate(false); void load(); }} />}
     {selectedImage && <Modal title={selectedImage.original_name} onClose={() => setSelectedImage(null)} wide><div className="briefing-lightbox"><img src={`/api/staff/briefing/images/${selectedImage.id}`} alt={selectedImage.original_name} /><p>{selectedImage.update?.body}</p><small>{selectedImage.update ? `${selectedImage.update.author_name} · ${formatDate(selectedImage.update.created_at, true)}` : formatDate(selectedImage.created_at, true)}</small></div></Modal>}
   </>;
+}
+
+function BriefingSystemLinks({ links }: { links: any[] }) {
+  return <section className="panel briefing-system-links">
+    <div className="panel-heading"><div><span className="eyebrow">System access</span><h2>System links</h2></div><b>{links.length}</b></div>
+    {links.length ? <div className="system-link-grid">
+      {links.map((link: any) => <a className="system-link-card" href={link.url} target="_blank" rel="noreferrer" key={link.id}>
+        <small>Open system</small><strong>{link.title}</strong><span>{shortUrl(link.url)}</span>
+      </a>)}
+    </div> : <Empty title="No system links yet" body="Add links from the project edit view." />}
+  </section>;
 }
 
 function BriefingUpdateModal({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {

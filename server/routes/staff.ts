@@ -166,22 +166,19 @@ staffRouter.get("/projects/:id", (req, res) => {
     SELECT w.*, u.name AS assignee_name FROM work_items w LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.project_id = ? ORDER BY w.updated_at DESC
   `).all(req.params.id);
-  res.json({ project, links: projectLinks(req.params.id), workItems });
+  res.json({ project, links: projectLinks(String(req.params.id)), workItems });
 });
 
 staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), async (req, res, next) => {
   const storedNames: string[] = [];
   try {
     const authReq = req as unknown as AuthenticatedRequest;
-    const existing = db.prepare("SELECT id, owner_id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
+    const existing = db.prepare("SELECT id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
       id: number;
-      owner_id: number | null;
       status: string;
       progress: number;
     } | undefined;
     if (!existing) return res.status(404).json({ error: "Project not found" });
-    const canUpdate = authReq.user.role === "admin" || authReq.user.role === "lead" || existing.owner_id === authReq.user.id;
-    if (!canUpdate) return res.status(403).json({ error: "Only the project owner or a lead can update progress" });
     const parsed = z.object({
       status: z.enum(mutableProjectStatuses).optional(),
       progress: z.coerce.number().int().min(0).max(100).optional(),
@@ -238,7 +235,7 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
 });
 
 staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => {
-  const projects = db.prepare(`
+  const projects = (db.prepare(`
     SELECT p.*, owner.name AS owner_name, updater.name AS progress_updated_by_name,
       (SELECT COUNT(*) FROM work_items w WHERE w.project_id = p.id AND w.status NOT IN ('resolved','closed')) AS open_work_count,
       (SELECT COUNT(*) FROM project_updates pu WHERE pu.project_id = p.id) AS update_count,
@@ -252,7 +249,7 @@ staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => 
     ORDER BY CASE p.status WHEN 'in_progress' THEN 0 WHEN 'complete_monitoring' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'planned' THEN 3 ELSE 4 END,
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       p.updated_at DESC
-  `).all();
+  `).all() as any[]).map(project => ({ ...project, links: projectLinks(project.id) }));
   const storage = await fs.promises.statfs(paths.uploads);
   const imageStats = db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes FROM project_update_images").get() as { count: number; bytes: number };
   res.json({
@@ -306,6 +303,7 @@ staffRouter.get("/briefing/projects/:id", requireRole("admin", "lead"), (req, re
   res.json({
     project,
     updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
+    links: projectLinks(String(req.params.id)),
     workItems
   });
 });

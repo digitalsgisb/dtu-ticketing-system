@@ -2002,6 +2002,19 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .briefing-progress { margin-top: auto; }
 .briefing-progress > div:first-child { display: flex; justify-content: space-between; margin-bottom: 7px; color: #7c909b; font-size: 9px; }
 .briefing-progress strong { color: #176e78; }
+.briefing-card-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: #557485;
+  background: #f3f8f9;
+  font-size: 9px;
+}
+.briefing-card-links span { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.briefing-card-links strong { color: #176e78; font-size: 12px; }
 .briefing-card-body footer { display: grid; grid-template-columns: 1.2fr 1fr .6fr; gap: 10px; padding-top: 13px; border-top: 1px solid #edf2f3; }
 .briefing-card-body footer span { min-width: 0; color: #315164; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .briefing-card-body footer small { display: block; margin-bottom: 3px; color: #94a3ab; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
@@ -2063,6 +2076,10 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .briefing-gallery button span { position: absolute; right: 5px; bottom: 5px; padding: 3px 5px; border-radius: 5px; color: white; background: rgba(3, 20, 29, .66); font-size: 7px; }
 .briefing-gallery-empty { min-height: 170px; display: grid; place-items: center; align-content: center; gap: 10px; color: #859aa5; font-size: 10px; text-align: center; }
 .briefing-gallery-empty svg { width: 32px; height: 32px; color: #48b5ad; }
+.briefing-system-links .panel-heading { margin-bottom: 13px; }
+.briefing-system-links .panel-heading b { color: #24887f; font-size: 11px; }
+.briefing-system-links .system-link-grid { grid-template-columns: 1fr; }
+.briefing-system-links .empty-state { min-height: 120px; }
 .briefing-work-list { display: grid; }
 .briefing-work-list > a { display: grid; gap: 5px; padding: 11px 3px; border-bottom: 1px solid #edf2f3; }
 .briefing-work-list > a:last-child { border-bottom: 0; }

@@ -121,6 +121,15 @@ describe("DTU Control Centre API", () => {
     expect(detail.body.links[0]).toMatchObject({ title: "Live system", url: "https://production.example.com/" });
     expect(detail.body.links[1]).toMatchObject({ title: "Admin console", url: "https://admin.example.com/console" });
 
+    const briefingList = await request(app).get("/api/staff/briefing").set("Cookie", cookie);
+    expect(briefingList.status).toBe(200);
+    const briefingProject = briefingList.body.projects.find((project: { id: number }) => project.id === briefingProjectId);
+    expect(briefingProject.links).toHaveLength(2);
+
+    const briefingDetail = await request(app).get(`/api/staff/briefing/projects/${briefingProjectId}`).set("Cookie", cookie);
+    expect(briefingDetail.status).toBe(200);
+    expect(briefingDetail.body.links[0]).toMatchObject({ title: "Live system", url: "https://production.example.com/" });
+
     const tooMany = await request(app).patch(`/api/staff/projects/${briefingProjectId}`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)
       .send({ links: Array.from({ length: 5 }, (_, index) => ({ title: `Link ${index + 1}`, url: `https://example.com/${index + 1}` })) });
@@ -159,12 +168,24 @@ describe("DTU Control Centre API", () => {
     expect(imageCount.count).toBe(1);
   });
 
-  it("blocks members from updating projects they do not own", async () => {
+  it("lets members publish progress updates on projects they do not own", async () => {
     const project = db.prepare("SELECT id FROM projects WHERE owner_id IS NULL ORDER BY id LIMIT 1").get() as { id: number };
     const response = await request(app).patch(`/api/staff/projects/${project.id}/progress`)
       .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
-      .send({ progress: 50, currentUpdate: "This update should not be accepted." });
-    expect(response.status).toBe(403);
+      .field("status", "in_progress")
+      .field("progress", "50")
+      .field("currentUpdate", "Member added a field update with supporting evidence.")
+      .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "member-field.jpg", contentType: "image/jpeg" });
+    expect(response.status).toBe(200);
+
+    const row = db.prepare("SELECT progress, current_update, progress_updated_by FROM projects WHERE id = ?").get(project.id) as {
+      progress: number;
+      current_update: string;
+      progress_updated_by: number;
+    };
+    expect(row.progress).toBe(50);
+    expect(row.current_update).toContain("field update");
+    expect(row.progress_updated_by).toBe(managedUserId);
   });
 
   it("limits the progress briefing to admins and leads", async () => {
