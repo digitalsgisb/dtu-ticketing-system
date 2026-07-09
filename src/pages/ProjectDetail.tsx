@@ -48,9 +48,14 @@ export function ProjectDetailPage() {
   const [editing, setEditing] = useState(false);
   const [updatingProgress, setUpdatingProgress] = useState(false);
   const [selectedImage, setSelectedImage] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/projects/${id}`).then(setData).catch(e => setError(e.message));
   useEffect(() => { void load(); }, [id]);
+  useEffect(() => {
+    if (user?.role === "member") return;
+    void api<any[]>("/api/staff/users").then(setUsers).catch(() => undefined);
+  }, [user?.role]);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const { project, workItems, links = [], updates = [] } = data;
@@ -101,7 +106,7 @@ export function ProjectDetailPage() {
         {workItems.map((item: any) => <Link to={`/tickets/${item.id}`} className="table-row" key={item.id}><span className="mono">{item.ticket_no}</span><span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" /></small></span><span>{item.assignee_name || "Unassigned"}</span><span>{formatDate(item.due_date)}</span><span><Badge value={item.status} /></span></Link>)}
       </div> : <Empty body="Create the first task or issue for this project." />}
     </section>
-    {editing && <EditProject project={project} links={links} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
+    {editing && <EditProject project={project} users={users} links={links} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
     {updatingProgress && <ProgressUpdate project={project} onClose={() => setUpdatingProgress(false)} onSaved={() => { setUpdatingProgress(false); void load(); }} />}
     {selectedImage && <Modal title={selectedImage.original_name} onClose={() => setSelectedImage(null)} wide><div className="briefing-lightbox"><img src={`/api/staff/projects/progress-images/${selectedImage.id}`} alt={selectedImage.original_name} /><p>{selectedImage.update?.body}</p><small>{selectedImage.update ? `${selectedImage.update.author_name} - ${formatDate(selectedImage.update.created_at, true)}` : formatDate(selectedImage.created_at, true)}</small></div></Modal>}
     {qr && <QrModal qr={qr} onClose={() => setQr(null)} />}
@@ -179,23 +184,34 @@ function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: 
   </Modal>;
 }
 
-function EditProject({ project, links: projectLinks, onClose, onSaved }: { project: any; links: any[]; onClose: () => void; onSaved: () => void }) {
+function EditProject({ project, users, links: projectLinks, onClose, onSaved }: { project: any; users: any[]; links: any[]; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
-  const [form, setForm] = useState({ name: project.name, description: project.description, departmentName: project.department_name, status: project.status, priority: project.priority, dueDate: project.due_date || "", progress: project.progress });
+  const [form, setForm] = useState({ name: project.name, description: project.description, departmentName: project.department_name, ownerId: project.owner_id ? String(project.owner_id) : "", status: project.status, priority: project.priority, dueDate: project.due_date || "", progress: project.progress });
   const [links, setLinks] = useState<ProjectLinkForm[]>(projectLinkSlots(projectLinks));
   const [error, setError] = useState("");
+  const ownerOptions = users.filter(u => u.active || String(u.id) === form.ownerId);
   const updateLink = (index: number, patch: Partial<ProjectLinkForm>) => {
     setLinks(current => current.map((link, itemIndex) => itemIndex === index ? { ...link, ...patch } : link));
   };
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    try { await api(`/api/staff/projects/${project.id}`, json("PATCH", { ...form, dueDate: form.dueDate || null, progress: Number(form.progress), links })); onSaved(); }
+    try {
+      await api(`/api/staff/projects/${project.id}`, json("PATCH", {
+        ...form,
+        ownerId: form.ownerId ? Number(form.ownerId) : null,
+        dueDate: form.dueDate || null,
+        progress: Number(form.progress),
+        links
+      }));
+      onSaved();
+    }
     catch (err) { setError((err as Error).message); }
   };
   return <Modal title="Edit project" onClose={onClose}><form className="form-stack" onSubmit={save}><ErrorNotice message={error} />
     <label>{t("title")}<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
     <label>{t("description")}<textarea rows={4} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
     <div className="form-grid">
+      <label>{t("owner")}<select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
       <label>{t("status")}<select value={form.status} onChange={e => {
         const status = e.target.value;
         setForm({ ...form, status, progress: completeLikeProjectStatuses.has(status) ? 100 : form.progress });

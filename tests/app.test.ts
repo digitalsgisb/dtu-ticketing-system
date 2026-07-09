@@ -136,6 +136,26 @@ describe("DTU Control Centre API", () => {
     expect(tooMany.status).toBe(400);
   });
 
+  it("lets admins change and clear a project owner", async () => {
+    const assigned = await request(app).patch(`/api/staff/projects/${briefingProjectId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ ownerId: managedUserId });
+    expect(assigned.status).toBe(200);
+
+    const withOwner = await request(app).get(`/api/staff/projects/${briefingProjectId}`).set("Cookie", cookie);
+    expect(withOwner.body.project.owner_id).toBe(managedUserId);
+    expect(withOwner.body.project.owner_name).toBe("Managed User");
+
+    const cleared = await request(app).patch(`/api/staff/projects/${briefingProjectId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ ownerId: null });
+    expect(cleared.status).toBe(200);
+
+    const withoutOwner = await request(app).get(`/api/staff/projects/${briefingProjectId}`).set("Cookie", cookie);
+    expect(withoutOwner.body.project.owner_id).toBeNull();
+    expect(withoutOwner.body.project.owner_name).toBeNull();
+  });
+
   it("lets the project owner publish a progress update", async () => {
     const created = await request(app).post("/api/staff/projects")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

@@ -43,6 +43,43 @@ button { cursor: pointer; }
 .sidebar nav a:hover { color: white; background: rgba(255,255,255,.05); }
 .sidebar nav a.active { color: white; background: linear-gradient(90deg, rgba(44,184,178,.2), rgba(44,184,178,.05)); box-shadow: inset 3px 0 var(--cyan); }
 .sidebar nav a svg { width: 18px; }
+.nav-group { display: grid; gap: 6px; }
+.nav-group-trigger {
+  width: 100%;
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  padding: 12px 13px;
+  border: 0;
+  border-radius: 11px;
+  color: #89a7b9;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  transition: .2s ease;
+}
+.nav-group-trigger:hover { color: white; background: rgba(255,255,255,.05); }
+.nav-group-trigger.active { color: white; background: linear-gradient(90deg, rgba(44,184,178,.2), rgba(44,184,178,.05)); box-shadow: inset 3px 0 var(--cyan); }
+.nav-group-trigger svg { width: 18px; }
+.nav-group-trigger span { flex: 1; }
+.nav-group-trigger i {
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform .2s ease;
+}
+.nav-group.is-open .nav-group-trigger i { transform: rotate(225deg); }
+.nav-subnav { display: grid; gap: 4px; padding-left: 31px; }
+.sidebar nav .nav-subnav a {
+  min-height: 34px;
+  padding: 9px 11px;
+  font-size: 12px;
+  color: #7f9eaf;
+}
+.sidebar nav .nav-subnav a.active { color: white; background: rgba(44,184,178,.12); box-shadow: inset 2px 0 var(--cyan); }
 .sidebar-footer { margin-top: auto; border-top: 1px solid rgba(255,255,255,.08); padding-top: 18px; }
 .user-card { display: flex; align-items: center; gap: 10px; }
 .avatar { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; display: grid; place-items: center; background: #dcefeb; color: #17636e; font-weight: 800; font-size: 12px; font-family: Aptos, "Segoe UI", sans-serif; }

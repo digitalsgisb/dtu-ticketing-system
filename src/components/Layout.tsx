@@ -15,6 +15,8 @@ export function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const projectSectionActive = location.pathname.startsWith("/projects") || location.pathname.startsWith("/my-projects");
+  const [projectsOpen, setProjectsOpen] = useState(projectSectionActive);
 
   useEffect(() => {
     const loadUnread = () => {
@@ -37,10 +39,12 @@ export function Layout() {
       .catch(() => undefined);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (projectSectionActive) setProjectsOpen(true);
+  }, [projectSectionActive]);
+
   const items = [
     ["/", t("dashboard"), <GridIcon key="grid" />],
-    ["/my-projects", t("myProjects"), <ProjectIcon key="my-project" />],
-    ["/projects", t("projects"), <ProjectIcon key="project" />],
     ["/tickets", t("tickets"), <TicketIcon key="ticket" />],
     ["/requests", t("requests"), <RequestIcon key="request" />],
     ...(user?.role !== "member" ? [["/briefing", t("briefing"), <PresentationIcon key="briefing" />] as const] : []),
@@ -48,6 +52,8 @@ export function Layout() {
   ] as const;
   const currentSection = location.pathname.startsWith("/notifications")
     ? "Notifications"
+    : projectSectionActive
+      ? t("projects")
     : items.find(([to]) => to === "/" ? location.pathname === "/" : location.pathname.startsWith(to))?.[1] ?? t("dashboard");
   const today = new Intl.DateTimeFormat(lang === "ms" ? "ms-MY" : "en-MY", { weekday: "short", day: "2-digit", month: "short" }).format(new Date());
 
@@ -61,6 +67,15 @@ export function Layout() {
         </div>
         <span className="sidebar-section-label">Workspace</span>
         <nav>
+          <div className={`nav-group ${projectsOpen ? "is-open" : ""}`}>
+            <button type="button" className={`nav-group-trigger ${projectSectionActive ? "active" : ""}`} onClick={() => setProjectsOpen(open => !open)} aria-expanded={projectsOpen}>
+              <ProjectIcon /><span>{t("projects")}</span><i />
+            </button>
+            {projectsOpen && <div className="nav-subnav">
+              <NavLink to="/projects" onClick={() => setMobileOpen(false)}>{t("allProjects")}</NavLink>
+              <NavLink to="/my-projects" onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
+            </div>}
+          </div>
           {items.map(([to, label, icon]) => (
             <NavLink key={to} to={to} end={to === "/"} onClick={() => setMobileOpen(false)}>
               {icon}<span>{label}</span>
