@@ -96,7 +96,7 @@ export function ProgressBriefingPage() {
           <option value="all">Any update age</option><option value="updated7">Updated 7 days</option><option value="stale14">Stale 14+ days</option><option value="no_update">No management update</option>
         </select></label>
         <label>Sort by<select value={sort} onChange={event => setSort(event.target.value)}>
-          <option value="updated_desc">Latest update</option><option value="created_desc">Newest project</option><option value="deadline_asc">Nearest deadline</option><option value="progress_desc">Highest progress</option><option value="progress_asc">Lowest progress</option><option value="priority">Priority first</option>
+          <option value="updated_desc">Latest update</option><option value="project_no_asc">Project ID ascending</option><option value="project_no_desc">Project ID descending</option><option value="created_desc">Newest project</option><option value="deadline_asc">Nearest deadline</option><option value="progress_desc">Highest progress</option><option value="progress_asc">Lowest progress</option><option value="priority">Priority first</option>
         </select></label>
       </div>
       <div className="briefing-result-summary"><strong>{projects.length}</strong> of {data.stats.total} projects shown</div>
@@ -275,13 +275,26 @@ function ageInDays(value?: string | null) {
   return Math.floor((Date.now() - time) / 86_400_000);
 }
 
+function projectNoValue(value?: string | null) {
+  const match = String(value ?? "").match(/(\d+)(?!.*\d)/);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function compareProjectNo(left: any, right: any) {
+  return projectNoValue(left.project_no) - projectNoValue(right.project_no)
+    || String(left.project_no ?? "").localeCompare(String(right.project_no ?? ""), undefined, { numeric: true, sensitivity: "base" });
+}
+
 function compareProjects(left: any, right: any, sort: string) {
+  if (sort === "project_no_asc") return compareProjectNo(left, right);
+  if (sort === "project_no_desc") return compareProjectNo(right, left);
   if (sort === "created_desc") return compareDateDesc(left.created_at, right.created_at);
-  if (sort === "deadline_asc") return compareDateAsc(left.due_date, right.due_date) || comparePriority(left, right);
-  if (sort === "progress_desc") return projectProgress(right) - projectProgress(left) || comparePriority(left, right);
-  if (sort === "progress_asc") return projectProgress(left) - projectProgress(right) || comparePriority(left, right);
-  if (sort === "priority") return comparePriority(left, right) || compareDateAsc(left.due_date, right.due_date);
-  return compareDateDesc(left.progress_updated_at || left.updated_at || left.created_at, right.progress_updated_at || right.updated_at || right.created_at);
+  if (sort === "deadline_asc") return compareDateAsc(left.due_date, right.due_date) || comparePriority(left, right) || compareProjectNo(left, right);
+  if (sort === "progress_desc") return projectProgress(right) - projectProgress(left) || comparePriority(left, right) || compareProjectNo(left, right);
+  if (sort === "progress_asc") return projectProgress(left) - projectProgress(right) || comparePriority(left, right) || compareProjectNo(left, right);
+  if (sort === "priority") return comparePriority(left, right) || compareDateAsc(left.due_date, right.due_date) || compareProjectNo(left, right);
+  return compareDateDesc(left.progress_updated_at || left.updated_at || left.created_at, right.progress_updated_at || right.updated_at || right.created_at)
+    || compareProjectNo(left, right);
 }
 
 function compareDateAsc(left?: string | null, right?: string | null) {

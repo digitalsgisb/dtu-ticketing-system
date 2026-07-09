@@ -166,19 +166,43 @@ staffRouter.get("/projects/:id", (req, res) => {
     SELECT w.*, u.name AS assignee_name FROM work_items w LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.project_id = ? ORDER BY w.updated_at DESC
   `).all(req.params.id);
-  res.json({ project, links: projectLinks(String(req.params.id)), workItems });
+  const updates = db.prepare(`
+    SELECT pu.*, COUNT(pui.id) AS image_count
+    FROM project_updates pu
+    LEFT JOIN project_update_images pui ON pui.project_update_id = pu.id
+    WHERE pu.project_id = ?
+    GROUP BY pu.id
+    ORDER BY pu.created_at DESC, pu.id DESC
+  `).all(req.params.id) as any[];
+  const images = db.prepare(`
+    SELECT pui.id, pui.project_update_id, pui.original_name, pui.mime_type, pui.size, pui.created_at
+    FROM project_update_images pui
+    JOIN project_updates pu ON pu.id = pui.project_update_id
+    WHERE pu.project_id = ?
+    ORDER BY pui.created_at DESC, pui.id DESC
+  `).all(req.params.id);
+  res.json({
+    project,
+    links: projectLinks(String(req.params.id)),
+    workItems,
+    updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) }))
+  });
 });
 
 staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), async (req, res, next) => {
   const storedNames: string[] = [];
   try {
     const authReq = req as unknown as AuthenticatedRequest;
-    const existing = db.prepare("SELECT id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
+    const existing = db.prepare("SELECT id, owner_id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
       id: number;
+      owner_id: number | null;
       status: string;
       progress: number;
     } | undefined;
     if (!existing) return res.status(404).json({ error: "Project not found" });
+    if (authReq.user.role === "member" && existing.owner_id !== authReq.user.id) {
+      return res.status(403).json({ error: "Members can update progress only for projects they own" });
+    }
     const parsed = z.object({
       status: z.enum(mutableProjectStatuses).optional(),
       progress: z.coerce.number().int().min(0).max(100).optional(),
@@ -232,6 +256,17 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
     await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
     next(error);
   }
+});
+
+staffRouter.get("/projects/progress-images/:id", (req, res) => {
+  const image = db.prepare("SELECT stored_name, original_name, mime_type FROM project_update_images WHERE id = ?").get(req.params.id) as {
+    stored_name: string; original_name: string; mime_type: string;
+  } | undefined;
+  if (!image) return res.status(404).end();
+  res.setHeader("Content-Type", image.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.sendFile(path.resolve(paths.uploads, image.stored_name));
 });
 
 staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => {

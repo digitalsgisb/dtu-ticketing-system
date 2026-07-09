@@ -47,14 +47,17 @@ export function ProjectDetailPage() {
   const [qr, setQr] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [updatingProgress, setUpdatingProgress] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<any>(null);
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/projects/${id}`).then(setData).catch(e => setError(e.message));
   useEffect(() => { void load(); }, [id]);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
-  const { project, workItems, links = [] } = data;
+  const { project, workItems, links = [], updates = [] } = data;
   const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
-  const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
+  const canManageProjects = user?.role === "admin" || user?.role === "lead";
+  const ownsProject = Number(project.owner_id) === user?.id || String(project.owner_name ?? "").trim().toLowerCase() === user?.name.trim().toLowerCase();
+  const canUpdateProgress = project.status !== "cancelled" && Boolean(user) && (canManageProjects || ownsProject);
 
   return <>
     <PageHeader eyebrow={project.project_no} title={project.name} description={project.description || "No description has been added."} actions={<>
@@ -83,6 +86,15 @@ export function ProjectDetailPage() {
         : <p className="project-update-empty">No progress note yet. The project owner can add the first delivery update here.</p>}
     </section>
     <section className="panel">
+      <div className="panel-heading"><div><span className="eyebrow">Progress evidence</span><h2>Progress history</h2></div><b>{updates.length} updates</b></div>
+      {updates.length ? <div className="briefing-timeline">{updates.map((update: any) => <article key={update.id}>
+        <div className="briefing-timeline-marker"><i /></div>
+        <div><header><div><strong>{update.author_name}</strong><span>{formatDate(update.created_at, true)}</span></div><div><Badge value={update.status} /><b>{update.progress}%</b></div></header><p>{update.body}</p>
+          {update.images.length > 0 && <div className="briefing-inline-gallery">{update.images.map((image: any) => <button key={image.id} onClick={() => setSelectedImage({ ...image, update })}><img src={`/api/staff/projects/progress-images/${image.id}`} alt={image.original_name} /></button>)}</div>}
+        </div>
+      </article>)}</div> : <Empty title="No progress history yet" body={canUpdateProgress ? "Publish the first project progress update with supporting photos." : "The project owner can publish the first progress update."} />}
+    </section>
+    <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">Delivery & support</span><h2>Project work</h2></div><Link className="button button-secondary" to={`/tickets?projectId=${project.id}`}>Open full queue</Link></div>
       {workItems.length ? <div className="data-table">
         <div className="table-head"><span>Reference</span><span>Work item</span><span>{t("assignee")}</span><span>{t("dueDate")}</span><span>{t("status")}</span></div>
@@ -91,6 +103,7 @@ export function ProjectDetailPage() {
     </section>
     {editing && <EditProject project={project} links={links} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
     {updatingProgress && <ProgressUpdate project={project} onClose={() => setUpdatingProgress(false)} onSaved={() => { setUpdatingProgress(false); void load(); }} />}
+    {selectedImage && <Modal title={selectedImage.original_name} onClose={() => setSelectedImage(null)} wide><div className="briefing-lightbox"><img src={`/api/staff/projects/progress-images/${selectedImage.id}`} alt={selectedImage.original_name} /><p>{selectedImage.update?.body}</p><small>{selectedImage.update ? `${selectedImage.update.author_name} - ${formatDate(selectedImage.update.created_at, true)}` : formatDate(selectedImage.created_at, true)}</small></div></Modal>}
     {qr && <QrModal qr={qr} onClose={() => setQr(null)} />}
   </>;
 }

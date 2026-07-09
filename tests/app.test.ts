@@ -166,9 +166,16 @@ describe("DTU Control Centre API", () => {
       WHERE pu.project_id = ?
     `).get(created.body.id) as { count: number };
     expect(imageCount.count).toBe(1);
+
+    const detail = await request(app).get(`/api/staff/projects/${created.body.id}`).set("Cookie", managedCookie);
+    expect(detail.status).toBe(200);
+    expect(detail.body.updates[0].images).toHaveLength(1);
+    const image = await request(app).get(`/api/staff/projects/progress-images/${detail.body.updates[0].images[0].id}`).set("Cookie", managedCookie);
+    expect(image.status).toBe(200);
+    expect(image.headers["content-type"]).toContain("image/jpeg");
   });
 
-  it("lets members publish progress updates on projects they do not own", async () => {
+  it("blocks members from publishing progress updates on projects they do not own", async () => {
     const project = db.prepare("SELECT id FROM projects WHERE owner_id IS NULL ORDER BY id LIMIT 1").get() as { id: number };
     const response = await request(app).patch(`/api/staff/projects/${project.id}/progress`)
       .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
@@ -176,16 +183,7 @@ describe("DTU Control Centre API", () => {
       .field("progress", "50")
       .field("currentUpdate", "Member added a field update with supporting evidence.")
       .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "member-field.jpg", contentType: "image/jpeg" });
-    expect(response.status).toBe(200);
-
-    const row = db.prepare("SELECT progress, current_update, progress_updated_by FROM projects WHERE id = ?").get(project.id) as {
-      progress: number;
-      current_update: string;
-      progress_updated_by: number;
-    };
-    expect(row.progress).toBe(50);
-    expect(row.current_update).toContain("field update");
-    expect(row.progress_updated_by).toBe(managedUserId);
+    expect(response.status).toBe(403);
   });
 
   it("limits the progress briefing to admins and leads", async () => {

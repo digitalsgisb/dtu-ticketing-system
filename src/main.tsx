@@ -45,6 +45,7 @@ function App() {
     <Route path="/login" element={<LoginRoute />} />
     <Route element={<Protected />}><Route element={<Layout />}>
       <Route index element={<DashboardPage />} />
+      <Route path="my-projects" element={<ProjectsPage myProjectsOnly />} />
       <Route path="projects" element={<ProjectsPage />} />
       <Route path="projects/:id" element={<ProjectDetailPage />} />
       <Route path="tickets" element={<TicketsPage />} />

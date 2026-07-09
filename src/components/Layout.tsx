@@ -39,6 +39,7 @@ export function Layout() {
 
   const items = [
     ["/", t("dashboard"), <GridIcon key="grid" />],
+    ["/my-projects", t("myProjects"), <ProjectIcon key="my-project" />],
     ["/projects", t("projects"), <ProjectIcon key="project" />],
     ["/tickets", t("tickets"), <TicketIcon key="ticket" />],
     ["/requests", t("requests"), <RequestIcon key="request" />],
