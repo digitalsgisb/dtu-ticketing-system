@@ -71,10 +71,10 @@ export function Layout() {
             <button type="button" className={`nav-group-trigger ${projectSectionActive ? "active" : ""}`} onClick={() => setProjectsOpen(open => !open)} aria-expanded={projectsOpen}>
               <ProjectIcon /><span>{t("projects")}</span><i />
             </button>
-            {projectsOpen && <div className="nav-subnav">
-              <NavLink to="/projects" onClick={() => setMobileOpen(false)}>{t("allProjects")}</NavLink>
-              <NavLink to="/my-projects" onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
-            </div>}
+            <div className="nav-subnav" aria-hidden={!projectsOpen}>
+              <NavLink to="/projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("allProjects")}</NavLink>
+              <NavLink to="/my-projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
+            </div>
           </div>
           {items.map(([to, label, icon]) => (
             <NavLink key={to} to={to} end={to === "/"} onClick={() => setMobileOpen(false)}>

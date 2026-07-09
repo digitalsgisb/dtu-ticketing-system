@@ -69,10 +69,26 @@ button { cursor: pointer; }
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
   transform: rotate(45deg);
-  transition: transform .2s ease;
+  transition: transform .24s cubic-bezier(.2,.8,.2,1);
 }
 .nav-group.is-open .nav-group-trigger i { transform: rotate(225deg); }
-.nav-subnav { display: grid; gap: 4px; padding-left: 31px; }
+.nav-subnav {
+  display: grid;
+  gap: 4px;
+  max-height: 0;
+  overflow: hidden;
+  padding-left: 31px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: max-height .26s cubic-bezier(.2,.8,.2,1), opacity .18s ease, transform .26s cubic-bezier(.2,.8,.2,1);
+}
+.nav-group.is-open .nav-subnav {
+  max-height: 88px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
 .sidebar nav .nav-subnav a {
   min-height: 34px;
   padding: 9px 11px;
@@ -80,6 +96,9 @@ button { cursor: pointer; }
   color: #7f9eaf;
 }
 .sidebar nav .nav-subnav a.active { color: white; background: rgba(44,184,178,.12); box-shadow: inset 2px 0 var(--cyan); }
+@media (prefers-reduced-motion: reduce) {
+  .nav-group-trigger i, .nav-subnav { transition: none; }
+}
 .sidebar-footer { margin-top: auto; border-top: 1px solid rgba(255,255,255,.08); padding-top: 18px; }
 .user-card { display: flex; align-items: center; gap: 10px; }
 .avatar { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; display: grid; place-items: center; background: #dcefeb; color: #17636e; font-weight: 800; font-size: 12px; font-family: Aptos, "Segoe UI", sans-serif; }
