@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { useAuth } from "../auth";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
@@ -16,6 +16,19 @@ const projectStatusOptions = [
   ["completed", "Completed"]
 ] as const;
 const projectLinkSlotCount = 4;
+const projectNavigationKey = "dtu-project-presentation";
+
+type ProjectNavigationItem = { id: number; project_no: string; name: string };
+
+function savedProjectNavigation(): { projects: ProjectNavigationItem[]; returnTo: string } {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(projectNavigationKey) || "{}");
+    return {
+      projects: Array.isArray(saved.projects) ? saved.projects : [],
+      returnTo: saved.returnTo === "/my-projects" ? "/my-projects" : "/projects"
+    };
+  } catch { return { projects: [], returnTo: "/projects" }; }
+}
 
 type ProjectLinkForm = {
   title: string;
@@ -41,17 +54,37 @@ function shortUrl(value: string) {
 
 export function ProjectDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useI18n();
   const [data, setData] = useState<any>(null);
   const [qr, setQr] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [updatingProgress, setUpdatingProgress] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [error, setError] = useState("");
-  const load = () => api(`/api/staff/projects/${id}`).then(setData).catch(e => setError(e.message));
-  useEffect(() => { void load(); }, [id]);
+  const load = () => api(`/api/staff/projects/${id}`).then(next => { setData(next); setError(""); }).catch(e => setError(e.message));
+  useEffect(() => {
+    let cancelled = false;
+    const changingProject = data !== null;
+    setError("");
+    if (changingProject) {
+      setTransitioning(true);
+      window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }
+    void api(`/api/staff/projects/${id}`).then(next => {
+      if (cancelled) return;
+      setData(next);
+      requestAnimationFrame(() => setTransitioning(false));
+    }).catch(e => {
+      if (cancelled) return;
+      setError(e.message);
+      setTransitioning(false);
+    });
+    return () => { cancelled = true; };
+  }, [id]);
   useEffect(() => {
     if (user?.role === "member") return;
     void api<any[]>("/api/staff/users").then(setUsers).catch(() => undefined);
@@ -63,8 +96,21 @@ export function ProjectDetailPage() {
   const canManageProjects = user?.role === "admin" || user?.role === "lead";
   const ownsProject = Number(project.owner_id) === user?.id || String(project.owner_name ?? "").trim().toLowerCase() === user?.name.trim().toLowerCase();
   const canUpdateProgress = project.status !== "cancelled" && Boolean(user) && (canManageProjects || ownsProject);
+  const savedNavigation = savedProjectNavigation();
+  const presentationOrder: ProjectNavigationItem[] = savedNavigation.projects.some(item => String(item.id) === String(project.id)) ? savedNavigation.projects : data.navigationProjects;
+  const currentIndex = presentationOrder.findIndex(item => String(item.id) === String(project.id));
+  const previousProject = currentIndex > 0 ? presentationOrder[currentIndex - 1] : null;
+  const nextProject = currentIndex >= 0 && currentIndex < presentationOrder.length - 1 ? presentationOrder[currentIndex + 1] : null;
+  const goToProject = (projectId: number) => navigate(`/projects/${projectId}`);
 
   return <>
+    <div className="project-detail-back-row"><button type="button" className="briefing-back-link" onClick={() => navigate(savedNavigation.returnTo)}>← Project portfolio</button></div>
+    <nav className="briefing-presentation-nav project-presentation-nav" aria-label="Project navigation">
+      <button type="button" disabled={transitioning || !previousProject} onClick={() => previousProject && goToProject(previousProject.id)}><span>← Previous</span><small>{previousProject?.project_no || "Start of list"}</small></button>
+      <label><span>Viewing project <strong>{currentIndex + 1} of {presentationOrder.length}</strong></span><select disabled={transitioning} value={project.id} onChange={event => goToProject(Number(event.target.value))}>{presentationOrder.map(item => <option value={item.id} key={item.id}>{item.project_no} · {item.name}</option>)}</select></label>
+      <button type="button" disabled={transitioning || !nextProject} onClick={() => nextProject && goToProject(nextProject.id)}><span>Next →</span><small>{nextProject?.project_no || "End of list"}</small></button>
+    </nav>
+    <div className={`project-detail-stage${transitioning ? " is-switching" : ""}`} key={project.id} aria-busy={transitioning}>
     <PageHeader eyebrow={project.project_no} title={project.name} description={project.description || "No description has been added."} actions={<>
       <button className="button button-secondary" onClick={() => void api(`/api/staff/projects/${id}/qr`).then(setQr)}>QR label</button>
       {canUpdateProgress && <button className="button button-secondary" onClick={() => setUpdatingProgress(true)}>Update progress</button>}
@@ -107,6 +153,7 @@ export function ProjectDetailPage() {
         {workItems.map((item: any) => <Link to={`/tickets/${item.id}`} className="table-row" key={item.id}><span className="mono">{item.ticket_no}</span><span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" /></small></span><span>{item.assignee_name || "Unassigned"}</span><span>{formatDate(item.due_date)}</span><span><Badge value={item.status} /></span></Link>)}
       </div> : <Empty body="Create the first task or issue for this project." />}
     </section>
+    </div>
     {editing && <EditProject project={project} users={users} links={links} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
     {updatingProgress && <ProgressUpdate project={project} onClose={() => setUpdatingProgress(false)} onSaved={() => { setUpdatingProgress(false); void load(); }} />}
     {selectedImage && <Modal title={selectedImage.original_name} onClose={() => setSelectedImage(null)} wide><div className="briefing-lightbox"><img src={`/api/staff/projects/progress-images/${selectedImage.id}`} alt={selectedImage.original_name} /><p>{selectedImage.update?.body}</p><small>{selectedImage.update ? `${selectedImage.update.author_name} - ${formatDate(selectedImage.update.created_at, true)}` : formatDate(selectedImage.created_at, true)}</small></div></Modal>}

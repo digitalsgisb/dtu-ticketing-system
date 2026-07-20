@@ -8,22 +8,40 @@ import { useI18n } from "../i18n";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"], ["cancelled", "Cancelled"]] as const;
+const projectNavigationKey = "dtu-project-presentation";
+const projectScrollKey = "dtu-project-return-scroll";
+
+function savedProjectPreferences(myProjectsOnly: boolean) {
+  try { return JSON.parse(sessionStorage.getItem(`dtu-project-preferences-${myProjectsOnly ? "mine" : "all"}`) || "{}"); }
+  catch { return {}; }
+}
 
 export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: boolean }) {
   const { t } = useI18n();
   const { user } = useAuth();
+  const saved = useMemo(() => savedProjectPreferences(myProjectsOnly), [myProjectsOnly]);
   const [projects, setProjects] = useState<any[] | null>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [scope, setScope] = useState(myProjectsOnly ? "mine" : "all");
-  const [progressFilter, setProgressFilter] = useState("all");
-  const [deadlineFilter, setDeadlineFilter] = useState("all");
-  const [sort, setSort] = useState("updated_desc");
+  const [search, setSearch] = useState(saved.search || "");
+  const [filter, setFilter] = useState(saved.filter || "all");
+  const [scope, setScope] = useState(myProjectsOnly ? "mine" : (saved.scope || "all"));
+  const [progressFilter, setProgressFilter] = useState(saved.progressFilter || "all");
+  const [deadlineFilter, setDeadlineFilter] = useState(saved.deadlineFilter || "all");
+  const [sort, setSort] = useState(saved.sort || "updated_desc");
   const [showCreate, setShowCreate] = useState(false);
   const load = () => api<any[]>("/api/staff/projects").then(setProjects);
 
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, []);
+  useEffect(() => {
+    sessionStorage.setItem(`dtu-project-preferences-${myProjectsOnly ? "mine" : "all"}`, JSON.stringify({ search, filter, scope, progressFilter, deadlineFilter, sort }));
+  }, [myProjectsOnly, search, filter, scope, progressFilter, deadlineFilter, sort]);
+  useEffect(() => {
+    if (!projects) return;
+    const scroll = Number(sessionStorage.getItem(projectScrollKey));
+    if (!Number.isFinite(scroll)) return;
+    sessionStorage.removeItem(projectScrollKey);
+    requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, scroll) }));
+  }, [projects]);
 
   const effectiveScope = myProjectsOnly ? "mine" : scope;
   const filtered = useMemo(() => {
@@ -87,7 +105,13 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       </div>
       {filtered.length ? <div className="project-grid">{filtered.map(project => {
         const displayedProgress = projectProgress(project);
-        return <Link to={`/projects/${project.id}`} className="project-card" key={project.id}>
+        return <Link to={`/projects/${project.id}`} className="project-card" key={project.id} onClick={() => {
+          sessionStorage.setItem(projectNavigationKey, JSON.stringify({
+            projects: filtered.map(item => ({ id: item.id, project_no: item.project_no, name: item.name })),
+            returnTo: myProjectsOnly ? "/my-projects" : "/projects"
+          }));
+          sessionStorage.setItem(projectScrollKey, String(window.scrollY));
+        }}>
           <div className="project-card-image">{project.latest_image_id ? <img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} /> : <div><span>{project.project_no}</span><small>Add a photo with a progress update</small></div>}</div>
           <div className="project-card-content">
             <div className="project-card-top"><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>

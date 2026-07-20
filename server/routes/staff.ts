@@ -187,11 +187,16 @@ staffRouter.get("/projects/:id", (req, res) => {
     WHERE pu.project_id = ?
     ORDER BY pui.created_at DESC, pui.id DESC
   `).all(req.params.id);
+  const navigationProjects = db.prepare(`
+    SELECT id, project_no, name FROM projects
+    ORDER BY updated_at DESC, id DESC
+  `).all();
   res.json({
     project,
     links: projectLinks(String(req.params.id)),
     workItems,
-    updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) }))
+    updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
+    navigationProjects
   });
 });
 

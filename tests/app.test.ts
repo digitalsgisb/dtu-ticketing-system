@@ -191,6 +191,7 @@ describe("DTU Control Centre API", () => {
     expect(detail.status).toBe(200);
     expect(detail.body.updates[0].images).toHaveLength(1);
     expect(detail.body.project.latest_image_id).toBe(detail.body.updates[0].images[0].id);
+    expect(detail.body.navigationProjects.some((project: { id: number }) => project.id === created.body.id)).toBe(true);
     const projectList = await request(app).get("/api/staff/projects").set("Cookie", managedCookie);
     expect(projectList.body.find((project: { id: number }) => project.id === created.body.id).latest_image_id).toBe(detail.body.project.latest_image_id);
     const image = await request(app).get(`/api/staff/projects/progress-images/${detail.body.updates[0].images[0].id}`).set("Cookie", managedCookie);
