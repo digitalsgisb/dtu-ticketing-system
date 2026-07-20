@@ -116,7 +116,12 @@ export function ProjectDetailPage() {
       {canUpdateProgress && <button className="button button-secondary" onClick={() => setUpdatingProgress(true)}>Update progress</button>}
       {user?.role !== "member" && <button className="button button-primary" onClick={() => setEditing(true)}>Edit project</button>}
     </>} />
-    {project.latest_image_id ? <div className="project-detail-cover"><img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} /><span>Latest progress photo</span></div> : null}
+    <div className={`project-overview${project.latest_image_id ? " has-photo" : ""}`}>
+    {project.latest_image_id ? <figure className="project-detail-cover">
+      <img className="project-detail-cover-backdrop" src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt="" aria-hidden="true" />
+      <img className="project-detail-cover-foreground" src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} />
+      <figcaption>Latest progress photo</figcaption>
+    </figure> : null}
     <section className="detail-hero">
       <div className="detail-status"><Badge value={project.status} /><Badge value={project.priority} kind="priority" /></div>
       <div className="detail-facts">
@@ -127,6 +132,7 @@ export function ProjectDetailPage() {
       </div>
       <div className="hero-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
     </section>
+    </div>
     <SystemLinks links={links} />
     <section className="project-update-panel">
       <div className="project-update-heading">
