@@ -62,6 +62,42 @@ In short: use port `5173` while changing the code; use port `3100` for a built d
 
 Do not permanently put `NODE_ENV=production` in the local development `.env`; set it only for the production-style command as shown above. The Raspberry Pi receives its separate production environment template from `deploy/dtu-control.env.example`.
 
+## GitHub pull and push commands
+
+The repository uses the `main` branch and the `origin` remote at `https://github.com/digitalsgisb/dtu-ticketing-system.git`.
+
+### Pull the latest changes from GitHub
+
+Run this before starting new work:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+```
+
+The `--ff-only` option prevents Git from creating an unexpected merge commit. If Git reports that local changes would be overwritten, commit or stash those changes before pulling.
+
+### Push changes to GitHub
+
+Review, commit, synchronize, and push your work:
+
+```powershell
+git status
+git diff
+git add -A
+git commit -m "Describe the changes made"
+git pull --rebase origin main
+git push origin main
+```
+
+For the first push of a new branch, set its upstream connection with:
+
+```powershell
+git push -u origin your-branch-name
+```
+
+After the upstream is configured, `git pull` and `git push` can be used without specifying the remote and branch each time.
+
 ## Company branding
 
 The Sugihara Grand Industries logo is stored locally at `public/sugihara-grand-logo.png` and used by the staff portal, login page, public request portal, wallboard, and printable QR labels. Because it is bundled locally, the deployed Pi does not need to contact GitHub to display the logo.

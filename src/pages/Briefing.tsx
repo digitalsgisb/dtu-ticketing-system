@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
-import { api, formatDate } from "../api";
-import { ArrowIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icons";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { api, formatDate, json } from "../api";
+import { ArrowIcon, CheckIcon, ClockIcon, PlusIcon, ProjectIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader, StatCard } from "../components/UI";
 import { compressProgressImage } from "../progressImages";
 
@@ -15,6 +15,23 @@ const projectStatusOptions = [
 ] as const;
 const briefingStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"]] as const;
 const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+const briefingPreferenceKey = "dtu-briefing-preferences";
+const briefingOrderKey = "dtu-briefing-presentation-order";
+const briefingScrollKey = "dtu-briefing-return-scroll";
+
+type PresentationProject = { id: number; project_no: string; name: string };
+
+function savedBriefingPreferences() {
+  try { return JSON.parse(sessionStorage.getItem(briefingPreferenceKey) || "{}"); }
+  catch { return {}; }
+}
+
+function savedPresentationOrder(): PresentationProject[] {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(briefingOrderKey) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch { return []; }
+}
 
 function shortUrl(value: string) {
   try {
@@ -26,19 +43,30 @@ function shortUrl(value: string) {
 }
 
 export function ProgressBriefingPage() {
+  const saved = useMemo(savedBriefingPreferences, []);
   const [data, setData] = useState<any>(null);
-  const [filter, setFilter] = useState("all");
-  const [progressFilter, setProgressFilter] = useState("all");
-  const [deadlineFilter, setDeadlineFilter] = useState("all");
-  const [freshnessFilter, setFreshnessFilter] = useState("all");
-  const [sort, setSort] = useState("updated_desc");
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState(saved.filter || "all");
+  const [progressFilter, setProgressFilter] = useState(saved.progressFilter || "all");
+  const [deadlineFilter, setDeadlineFilter] = useState(saved.deadlineFilter || "all");
+  const [freshnessFilter, setFreshnessFilter] = useState(saved.freshnessFilter || "all");
+  const [sort, setSort] = useState(saved.sort || "updated_desc");
+  const [search, setSearch] = useState(saved.search || "");
   const [error, setError] = useState("");
   useEffect(() => {
     document.title = "Progress Briefing · DTU";
     void api("/api/staff/briefing").then(setData).catch(err => setError(err.message));
     return () => { document.title = "DTU Control Centre"; };
   }, []);
+  useEffect(() => {
+    sessionStorage.setItem(briefingPreferenceKey, JSON.stringify({ filter, progressFilter, deadlineFilter, freshnessFilter, sort, search }));
+  }, [filter, progressFilter, deadlineFilter, freshnessFilter, sort, search]);
+  useEffect(() => {
+    if (!data) return;
+    const scroll = Number(sessionStorage.getItem(briefingScrollKey));
+    if (!Number.isFinite(scroll)) return;
+    sessionStorage.removeItem(briefingScrollKey);
+    requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, scroll) }));
+  }, [data]);
   const projects = useMemo(() => {
     const query = search.trim().toLowerCase();
     return [...(data?.projects ?? [])].filter((project: any) => {
@@ -72,7 +100,7 @@ export function ProgressBriefingPage() {
     <PageHeader eyebrow="Executive reporting" title="Progress Briefing" description="A presentation-ready view of every DTU project, its latest progress, evidence, and delivery position." />
     <section className="briefing-hero">
       <div><span>Portfolio pulse</span><h2>{data.stats.active} projects actively moving</h2><p>Select any project to present its update history, progress photos, and current work.</p></div>
-      <div className="briefing-storage"><small>Progress photo storage</small><strong>{formatBytes(data.stats.imageBytes)}</strong><span>{data.stats.imageCount} images · {formatBytes(data.stats.freeBytes)} free locally</span></div>
+      <div className="briefing-storage"><small>Project image storage</small><strong>{formatBytes(data.stats.imageBytes)}</strong><span>{data.stats.imageCount} project and progress images · {formatBytes(data.stats.freeBytes)} free locally</span></div>
     </section>
     <section className="stat-grid briefing-stats">
       <StatCard label="Portfolio projects" value={data.stats.total} tone="blue" note="Management view" icon={<ProjectIcon />} />
@@ -102,18 +130,24 @@ export function ProgressBriefingPage() {
       <div className="briefing-result-summary"><strong>{projects.length}</strong> of {data.stats.total} projects shown</div>
       <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search projects or updates…" />
     </div>
-    {projects.length ? <div className="briefing-project-grid">{projects.map((project: any) => <BriefingProjectCard project={project} key={project.id} />)}</div> : <Empty title="No projects match this view" />}
+    {projects.length ? <div className="briefing-project-grid">{projects.map((project: any) => <BriefingProjectCard project={project} presentationOrder={projects} key={project.id} />)}</div> : <Empty title="No projects match this view" />}
   </>;
 }
 
-function BriefingProjectCard({ project }: { project: any }) {
+function BriefingProjectCard({ project, presentationOrder }: { project: any; presentationOrder: any[] }) {
   const progress = projectProgress(project);
   const linkCount = project.links?.length ?? 0;
-  return <Link to={`/briefing/${project.id}`} className="briefing-project-card">
+  const preparePresentation = () => {
+    sessionStorage.setItem(briefingOrderKey, JSON.stringify(presentationOrder.map(item => ({ id: item.id, project_no: item.project_no, name: item.name }))));
+    sessionStorage.setItem(briefingScrollKey, String(window.scrollY));
+  };
+  return <Link to={`/briefing/${project.id}`} className="briefing-project-card" onClick={preparePresentation}>
     <div className="briefing-project-image">
-      {project.latest_image_id
+      {project.has_project_image
+        ? <img src={`/api/staff/projects/${project.id}/image?v=${encodeURIComponent(project.updated_at)}`} alt={`${project.name} project cover`} />
+        : project.latest_image_id
         ? <img src={`/api/staff/briefing/images/${project.latest_image_id}`} alt="" />
-        : <div className="briefing-image-placeholder"><ProjectIcon /><span>No progress photo yet</span></div>}
+        : <div className="briefing-image-placeholder"><ProjectIcon /><span>No project photo yet</span></div>}
       <span className="mono">{project.project_no}</span>
     </div>
     <div className="briefing-card-body">
@@ -129,12 +163,21 @@ function BriefingProjectCard({ project }: { project: any }) {
 
 export function BriefingProjectPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
   const [showUpdate, setShowUpdate] = useState(false);
+  const [showWorkItem, setShowWorkItem] = useState(false);
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/briefing/projects/${id}`).then(setData).catch(err => setError(err.message));
-  useEffect(() => { void load(); }, [id]);
+  useEffect(() => {
+    setData(null);
+    setError("");
+    window.scrollTo({ top: 0 });
+    void load();
+  }, [id]);
+  useEffect(() => { void api<any[]>("/api/staff/users").then(setUsers).catch(() => undefined); }, []);
   useEffect(() => {
     if (!data) return;
     document.title = `${data.project.name} · Progress Briefing`;
@@ -146,10 +189,22 @@ export function BriefingProjectPage() {
   const progress = projectProgress(project);
   const allImages = updates.flatMap((update: any) => update.images.map((image: any) => ({ ...image, update })));
   const openWork = workItems.filter((item: any) => !["resolved", "closed"].includes(item.status));
+  const savedOrder = savedPresentationOrder();
+  const presentationOrder: PresentationProject[] = savedOrder.some(item => String(item.id) === String(project.id)) ? savedOrder : data.navigationProjects;
+  const currentIndex = presentationOrder.findIndex(item => String(item.id) === String(project.id));
+  const previousProject = currentIndex > 0 ? presentationOrder[currentIndex - 1] : null;
+  const nextProject = currentIndex >= 0 && currentIndex < presentationOrder.length - 1 ? presentationOrder[currentIndex + 1] : null;
+  const goToProject = (projectId: number) => navigate(`/briefing/${projectId}`);
 
   return <>
-    <div className="briefing-back-row"><Link to="/briefing">← Portfolio briefing</Link><button className="button button-primary" onClick={() => setShowUpdate(true)}>Publish progress update</button></div>
-    <section className="briefing-detail-hero">
+    <div className="briefing-back-row"><button className="briefing-back-link" onClick={() => navigate("/briefing")}>← Portfolio briefing</button><div className="briefing-primary-actions"><button className="button button-secondary" onClick={() => setShowWorkItem(true)}><PlusIcon /> Add task / issue</button><button className="button button-primary" onClick={() => setShowUpdate(true)}>Management update</button></div></div>
+    <nav className="briefing-presentation-nav" aria-label="Project presentation navigation">
+      <button type="button" disabled={!previousProject} onClick={() => previousProject && goToProject(previousProject.id)}><span>← Previous</span><small>{previousProject?.project_no || "Start of list"}</small></button>
+      <label><span>Presenting project <strong>{currentIndex + 1} of {presentationOrder.length}</strong></span><select value={project.id} onChange={event => goToProject(Number(event.target.value))}>{presentationOrder.map(item => <option value={item.id} key={item.id}>{item.project_no} · {item.name}</option>)}</select></label>
+      <button type="button" disabled={!nextProject} onClick={() => nextProject && goToProject(nextProject.id)}><span>Next →</span><small>{nextProject?.project_no || "End of list"}</small></button>
+    </nav>
+    <section className={`briefing-detail-hero${project.has_project_image ? " has-project-image" : ""}`}>
+      {project.has_project_image && <img className="briefing-detail-cover" src={`/api/staff/projects/${project.id}/image?v=${encodeURIComponent(project.updated_at)}`} alt="" />}
       <div className="briefing-detail-copy"><span className="mono">{project.project_no}</span><div><Badge value={project.status} /><Badge value={project.priority} kind="priority" /></div><h1>{project.name}</h1><p>{project.description || "No project description has been added."}</p></div>
       <div className="briefing-progress-orbit"><strong>{progress}%</strong><span>delivery progress</span><i style={{ "--progress": `${progress * 3.6}deg` } as CSSProperties} /></div>
       <div className="briefing-detail-facts"><div><small>Owner</small><strong>{project.owner_name || "Unassigned"}</strong></div><div><small>Department</small><strong>{project.department_name}</strong></div><div><small>Due date</small><strong>{formatDate(project.due_date)}</strong></div><div><small>Open work</small><strong>{openWork.length}</strong></div></div>
@@ -174,14 +229,51 @@ export function BriefingProjectPage() {
         <section className="panel briefing-gallery-panel"><div className="panel-heading"><div><span className="eyebrow">Visual evidence</span><h2>Progress gallery</h2></div><b>{allImages.length}</b></div>
           {allImages.length ? <div className="briefing-gallery">{allImages.map((image: any) => <button key={image.id} onClick={() => setSelectedImage(image)}><img src={`/api/staff/briefing/images/${image.id}`} alt={image.original_name} /><span>{formatDate(image.created_at)}</span></button>)}</div> : <div className="briefing-gallery-empty"><ProjectIcon /><span>Add progress photos with the next update.</span></div>}
         </section>
-        <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Execution</span><h2>Current work</h2></div><Link to={`/tickets?projectId=${project.id}`}>Open queue →</Link></div>
+        <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Execution</span><h2>Current work</h2></div><div className="briefing-panel-actions"><button type="button" onClick={() => setShowWorkItem(true)}>+ Add work</button><Link to={`/tickets?projectId=${project.id}`}>Open queue →</Link></div></div>
           {openWork.length ? <div className="briefing-work-list">{openWork.slice(0, 8).map((item: any) => <Link to={`/tickets/${item.id}`} key={item.id}><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><strong>{item.title}</strong><small>{item.assignee_name || "Unassigned"} · {formatDate(item.due_date)}</small></Link>)}</div> : <Empty title="No open work" />}
         </section>
       </aside>
     </div>
     {showUpdate && <BriefingUpdateModal project={project} onClose={() => setShowUpdate(false)} onSaved={() => { setShowUpdate(false); void load(); }} />}
+    {showWorkItem && <BriefingWorkItemModal project={project} users={users} onClose={() => setShowWorkItem(false)} onSaved={() => { setShowWorkItem(false); void load(); }} />}
     {selectedImage && <Modal title={selectedImage.original_name} onClose={() => setSelectedImage(null)} wide><div className="briefing-lightbox"><img src={`/api/staff/briefing/images/${selectedImage.id}`} alt={selectedImage.original_name} /><p>{selectedImage.update?.body}</p><small>{selectedImage.update ? `${selectedImage.update.author_name} · ${formatDate(selectedImage.update.created_at, true)}` : formatDate(selectedImage.created_at, true)}</small></div></Modal>}
   </>;
+}
+
+function BriefingWorkItemModal({ project, users, onClose, onSaved }: { project: any; users: any[]; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ type: "task", title: "", description: "", priority: "medium", assigneeId: "", dueDate: "" });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await api("/api/staff/tickets", json("POST", {
+        projectId: project.id,
+        type: form.type,
+        title: form.title,
+        description: form.description,
+        priority: form.priority,
+        status: form.assigneeId ? "assigned" : "new",
+        assigneeId: form.assigneeId ? Number(form.assigneeId) : null,
+        dueDate: form.dueDate || null
+      }));
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+      setSaving(false);
+    }
+  };
+  return <Modal title="Add task or issue" onClose={onClose} wide><form className="form-stack" onSubmit={save}>
+    <ErrorNotice message={error} />
+    <div className="progress-update-summary"><span className="mono">{project.project_no}</span><strong>{project.name}</strong><small>Create delivery work without leaving the management briefing. The selected PIC will be notified automatically.</small></div>
+    <div className="form-grid"><label>Work type<select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}><option value="task">Task</option><option value="issue">Issue</option></select></label><label>PIC / assignee<select value={form.assigneeId} onChange={event => setForm({ ...form, assigneeId: event.target.value })}><option value="">Unassigned</option>{users.filter(user => user.active).map(user => <option value={user.id} key={user.id}>{user.name}</option>)}</select></label></div>
+    <label>Title<input required minLength={3} maxLength={200} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder={form.type === "task" ? "What needs to be completed?" : "What needs attention?"} /></label>
+    <label>Description<textarea rows={5} maxLength={5000} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} placeholder="Add the expected outcome, context, or next action." /></label>
+    <div className="form-grid"><label>Priority<select value={form.priority} onChange={event => setForm({ ...form, priority: event.target.value })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label><label>Due date<input type="date" value={form.dueDate} onChange={event => setForm({ ...form, dueDate: event.target.value })} /></label></div>
+    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={saving}>{saving ? "Creating…" : `Create ${form.type}`}</button></div>
+  </form></Modal>;
 }
 
 function BriefingSystemLinks({ links }: { links: any[] }) {

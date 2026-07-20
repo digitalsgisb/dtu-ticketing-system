@@ -136,6 +136,23 @@ describe("DTU Control Centre API", () => {
     expect(tooMany.status).toBe(400);
   });
 
+  it("stores a dedicated project cover image and exposes it across project views", async () => {
+    const uploaded = await request(app).patch(`/api/staff/projects/${briefingProjectId}/image`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .attach("image", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "project-cover.jpg", contentType: "image/jpeg" });
+    expect(uploaded.status).toBe(200);
+
+    const projectList = await request(app).get("/api/staff/projects").set("Cookie", cookie);
+    expect(projectList.body.find((project: { id: number }) => project.id === briefingProjectId).has_project_image).toBe(1);
+
+    const briefing = await request(app).get("/api/staff/briefing").set("Cookie", cookie);
+    expect(briefing.body.projects.find((project: { id: number }) => project.id === briefingProjectId).has_project_image).toBe(1);
+
+    const image = await request(app).get(`/api/staff/projects/${briefingProjectId}/image`).set("Cookie", cookie);
+    expect(image.status).toBe(200);
+    expect(image.headers["content-type"]).toContain("image/jpeg");
+  });
+
   it("lets admins change and clear a project owner", async () => {
     const assigned = await request(app).patch(`/api/staff/projects/${briefingProjectId}`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)

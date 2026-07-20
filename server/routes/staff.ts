@@ -16,6 +16,7 @@ import { malaysiaDate } from "../time.js";
 export const staffRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 3 } });
 const progressUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 4 } });
+const projectImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
 const statuses = ["new", "triaged", "assigned", "in_progress", "waiting", "resolved", "closed"] as const;
 const priorities = ["low", "medium", "high", "critical"] as const;
 const projectStatuses = ["planned", "in_progress", "on_hold", "complete_monitoring", "completed", "cancelled"] as const;
@@ -115,6 +116,7 @@ staffRouter.get("/dashboard", (req, res) => {
 staffRouter.get("/projects", (_req, res) => {
   res.json(db.prepare(`
     SELECT p.*, u.name AS owner_name,
+      EXISTS(SELECT 1 FROM project_images pi WHERE pi.project_id = p.id) AS has_project_image,
       COUNT(w.id) AS work_count,
       SUM(CASE WHEN w.status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS open_count
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id LEFT JOIN work_items w ON w.project_id = p.id
@@ -155,7 +157,8 @@ staffRouter.post("/projects", requireRole("admin", "lead"), (req, res) => {
 
 staffRouter.get("/projects/:id", (req, res) => {
   const project = db.prepare(`
-    SELECT p.*, u.name AS owner_name, updater.name AS progress_updated_by_name
+    SELECT p.*, u.name AS owner_name, updater.name AS progress_updated_by_name,
+      EXISTS(SELECT 1 FROM project_images pi WHERE pi.project_id = p.id) AS has_project_image
     FROM projects p
     LEFT JOIN users u ON u.id = p.owner_id
     LEFT JOIN users updater ON updater.id = p.progress_updated_by
@@ -269,9 +272,56 @@ staffRouter.get("/projects/progress-images/:id", (req, res) => {
   res.sendFile(path.resolve(paths.uploads, image.stored_name));
 });
 
+staffRouter.patch("/projects/:id/image", requireRole("admin", "lead"), projectImageUpload.single("image"), async (req, res, next) => {
+  let storedName = "";
+  let persisted = false;
+  try {
+    const authReq = req as unknown as AuthenticatedRequest;
+    const project = db.prepare("SELECT id FROM projects WHERE id = ?").get(req.params.id) as { id: number } | undefined;
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const file = req.file;
+    if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file)) {
+      return res.status(400).json({ error: "Choose a valid JPG, PNG, or WebP project photo" });
+    }
+    if (!(await storageAvailable(file.size))) return res.status(507).json({ error: "Storage capacity is too low for this project photo" });
+    const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
+    storedName = `${crypto.randomUUID()}${ext}`;
+    await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
+    const previous = db.prepare("SELECT stored_name FROM project_images WHERE project_id = ?").get(project.id) as { stored_name: string } | undefined;
+    db.prepare(`
+      INSERT INTO project_images(project_id, original_name, stored_name, mime_type, size)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET original_name = excluded.original_name,
+        stored_name = excluded.stored_name, mime_type = excluded.mime_type, size = excluded.size,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(project.id, cleanText(file.originalname, 255), storedName, file.mimetype, file.size);
+    persisted = true;
+    if (previous?.stored_name && previous.stored_name !== storedName) {
+      await fs.promises.rm(path.join(paths.uploads, previous.stored_name), { force: true }).catch(() => undefined);
+    }
+    audit(authReq.user, "project_image_updated", "project", project.id, { size: file.size }, req.ip);
+    res.json({ ok: true });
+  } catch (error) {
+    if (storedName && !persisted) await fs.promises.rm(path.join(paths.uploads, storedName), { force: true });
+    next(error);
+  }
+});
+
+staffRouter.get("/projects/:id/image", (req, res) => {
+  const image = db.prepare("SELECT stored_name, mime_type FROM project_images WHERE project_id = ?").get(req.params.id) as {
+    stored_name: string; mime_type: string;
+  } | undefined;
+  if (!image) return res.status(404).end();
+  res.setHeader("Content-Type", image.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, no-cache");
+  res.sendFile(path.resolve(paths.uploads, image.stored_name));
+});
+
 staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => {
   const projects = (db.prepare(`
     SELECT p.*, owner.name AS owner_name, updater.name AS progress_updated_by_name,
+      EXISTS(SELECT 1 FROM project_images pi WHERE pi.project_id = p.id) AS has_project_image,
       (SELECT COUNT(*) FROM work_items w WHERE w.project_id = p.id AND w.status NOT IN ('resolved','closed')) AS open_work_count,
       (SELECT COUNT(*) FROM project_updates pu WHERE pu.project_id = p.id) AS update_count,
       (SELECT pui.id FROM project_update_images pui
@@ -286,7 +336,11 @@ staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => 
       p.updated_at DESC
   `).all() as any[]).map(project => ({ ...project, links: projectLinks(project.id) }));
   const storage = await fs.promises.statfs(paths.uploads);
-  const imageStats = db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes FROM project_update_images").get() as { count: number; bytes: number };
+  const imageStats = db.prepare(`
+    SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes FROM (
+      SELECT size FROM project_update_images UNION ALL SELECT size FROM project_images
+    )
+  `).get() as { count: number; bytes: number };
   res.json({
     projects,
     stats: {
@@ -305,7 +359,8 @@ staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => 
 
 staffRouter.get("/briefing/projects/:id", requireRole("admin", "lead"), (req, res) => {
   const project = db.prepare(`
-    SELECT p.*, owner.name AS owner_name, updater.name AS progress_updated_by_name
+    SELECT p.*, owner.name AS owner_name, updater.name AS progress_updated_by_name,
+      EXISTS(SELECT 1 FROM project_images pi WHERE pi.project_id = p.id) AS has_project_image
     FROM projects p
     LEFT JOIN users owner ON owner.id = p.owner_id
     LEFT JOIN users updater ON updater.id = p.progress_updated_by
@@ -335,11 +390,18 @@ staffRouter.get("/briefing/projects/:id", requireRole("admin", "lead"), (req, re
       CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       w.due_date
   `).all(req.params.id);
+  const navigationProjects = db.prepare(`
+    SELECT id, project_no, name FROM projects WHERE status != 'cancelled'
+    ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'complete_monitoring' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'planned' THEN 3 ELSE 4 END,
+      CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+      updated_at DESC
+  `).all();
   res.json({
     project,
     updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
     links: projectLinks(String(req.params.id)),
-    workItems
+    workItems,
+    navigationProjects
   });
 });
 

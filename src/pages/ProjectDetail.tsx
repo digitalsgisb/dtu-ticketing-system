@@ -70,6 +70,7 @@ export function ProjectDetailPage() {
       {canUpdateProgress && <button className="button button-secondary" onClick={() => setUpdatingProgress(true)}>Update progress</button>}
       {user?.role !== "member" && <button className="button button-primary" onClick={() => setEditing(true)}>Edit project</button>}
     </>} />
+    {project.has_project_image && <div className="project-detail-cover"><img src={`/api/staff/projects/${project.id}/image?v=${encodeURIComponent(project.updated_at)}`} alt={`${project.name} project cover`} /><span>Project cover</span></div>}
     <section className="detail-hero">
       <div className="detail-status"><Badge value={project.status} /><Badge value={project.priority} kind="priority" /></div>
       <div className="detail-facts">
@@ -188,7 +189,10 @@ function EditProject({ project, users, links: projectLinks, onClose, onSaved }: 
   const { t } = useI18n();
   const [form, setForm] = useState({ name: project.name, description: project.description, departmentName: project.department_name, ownerId: project.owner_id ? String(project.owner_id) : "", status: project.status, priority: project.priority, dueDate: project.due_date || "", progress: project.progress });
   const [links, setLinks] = useState<ProjectLinkForm[]>(projectLinkSlots(projectLinks));
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [error, setError] = useState("");
+  useEffect(() => () => { if (imagePreview) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
   const ownerOptions = users.filter(u => u.active || String(u.id) === form.ownerId);
   const updateLink = (index: number, patch: Partial<ProjectLinkForm>) => {
     setLinks(current => current.map((link, itemIndex) => itemIndex === index ? { ...link, ...patch } : link));
@@ -203,6 +207,11 @@ function EditProject({ project, users, links: projectLinks, onClose, onSaved }: 
         progress: Number(form.progress),
         links
       }));
+      if (image) {
+        const body = new FormData();
+        body.set("image", image);
+        await api(`/api/staff/projects/${project.id}/image`, { method: "PATCH", body });
+      }
       onSaved();
     }
     catch (err) { setError((err as Error).message); }
@@ -210,6 +219,17 @@ function EditProject({ project, users, links: projectLinks, onClose, onSaved }: 
   return <Modal title="Edit project" onClose={onClose}><form className="form-stack" onSubmit={save}><ErrorNotice message={error} />
     <label>{t("title")}<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
     <label>{t("description")}<textarea rows={4} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
+    <label className="briefing-photo-picker">Project cover photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={async e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const compressed = await compressProgressImage(file);
+        if (imagePreview) URL.revokeObjectURL(imagePreview);
+        setImage(compressed);
+        setImagePreview(URL.createObjectURL(compressed));
+      } catch (err) { setError((err as Error).message); }
+    }} /><small>Shown on project cards and as the project’s presentation cover.</small></label>
+    {(imagePreview || project.has_project_image) && <div className="project-image-preview"><img src={imagePreview || `/api/staff/projects/${project.id}/image?v=${encodeURIComponent(project.updated_at)}`} alt="Project cover preview" /></div>}
     <div className="form-grid">
       <label>{t("owner")}<select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
       <label>{t("status")}<select value={form.status} onChange={e => {
