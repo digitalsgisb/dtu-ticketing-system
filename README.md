@@ -98,6 +98,30 @@ git push -u origin your-branch-name
 
 After the upstream is configured, `git pull` and `git push` can be used without specifying the remote and branch each time.
 
+### Pull and deploy the update on the Raspberry Pi
+
+After the changes have been pushed to GitHub, connect to the Raspberry Pi and run these commands from the cloned repository—not from `/opt/dtu-control/current`:
+
+```bash
+cd ~/dtu-ticketing-system
+git status --short
+git switch main
+git pull --ff-only origin main
+npm ci
+npm run build
+sudo bash deploy/install-pi.sh
+sudo systemctl status dtu-control --no-pager
+curl http://127.0.0.1:3100/api/health
+```
+
+`git status --short` should normally return no output before pulling. The installer creates a new production release and restarts the application when it is already running. It preserves `/etc/dtu-control.env`, the database, uploads, backups, and logs.
+
+If the health check does not return an `ok` response, inspect the latest service logs:
+
+```bash
+sudo journalctl -u dtu-control --since "10 minutes ago" --no-pager
+```
+
 ## Company branding
 
 The Sugihara Grand Industries logo is stored locally at `public/sugihara-grand-logo.png` and used by the staff portal, login page, public request portal, wallboard, and printable QR labels. Because it is bundled locally, the deployed Pi does not need to contact GitHub to display the logo.

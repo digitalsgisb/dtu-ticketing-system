@@ -100,7 +100,7 @@ export function ProgressBriefingPage() {
     <PageHeader eyebrow="Executive reporting" title="Progress Briefing" description="A presentation-ready view of every DTU project, its latest progress, evidence, and delivery position." />
     <section className="briefing-hero">
       <div><span>Portfolio pulse</span><h2>{data.stats.active} projects actively moving</h2><p>Select any project to present its update history, progress photos, and current work.</p></div>
-      <div className="briefing-storage"><small>Project image storage</small><strong>{formatBytes(data.stats.imageBytes)}</strong><span>{data.stats.imageCount} project and progress images · {formatBytes(data.stats.freeBytes)} free locally</span></div>
+      <div className="briefing-storage"><small>Progress photo storage</small><strong>{formatBytes(data.stats.imageBytes)}</strong><span>{data.stats.imageCount} progress images · {formatBytes(data.stats.freeBytes)} free locally</span></div>
     </section>
     <section className="stat-grid briefing-stats">
       <StatCard label="Portfolio projects" value={data.stats.total} tone="blue" note="Management view" icon={<ProjectIcon />} />
@@ -143,11 +143,9 @@ function BriefingProjectCard({ project, presentationOrder }: { project: any; pre
   };
   return <Link to={`/briefing/${project.id}`} className="briefing-project-card" onClick={preparePresentation}>
     <div className="briefing-project-image">
-      {project.has_project_image
-        ? <img src={`/api/staff/projects/${project.id}/image?v=${encodeURIComponent(project.updated_at)}`} alt={`${project.name} project cover`} />
-        : project.latest_image_id
+      {project.latest_image_id
         ? <img src={`/api/staff/briefing/images/${project.latest_image_id}`} alt="" />
-        : <div className="briefing-image-placeholder"><ProjectIcon /><span>No project photo yet</span></div>}
+        : <div className="briefing-image-placeholder"><ProjectIcon /><span>Add a photo with a progress update</span></div>}
       <span className="mono">{project.project_no}</span>
     </div>
     <div className="briefing-card-body">
@@ -168,14 +166,28 @@ export function BriefingProjectPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [showUpdate, setShowUpdate] = useState(false);
   const [showWorkItem, setShowWorkItem] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [error, setError] = useState("");
-  const load = () => api(`/api/staff/briefing/projects/${id}`).then(setData).catch(err => setError(err.message));
+  const load = () => api(`/api/staff/briefing/projects/${id}`).then(next => { setData(next); setError(""); }).catch(err => setError(err.message));
   useEffect(() => {
-    setData(null);
+    let cancelled = false;
+    const changingProject = data !== null;
     setError("");
-    window.scrollTo({ top: 0 });
-    void load();
+    if (changingProject) {
+      setTransitioning(true);
+      window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }
+    void api(`/api/staff/briefing/projects/${id}`).then(next => {
+      if (cancelled) return;
+      setData(next);
+      requestAnimationFrame(() => setTransitioning(false));
+    }).catch(err => {
+      if (cancelled) return;
+      setError(err.message);
+      setTransitioning(false);
+    });
+    return () => { cancelled = true; };
   }, [id]);
   useEffect(() => { void api<any[]>("/api/staff/users").then(setUsers).catch(() => undefined); }, []);
   useEffect(() => {
@@ -199,12 +211,13 @@ export function BriefingProjectPage() {
   return <>
     <div className="briefing-back-row"><button className="briefing-back-link" onClick={() => navigate("/briefing")}>← Portfolio briefing</button><div className="briefing-primary-actions"><button className="button button-secondary" onClick={() => setShowWorkItem(true)}><PlusIcon /> Add task / issue</button><button className="button button-primary" onClick={() => setShowUpdate(true)}>Management update</button></div></div>
     <nav className="briefing-presentation-nav" aria-label="Project presentation navigation">
-      <button type="button" disabled={!previousProject} onClick={() => previousProject && goToProject(previousProject.id)}><span>← Previous</span><small>{previousProject?.project_no || "Start of list"}</small></button>
-      <label><span>Presenting project <strong>{currentIndex + 1} of {presentationOrder.length}</strong></span><select value={project.id} onChange={event => goToProject(Number(event.target.value))}>{presentationOrder.map(item => <option value={item.id} key={item.id}>{item.project_no} · {item.name}</option>)}</select></label>
-      <button type="button" disabled={!nextProject} onClick={() => nextProject && goToProject(nextProject.id)}><span>Next →</span><small>{nextProject?.project_no || "End of list"}</small></button>
+      <button type="button" disabled={transitioning || !previousProject} onClick={() => previousProject && goToProject(previousProject.id)}><span>← Previous</span><small>{previousProject?.project_no || "Start of list"}</small></button>
+      <label><span>Presenting project <strong>{currentIndex + 1} of {presentationOrder.length}</strong></span><select disabled={transitioning} value={project.id} onChange={event => goToProject(Number(event.target.value))}>{presentationOrder.map(item => <option value={item.id} key={item.id}>{item.project_no} · {item.name}</option>)}</select></label>
+      <button type="button" disabled={transitioning || !nextProject} onClick={() => nextProject && goToProject(nextProject.id)}><span>Next →</span><small>{nextProject?.project_no || "End of list"}</small></button>
     </nav>
-    <section className={`briefing-detail-hero${project.has_project_image ? " has-project-image" : ""}`}>
-      {project.has_project_image && <img className="briefing-detail-cover" src={`/api/staff/projects/${project.id}/image?v=${encodeURIComponent(project.updated_at)}`} alt="" />}
+    <div className={`briefing-project-stage${transitioning ? " is-switching" : ""}`} key={project.id} aria-busy={transitioning}>
+    <section className={`briefing-detail-hero${project.latest_image_id ? " has-progress-image" : ""}`}>
+      {project.latest_image_id ? <img className="briefing-detail-cover" src={`/api/staff/briefing/images/${project.latest_image_id}`} alt="" /> : null}
       <div className="briefing-detail-copy"><span className="mono">{project.project_no}</span><div><Badge value={project.status} /><Badge value={project.priority} kind="priority" /></div><h1>{project.name}</h1><p>{project.description || "No project description has been added."}</p></div>
       <div className="briefing-progress-orbit"><strong>{progress}%</strong><span>delivery progress</span><i style={{ "--progress": `${progress * 3.6}deg` } as CSSProperties} /></div>
       <div className="briefing-detail-facts"><div><small>Owner</small><strong>{project.owner_name || "Unassigned"}</strong></div><div><small>Department</small><strong>{project.department_name}</strong></div><div><small>Due date</small><strong>{formatDate(project.due_date)}</strong></div><div><small>Open work</small><strong>{openWork.length}</strong></div></div>
@@ -233,6 +246,7 @@ export function BriefingProjectPage() {
           {openWork.length ? <div className="briefing-work-list">{openWork.slice(0, 8).map((item: any) => <Link to={`/tickets/${item.id}`} key={item.id}><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><strong>{item.title}</strong><small>{item.assignee_name || "Unassigned"} · {formatDate(item.due_date)}</small></Link>)}</div> : <Empty title="No open work" />}
         </section>
       </aside>
+    </div>
     </div>
     {showUpdate && <BriefingUpdateModal project={project} onClose={() => setShowUpdate(false)} onSaved={() => { setShowUpdate(false); void load(); }} />}
     {showWorkItem && <BriefingWorkItemModal project={project} users={users} onClose={() => setShowWorkItem(false)} onSaved={() => { setShowWorkItem(false); void load(); }} />}

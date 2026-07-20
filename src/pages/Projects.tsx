@@ -5,7 +5,6 @@ import { useAuth } from "../auth";
 import { PlusIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
-import { compressProgressImage } from "../progressImages";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"], ["cancelled", "Cancelled"]] as const;
@@ -89,7 +88,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       {filtered.length ? <div className="project-grid">{filtered.map(project => {
         const displayedProgress = projectProgress(project);
         return <Link to={`/projects/${project.id}`} className="project-card" key={project.id}>
-          <div className="project-card-image">{project.has_project_image ? <img src={`/api/staff/projects/${project.id}/image?v=${encodeURIComponent(project.updated_at)}`} alt={`${project.name} project cover`} /> : <div><span>{project.project_no}</span><small>Add a project photo</small></div>}</div>
+          <div className="project-card-image">{project.latest_image_id ? <img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} /> : <div><span>{project.project_no}</span><small>Add a photo with a progress update</small></div>}</div>
           <div className="project-card-content">
             <div className="project-card-top"><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
             <div><h2>{project.name}</h2><p>{project.description || "No project description yet."}</p></div>
@@ -106,19 +105,11 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
 function ProjectCreateModal({ users, onClose, onCreated }: { users: any[]; onClose: () => void; onCreated: () => void }) {
   const { t } = useI18n();
   const [form, setForm] = useState({ name: "", description: "", departmentName: "", ownerId: "", priority: "medium", dueDate: "" });
-  const [image, setImage] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setError("");
     try {
-      const created = await api<{ id: number }>("/api/staff/projects", json("POST", { ...form, ownerId: form.ownerId ? Number(form.ownerId) : null, dueDate: form.dueDate || null }));
-      if (image) {
-        const body = new FormData();
-        body.set("image", image);
-        await api(`/api/staff/projects/${created.id}/image`, { method: "PATCH", body });
-      }
+      await api("/api/staff/projects", json("POST", { ...form, ownerId: form.ownerId ? Number(form.ownerId) : null, dueDate: form.dueDate || null }));
       onCreated();
     } catch (err) { setError((err as Error).message); }
   };
@@ -127,17 +118,6 @@ function ProjectCreateModal({ users, onClose, onCreated }: { users: any[]; onClo
       <ErrorNotice message={error} />
       <label>{t("title")}<input required minLength={3} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
       <label>{t("description")}<textarea rows={4} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
-      <label className="briefing-photo-picker">Project cover photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={async e => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-          const compressed = await compressProgressImage(file);
-          if (preview) URL.revokeObjectURL(preview);
-          setImage(compressed);
-          setPreview(URL.createObjectURL(compressed));
-        } catch (err) { setError((err as Error).message); }
-      }} /><small>This photo represents the project across the portfolio and briefing.</small></label>
-      {preview && <div className="project-image-preview"><img src={preview} alt="Selected project cover" /></div>}
       <div className="form-grid">
         <label>{t("department")}<input required value={form.departmentName} onChange={e => setForm({ ...form, departmentName: e.target.value })} /></label>
         <label>{t("owner")}<select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
