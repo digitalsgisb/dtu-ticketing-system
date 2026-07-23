@@ -2018,6 +2018,12 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   min-width: 0;
   flex: 0 0 100%;
 }
+.wallboard-shell .wall-cycle-track > .wall-cycle-page {
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  flex: 0 0 100%;
+}
 .wallboard-shell .wall-cycle-page.wall-priority-grid {
   height: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
