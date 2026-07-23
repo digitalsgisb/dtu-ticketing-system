@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, formatDate } from "../api";
 import { AlertIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icons";
 import { Badge, Loading, StatCard } from "../components/UI";
@@ -7,6 +7,7 @@ import { CompanyLogo } from "../components/CompanyLogo";
 
 type WallboardView = "overview" | "projects" | "tickets";
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
+const wallboardPageSize = 4;
 
 export function WallboardPage() {
   const { t, lang, setLang } = useI18n();
@@ -66,7 +67,7 @@ export function WallboardPage() {
           <section className="wall-panel wall-priority-panel">
             <WallHeading index="01" eyebrow="OPERATIONS" title={t("criticalWork")} count={`${data.tickets.length} queued`} actionLabel="View all →" onClick={() => setView("tickets")} />
             {data.tickets.length
-              ? <div className="wall-priority-grid">{data.tickets.slice(0, 10).map((item: any, index: number) => <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />)}</div>
+              ? <CyclingTickets tickets={data.tickets} newTicketIds={newTicketIds} />
               : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
           </section>
         </main>
@@ -74,7 +75,7 @@ export function WallboardPage() {
         <aside className="wall-panel wall-portfolio-panel">
           <WallHeading index="02" eyebrow="PORTFOLIO" title={t("projectPortfolio")} count={`${data.projects.length} tracked`} actionLabel="View all →" onClick={() => setView("projects")} />
           {data.projects.length
-            ? <div className="wall-project-rail">{data.projects.slice(0, 10).map((project: any) => <WallProject key={project.id} project={project} />)}</div>
+            ? <CyclingProjects projects={data.projects} />
             : <WallClearState label="Portfolio clear" body="No active, monitoring, or completed projects require display." />}
         </aside>
       </div>
@@ -82,6 +83,102 @@ export function WallboardPage() {
 
     <footer className="wallboard-footer"><span className="status-dot" /> Systems operational <span>•</span> {t("refreshes")} <span>•</span> Secure local display</footer>
     <div className="wallboard-watermark">© DIGITAL TRANSFORMATION UNIT</div>
+  </div>;
+}
+
+function useWallboardCycle(itemCount: number, intervalMs: number) {
+  const pageCount = Math.ceil(itemCount / wallboardPageSize);
+  const [page, setPage] = useState(0);
+  const [animate, setAnimate] = useState(true);
+  const resetFrames = useRef<number[]>([]);
+
+  const enableAnimationAfterReset = () => {
+    const first = requestAnimationFrame(() => {
+      const second = requestAnimationFrame(() => {
+        setAnimate(true);
+        resetFrames.current = [];
+      });
+      resetFrames.current.push(second);
+    });
+    resetFrames.current.push(first);
+  };
+
+  useEffect(() => {
+    setAnimate(false);
+    setPage(0);
+    enableAnimationAfterReset();
+    return () => {
+      resetFrames.current.forEach(frame => cancelAnimationFrame(frame));
+      resetFrames.current = [];
+    };
+  }, [itemCount]);
+
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const timer = setInterval(() => setPage(current => current + 1), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs, pageCount]);
+
+  const finishTransition = () => {
+    if (page !== pageCount) return;
+    setAnimate(false);
+    setPage(0);
+    enableAnimationAfterReset();
+  };
+
+  return { page, pageCount, animate, finishTransition };
+}
+
+function pageItems<T>(items: T[]) {
+  return Array.from({ length: Math.ceil(items.length / wallboardPageSize) }, (_, page) =>
+    items.slice(page * wallboardPageSize, (page + 1) * wallboardPageSize));
+}
+
+function CyclingTickets({ tickets, newTicketIds }: { tickets: any[]; newTicketIds: Set<number> }) {
+  const pages = pageItems(tickets);
+  const { page, pageCount, animate, finishTransition } = useWallboardCycle(tickets.length, 8_000);
+  const renderedPages = pageCount > 1 ? [...pages, pages[0]] : pages;
+  return <div className="wall-cycle wall-cycle-priority">
+    <div
+      className={`wall-cycle-track${animate ? "" : " wall-cycle-track-reset"}`}
+      style={{ transform: `translate3d(-${page * 100}%, 0, 0)` }}
+      onTransitionEnd={event => { if (event.target === event.currentTarget) finishTransition(); }}
+    >
+      {renderedPages.map((items, pageIndex) => <div className="wall-cycle-page wall-priority-grid" key={`${pageIndex}-${items[0]?.id ?? "empty"}`}>
+        {items.map(item => {
+          const index = tickets.findIndex(ticket => ticket.id === item.id);
+          return <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />;
+        })}
+      </div>)}
+    </div>
+    <CyclePosition page={page} pageCount={pageCount} />
+  </div>;
+}
+
+function CyclingProjects({ projects }: { projects: any[] }) {
+  const pages = pageItems(projects);
+  const { page, pageCount, animate, finishTransition } = useWallboardCycle(projects.length, 10_000);
+  const renderedPages = pageCount > 1 ? [...pages, pages[0]] : pages;
+  return <div className="wall-cycle wall-cycle-projects">
+    <div
+      className={`wall-cycle-track${animate ? "" : " wall-cycle-track-reset"}`}
+      style={{ transform: `translate3d(-${page * 100}%, 0, 0)` }}
+      onTransitionEnd={event => { if (event.target === event.currentTarget) finishTransition(); }}
+    >
+      {renderedPages.map((items, pageIndex) => <div className="wall-cycle-page wall-project-rail" key={`${pageIndex}-${items[0]?.id ?? "empty"}`}>
+        {items.map(project => <WallProject key={project.id} project={project} showcase />)}
+      </div>)}
+    </div>
+    <CyclePosition page={page} pageCount={pageCount} />
+  </div>;
+}
+
+function CyclePosition({ page, pageCount }: { page: number; pageCount: number }) {
+  if (pageCount <= 1) return null;
+  const visiblePage = page === pageCount ? 0 : page;
+  return <div className="wall-cycle-position" aria-hidden="true">
+    <span>{String(visiblePage + 1).padStart(2, "0")} / {String(pageCount).padStart(2, "0")}</span>
+    <i key={visiblePage} />
   </div>;
 }
 
@@ -156,9 +253,25 @@ function WallHeading({ index, eyebrow, title, count, actionLabel, onClick }: {
   </button>;
 }
 
-function WallProject({ project, expanded = false }: { project: any; expanded?: boolean }) {
+function WallProject({ project, expanded = false, showcase = false }: { project: any; expanded?: boolean; showcase?: boolean }) {
   const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
-  return <article className={`${project.status === "complete_monitoring" ? "wall-project-monitoring" : ""}${project.status === "completed" ? " wall-project-completed" : ""}${expanded ? " wall-project-expanded" : ""}`}>
+  const projectClass = `${project.status === "complete_monitoring" ? "wall-project-monitoring" : ""}${project.status === "completed" ? " wall-project-completed" : ""}${expanded ? " wall-project-expanded" : ""}${showcase ? " wall-project-showcase" : ""}`;
+  if (showcase) return <article className={projectClass}>
+    <div className={`wall-project-visual${project.latest_image_id ? " has-image" : ""}`}>
+      {project.latest_image_id
+        ? <img src={`/api/wallboard/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} />
+        : <div className="wall-project-visual-fallback"><ProjectIcon /><i style={{ "--project-progress": `${displayedProgress * 3.6}deg` } as CSSProperties} /><small>{displayedProgress}%</small></div>}
+      <span>Latest progress</span>
+    </div>
+    <div className="wall-project-showcase-copy">
+      <header><span className="mono">{project.project_no}</span><Badge value={project.status} /></header>
+      <h3>{project.name}</h3>
+      {project.current_update && <p>{project.current_update}</p>}
+      <div className="wall-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
+      <footer><span>{project.owner_name || "Unassigned"}</span><strong>{displayedProgress}%</strong><span>{formatDate(project.due_date)}</span></footer>
+    </div>
+  </article>;
+  return <article className={projectClass}>
     <div><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
     <h3>{project.name}</h3>
     {project.current_update && <p>{project.current_update}</p>}

@@ -301,6 +301,7 @@ describe("DTU Control Centre API", () => {
     expect(response.body.projects.some((project: { project_no: string; status: string }) =>
       project.project_no === "PRJ-COMPLETE" && project.status === "completed"
     )).toBe(true);
+    expect(response.body.projects.every((project: Record<string, unknown>) => "latest_image_id" in project)).toBe(true);
     expect(response.body.stats.activeProjects).toBe(activeBefore);
   });
 

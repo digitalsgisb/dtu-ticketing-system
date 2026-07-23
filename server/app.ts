@@ -57,7 +57,10 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
   };
   const projects = db.prepare(`
     SELECT p.id, p.project_no, p.name, p.status, p.priority, p.progress, p.due_date,
-      p.current_update, p.progress_updated_at, u.name AS owner_name
+      p.current_update, p.progress_updated_at, u.name AS owner_name,
+      (SELECT pui.id FROM project_update_images pui
+        JOIN project_updates pu ON pu.id = pui.project_update_id
+        WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id
     WHERE p.status IN ('planned','in_progress','on_hold','complete_monitoring','completed')
     ORDER BY CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END,
@@ -73,6 +76,18 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
       CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, w.due_date
   `).all(today);
   res.json({ stats, projects, tickets, generatedAt: new Date().toISOString() });
+});
+
+app.get("/api/wallboard/progress-images/:id", blockStaffOnPublicHost, (req, res) => {
+  const image = db.prepare("SELECT stored_name, mime_type FROM project_update_images WHERE id = ?").get(req.params.id) as {
+    stored_name: string;
+    mime_type: string;
+  } | undefined;
+  if (!image) return res.status(404).end();
+  res.setHeader("Content-Type", image.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.sendFile(path.resolve(config.dataDir, "uploads", image.stored_name));
 });
 
 const dist = path.join(config.root, "dist");
