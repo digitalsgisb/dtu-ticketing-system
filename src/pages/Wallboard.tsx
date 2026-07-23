@@ -134,6 +134,20 @@ function pageItems<T>(items: T[]) {
     items.slice(page * wallboardPageSize, (page + 1) * wallboardPageSize));
 }
 
+function useWallboardFade(itemCount: number, intervalMs: number) {
+  const pageCount = Math.ceil(itemCount / wallboardPageSize);
+  const [page, setPage] = useState(0);
+
+  useEffect(() => setPage(0), [itemCount]);
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const timer = setInterval(() => setPage(current => (current + 1) % pageCount), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs, pageCount]);
+
+  return { page, pageCount };
+}
+
 function CyclingTickets({ tickets, newTicketIds }: { tickets: any[]; newTicketIds: Set<number> }) {
   const pages = pageItems(tickets);
   const { page, pageCount, animate, finishTransition } = useWallboardCycle(tickets.length, 8_000);
@@ -157,15 +171,14 @@ function CyclingTickets({ tickets, newTicketIds }: { tickets: any[]; newTicketId
 
 function CyclingProjects({ projects }: { projects: any[] }) {
   const pages = pageItems(projects);
-  const { page, pageCount, animate, finishTransition } = useWallboardCycle(projects.length, 10_000);
-  const renderedPages = pageCount > 1 ? [...pages, pages[0]] : pages;
+  const { page, pageCount } = useWallboardFade(projects.length, 10_000);
   return <div className="wall-cycle wall-cycle-projects">
-    <div
-      className={`wall-cycle-track${animate ? "" : " wall-cycle-track-reset"}`}
-      style={{ transform: `translate3d(-${page * 100}%, 0, 0)` }}
-      onTransitionEnd={event => { if (event.target === event.currentTarget) finishTransition(); }}
-    >
-      {renderedPages.map((items, pageIndex) => <div className="wall-cycle-page wall-project-rail" key={`${pageIndex}-${items[0]?.id ?? "empty"}`}>
+    <div className="wall-project-fade-stage">
+      {pages.map((items, pageIndex) => <div
+        className={`wall-cycle-page wall-project-rail${pageIndex === page ? " wall-project-page-active" : ""}`}
+        aria-hidden={pageIndex !== page}
+        key={`${pageIndex}-${items[0]?.id ?? "empty"}`}
+      >
         {items.map(project => <WallProject key={project.id} project={project} showcase />)}
       </div>)}
     </div>
@@ -255,7 +268,8 @@ function WallHeading({ index, eyebrow, title, count, actionLabel, onClick }: {
 
 function WallProject({ project, expanded = false, showcase = false }: { project: any; expanded?: boolean; showcase?: boolean }) {
   const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
-  const projectClass = `${project.status === "complete_monitoring" ? "wall-project-monitoring" : ""}${project.status === "completed" ? " wall-project-completed" : ""}${expanded ? " wall-project-expanded" : ""}${showcase ? " wall-project-showcase" : ""}`;
+  const statusClass = `wall-project-status-${String(project.status).replaceAll("_", "-")}`;
+  const projectClass = `${statusClass}${project.status === "complete_monitoring" ? " wall-project-monitoring" : ""}${project.status === "completed" ? " wall-project-completed" : ""}${expanded ? " wall-project-expanded" : ""}${showcase ? " wall-project-showcase" : ""}`;
   if (showcase) return <article className={projectClass}>
     <div className={`wall-project-visual${project.latest_image_id ? " has-image" : ""}`}>
       {project.latest_image_id

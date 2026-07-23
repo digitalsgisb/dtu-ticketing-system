@@ -63,8 +63,10 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
         WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id
     WHERE p.status IN ('planned','in_progress','on_hold','complete_monitoring','completed')
-    ORDER BY CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END,
-      CASE p.status WHEN 'in_progress' THEN 0 WHEN 'complete_monitoring' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'planned' THEN 3 ELSE 4 END,
+    ORDER BY CASE p.status
+        WHEN 'in_progress' THEN 0 WHEN 'on_hold' THEN 1 WHEN 'planned' THEN 2
+        WHEN 'complete_monitoring' THEN 3 WHEN 'completed' THEN 4 ELSE 5 END,
+      p.progress DESC,
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       CASE WHEN p.status = 'completed' THEN p.updated_at END DESC, p.due_date
   `).all();
