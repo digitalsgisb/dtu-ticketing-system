@@ -2214,40 +2214,40 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 }
 .wallboard-shell .wall-project-rail .wall-project-showcase-copy footer { font-size: 8px; }
 
-/* Project status colour language: subtle enough for photos, clear at TV distance. */
+/* Quiet project status tinting that preserves the wallboard's dark visual language. */
 .wallboard-shell .wall-project-rail article.wall-project-status-in-progress,
 .wallboard-all-projects article.wall-project-status-in-progress {
-  border-color: rgba(61, 199, 201, .34);
-  background: linear-gradient(135deg, rgba(12, 65, 75, .96), rgba(9, 38, 51, .92));
-  box-shadow: inset 3px 0 rgba(70, 211, 202, .68);
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(41, 150, 156, .13), rgba(10, 38, 51, .94) 64%);
+  box-shadow: none;
 }
 .wallboard-shell .wall-project-rail article.wall-project-status-on-hold,
 .wallboard-all-projects article.wall-project-status-on-hold {
-  border-color: rgba(231, 172, 75, .38);
-  background: linear-gradient(135deg, rgba(67, 52, 28, .88), rgba(13, 41, 50, .94));
-  box-shadow: inset 3px 0 rgba(238, 174, 67, .78);
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(158, 116, 54, .13), rgba(10, 38, 51, .94) 64%);
+  box-shadow: none;
 }
-.wall-project-status-on-hold .wall-progress i { background: linear-gradient(90deg, #c7842e, #efb455); }
-.wall-project-status-on-hold footer strong { color: #efb85f; }
+.wall-project-status-on-hold .wall-progress i { background: linear-gradient(90deg, #9c743f, #c69b5b); }
+.wall-project-status-on-hold footer strong { color: #c4a06b; }
 .wallboard-shell .wall-project-rail article.wall-project-status-planned,
 .wallboard-all-projects article.wall-project-status-planned {
-  border-color: rgba(111, 154, 223, .34);
-  background: linear-gradient(135deg, rgba(28, 52, 80, .92), rgba(10, 38, 52, .94));
-  box-shadow: inset 3px 0 rgba(107, 160, 231, .7);
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(73, 110, 159, .13), rgba(10, 38, 51, .94) 64%);
+  box-shadow: none;
 }
-.wall-project-status-planned .wall-progress i { background: linear-gradient(90deg, #557fc1, #80a9eb); }
-.wall-project-status-planned footer strong { color: #8fb5ee; }
+.wall-project-status-planned .wall-progress i { background: linear-gradient(90deg, #58779f, #7895b9); }
+.wall-project-status-planned footer strong { color: #849ebd; }
 .wallboard-shell .wall-project-rail article.wall-project-status-complete-monitoring,
 .wallboard-all-projects article.wall-project-status-complete-monitoring {
-  border-color: rgba(121, 214, 151, .36);
-  background: linear-gradient(135deg, rgba(26, 71, 54, .9), rgba(9, 42, 48, .94));
-  box-shadow: inset 3px 0 rgba(122, 222, 156, .72);
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(84, 147, 107, .12), rgba(10, 38, 51, .94) 64%);
+  box-shadow: none;
 }
 .wallboard-shell .wall-project-rail article.wall-project-status-completed,
 .wallboard-all-projects article.wall-project-status-completed {
-  border-color: rgba(74, 179, 126, .34);
-  background: linear-gradient(135deg, rgba(14, 60, 51, .9), rgba(9, 38, 47, .94));
-  box-shadow: inset 3px 0 rgba(80, 190, 132, .66);
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(57, 125, 91, .11), rgba(10, 38, 51, .94) 64%);
+  box-shadow: none;
 }
 
 @keyframes wallCycleTimer { from { transform: scaleX(0); } to { transform: scaleX(1); } }
