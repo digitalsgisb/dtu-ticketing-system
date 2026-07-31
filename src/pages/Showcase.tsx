@@ -236,7 +236,10 @@ export function PublicShowcasePage() {
       }}>
         {data.projects.map((project, index) => <article className="guest-showcase-card" key={project.id}>
           <div className={`guest-showcase-image ${project.imageUrl ? "" : "is-empty"}`}>
-            {project.imageUrl ? <img src={project.imageUrl} alt={`Preview of ${project.name}`} /> : <div><span>{String(index + 1).padStart(2, "0")}</span><strong>DTU</strong></div>}
+            {project.imageUrl ? <>
+              <img className="guest-showcase-image-backdrop" src={project.imageUrl} alt="" aria-hidden="true" />
+              <img className="guest-showcase-image-foreground" src={project.imageUrl} alt={`Preview of ${project.name}`} />
+            </> : <div><span>{String(index + 1).padStart(2, "0")}</span><strong>DTU</strong></div>}
             <span className="guest-card-count">{String(index + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span>
           </div>
           <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A digital solution designed and delivered by the DTU team."}</p><footer><i /><span>Designed & delivered by DTU</span></footer></div>
