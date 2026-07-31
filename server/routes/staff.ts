@@ -100,7 +100,7 @@ staffRouter.get("/showcase", requireRole("admin", "lead"), async (_req, res) => 
         WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id
     FROM projects p LEFT JOIN showcase_projects sp ON sp.project_id = p.id
     WHERE p.status != 'cancelled'
-    ORDER BY COALESCE(sp.visible, 0) DESC, COALESCE(sp.sort_order, 9999), p.name
+    ORDER BY COALESCE(sp.sort_order, 9999), p.name
   `).all();
   const url = `${config.publicBaseUrl.replace(/\/$/, "")}/showcase/${settings.token}`;
   const dataUrl = await QRCode.toDataURL(url, {
@@ -131,6 +131,31 @@ staffRouter.patch("/showcase", requireRole("admin", "lead"), (req, res) => {
     authReq.user.id
   );
   audit(authReq.user, "showcase_updated", "showcase", 1, parsed.data, req.ip);
+  res.json({ ok: true });
+});
+
+staffRouter.patch("/showcase/order", requireRole("admin", "lead"), (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const parsed = z.object({
+    projectIds: z.array(z.number().int().positive()).min(1).max(500)
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid showcase order" });
+  if (new Set(parsed.data.projectIds).size !== parsed.data.projectIds.length) return res.status(400).json({ error: "Invalid showcase order" });
+  const placeholders = parsed.data.projectIds.map(() => "?").join(",");
+  const existing = db.prepare(`
+    SELECT COUNT(*) AS count FROM projects WHERE status != 'cancelled' AND id IN (${placeholders})
+  `).get(...parsed.data.projectIds) as { count: number };
+  if (existing.count !== parsed.data.projectIds.length) {
+    return res.status(400).json({ error: "One or more showcase projects no longer exist" });
+  }
+  db.transaction(() => {
+    const update = db.prepare(`
+      INSERT INTO showcase_projects(project_id, sort_order) VALUES (?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET sort_order = excluded.sort_order, updated_at = CURRENT_TIMESTAMP
+    `);
+    parsed.data.projectIds.forEach((projectId, index) => update.run(projectId, index));
+  })();
+  audit(authReq.user, "showcase_reordered", "showcase", 1, { projectIds: parsed.data.projectIds }, req.ip);
   res.json({ ok: true });
 });
 

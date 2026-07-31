@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type PointerEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, humanize, json } from "../api";
 import { CompanyLogo } from "../components/CompanyLogo";
@@ -38,11 +38,19 @@ type GuestProject = {
 
 export function ShowcasePage() {
   const [data, setData] = useState<ShowcaseAdminData | null>(null);
+  const [orderedProjects, setOrderedProjects] = useState<ShowcaseProject[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [orderStatus, setOrderStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const orderedProjectsRef = useRef<ShowcaseProject[]>([]);
+  const dragStartOrder = useRef<ShowcaseProject[]>([]);
+  const dragProjectId = useRef<number | null>(null);
   const load = () => api<ShowcaseAdminData>("/api/staff/showcase").then(next => {
     setData(next);
+    setOrderedProjects(next.projects);
+    orderedProjectsRef.current = next.projects;
     setError("");
   }).catch(e => setError(e.message));
   useEffect(() => { void load(); }, []);
@@ -75,7 +83,70 @@ export function ShowcasePage() {
     finally { setBusy(false); }
   };
 
-  const selected = data.projects.filter(project => project.visible).length;
+  const setProjectOrder = (projects: ShowcaseProject[]) => {
+    orderedProjectsRef.current = projects;
+    setOrderedProjects(projects);
+  };
+
+  const moveProject = (projectId: number, targetId: number) => {
+    const projects = orderedProjectsRef.current;
+    const from = projects.findIndex(project => project.id === projectId);
+    const to = projects.findIndex(project => project.id === targetId);
+    if (from < 0 || to < 0 || from === to) return;
+    const next = [...projects];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setProjectOrder(next);
+  };
+
+  const saveProjectOrder = async (projects: ShowcaseProject[], rollback: ShowcaseProject[]) => {
+    setOrderStatus("saving");
+    setError("");
+    try {
+      await api("/api/staff/showcase/order", json("PATCH", { projectIds: projects.map(project => project.id) }));
+      setOrderStatus("saved");
+      window.setTimeout(() => setOrderStatus("idle"), 1800);
+    } catch (e) {
+      setProjectOrder(rollback);
+      setOrderStatus("idle");
+      setError((e as Error).message);
+    }
+  };
+
+  const beginDrag = (projectId: number, event?: DragEvent<HTMLElement>) => {
+    dragProjectId.current = projectId;
+    dragStartOrder.current = orderedProjectsRef.current;
+    setDraggingId(projectId);
+    if (event) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(projectId));
+    }
+  };
+
+  const finishDrag = () => {
+    if (dragProjectId.current === null) return;
+    const next = orderedProjectsRef.current;
+    const rollback = dragStartOrder.current;
+    const changed = next.map(project => project.id).join(",") !== rollback.map(project => project.id).join(",");
+    dragProjectId.current = null;
+    setDraggingId(null);
+    if (changed) void saveProjectOrder(next, rollback);
+  };
+
+  const pointerStart = (projectId: number, event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse" || !(event.target as HTMLElement).closest(".showcase-drag-handle")) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    beginDrag(projectId);
+  };
+
+  const pointerMove = (event: PointerEvent<HTMLElement>) => {
+    if (dragProjectId.current === null || event.pointerType === "mouse") return;
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-showcase-project-id]");
+    const targetId = Number(target?.dataset.showcaseProjectId);
+    if (Number.isInteger(targetId)) moveProject(dragProjectId.current, targetId);
+  };
+
+  const selected = orderedProjects.filter(project => project.visible).length;
   return <>
     <PageHeader
       eyebrow="Visitor experience"
@@ -120,19 +191,36 @@ export function ShowcasePage() {
     </div>
 
     <section className="showcase-project-section">
-      <div className="showcase-project-heading"><div><span className="eyebrow">Approved content</span><h2>Portfolio cards</h2><p>Use a progress photo, upload a cleaner cover, or show a text-only card.</p></div><span>{data.projects.length} available projects</span></div>
+      <div className="showcase-project-heading"><div><span className="eyebrow">Approved content</span><h2>Portfolio cards</h2><p>Drag the handle to set the display order. Changes save automatically.</p></div><span>{orderStatus === "saving" ? "Saving order…" : orderStatus === "saved" ? "Order saved" : `${orderedProjects.length} available projects`}</span></div>
       <div className="showcase-editor-list">
-        {data.projects.map(project => <ShowcaseProjectEditor key={project.id} project={project} onSaved={load} />)}
+        {orderedProjects.map((project, index) => <div
+          className={`showcase-editor-dropzone ${draggingId === project.id ? "is-dragging" : ""}`}
+          key={project.id}
+          data-showcase-project-id={project.id}
+          onDragStart={event => beginDrag(project.id, event)}
+          onDragEnter={event => {
+            event.preventDefault();
+            if (dragProjectId.current !== null) moveProject(dragProjectId.current, project.id);
+          }}
+          onDragOver={event => event.preventDefault()}
+          onDrop={event => { event.preventDefault(); finishDrag(); }}
+          onDragEnd={finishDrag}
+          onPointerDown={event => pointerStart(project.id, event)}
+          onPointerMove={pointerMove}
+          onPointerUp={finishDrag}
+          onPointerCancel={finishDrag}
+        >
+          <ShowcaseProjectEditor project={project} position={index} dragging={draggingId === project.id} onSaved={load} />
+        </div>)}
       </div>
     </section>
   </>;
 }
 
-function ShowcaseProjectEditor({ project, onSaved }: { project: ShowcaseProject; onSaved: () => void }) {
+function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { project: ShowcaseProject; position: number; dragging: boolean; onSaved: () => void }) {
   const [visible, setVisible] = useState(Boolean(project.visible));
   const [title, setTitle] = useState(project.title_override ?? "");
   const [summary, setSummary] = useState(project.summary_override ?? "");
-  const [sortOrder, setSortOrder] = useState(project.sort_order);
   const [imageMode, setImageMode] = useState(project.image_mode);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -147,7 +235,6 @@ function ShowcaseProjectEditor({ project, onSaved }: { project: ShowcaseProject;
     setVisible(Boolean(project.visible));
     setTitle(project.title_override ?? "");
     setSummary(project.summary_override ?? "");
-    setSortOrder(project.sort_order);
     setImageMode(project.image_mode);
   }, [project]);
 
@@ -158,7 +245,7 @@ function ShowcaseProjectEditor({ project, onSaved }: { project: ShowcaseProject;
     try {
       const body = new FormData();
       body.set("visible", String(visible));
-      body.set("sortOrder", String(sortOrder));
+      body.set("sortOrder", String(position));
       body.set("title", title);
       body.set("summary", summary);
       body.set("imageMode", imageMode);
@@ -172,16 +259,19 @@ function ShowcaseProjectEditor({ project, onSaved }: { project: ShowcaseProject;
     finally { setBusy(false); }
   };
 
-  return <article className={`showcase-editor ${visible ? "is-selected" : ""}`}>
+  return <article className={`showcase-editor ${visible ? "is-selected" : ""} ${dragging ? "is-dragging" : ""}`}>
     <div className="showcase-editor-cover">
       {preview ? <img src={preview} alt="" /> : <div><strong>{project.project_no}</strong><span>Text-only card</span></div>}
       <label className="showcase-include"><input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} /><span>{visible ? "Included" : "Include"}</span></label>
     </div>
     <div className="showcase-editor-fields">
-      <header><div><span>{project.project_no} · {project.department_name}</span><h3>{project.name}</h3></div><small>{humanize(project.status)}</small></header>
+      <header>
+        <button className="showcase-drag-handle" type="button" draggable aria-label={`Drag ${project.name} to reorder`} title="Drag to reorder"><i /><i /><i /><i /><i /><i /><span>{String(position + 1).padStart(2, "0")}</span></button>
+        <div><span>{project.project_no} · {project.department_name}</span><h3>{project.name}</h3></div>
+        <small>{humanize(project.status)}</small>
+      </header>
       <div className="showcase-editor-form">
-        <label>Visitor title <small>optional</small><input value={title} maxLength={120} placeholder={project.name} onChange={e => setTitle(e.target.value)} /></label>
-        <label>Display order<input type="number" min="0" max="999" value={sortOrder} onChange={e => setSortOrder(Number(e.target.value))} /></label>
+        <label className="showcase-title-field">Visitor title <small>optional</small><input value={title} maxLength={120} placeholder={project.name} onChange={e => setTitle(e.target.value)} /></label>
         <label className="showcase-summary-field">Visitor summary <small>optional</small><textarea rows={3} maxLength={800} value={summary} placeholder={project.description || "Add a short, visitor-friendly description"} onChange={e => setSummary(e.target.value)} /></label>
         <label>Cover style<select value={imageMode} onChange={e => setImageMode(e.target.value as typeof imageMode)}>
           <option value="latest">Latest progress photo</option>
@@ -242,7 +332,7 @@ export function PublicShowcasePage() {
             </> : <div><span>{String(index + 1).padStart(2, "0")}</span><strong>DTU</strong></div>}
             <span className="guest-card-count">{String(index + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span>
           </div>
-          <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A digital solution designed and delivered by the DTU team."}</p><footer><i /><span>Designed & delivered by DTU</span></footer></div>
+          <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A digital solution designed and delivered by the DTU team."}</p><footer><i /><span>Designed and developed by Digital Transformation Unit</span></footer></div>
         </article>)}
       </div>
       <nav className="guest-showcase-controls" aria-label="Showcase navigation">
@@ -252,6 +342,6 @@ export function PublicShowcasePage() {
       </nav>
       <p className="guest-showcase-hint">Swipe to explore</p>
     </> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
-    <footer className="guest-showcase-footer"><CompanyLogo /><span>Digital Transformation Unit</span></footer>
+    <footer className="guest-showcase-footer"><CompanyLogo /><span>Designed and developed by<br /><strong>Digital Transformation Unit</strong></span></footer>
   </main>;
 }

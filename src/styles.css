@@ -2606,7 +2606,10 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .showcase-project-heading p { margin: 0; color: #718592; font-size: 12px; }
 .showcase-project-heading > span { color: #78909b; font-size: 10px; }
 .showcase-editor-list { display: grid; gap: 14px; }
-.showcase-editor { display: grid; grid-template-columns: 260px minmax(0, 1fr); overflow: hidden; border: 1px solid #e0e8eb; border-radius: 18px; background: white; box-shadow: 0 12px 36px rgba(17,48,69,.045); transition: border-color .2s, box-shadow .2s; }
+.showcase-editor-dropzone { border-radius: 18px; transition: transform .18s ease, opacity .18s ease; }
+.showcase-editor-dropzone.is-dragging { z-index: 3; opacity: .72; transform: scale(.985); }
+.showcase-editor { display: grid; grid-template-columns: 260px minmax(0, 1fr); overflow: hidden; border: 1px solid #e0e8eb; border-radius: 18px; background: white; box-shadow: 0 12px 36px rgba(17,48,69,.045); transition: border-color .2s, box-shadow .2s, transform .18s ease; }
+.showcase-editor.is-dragging { border-color: #69bdb7; box-shadow: 0 20px 55px rgba(20,111,111,.18); }
 .showcase-editor.is-selected { border-color: #9fd3ce; box-shadow: 0 16px 44px rgba(29,129,126,.09); }
 .showcase-editor-cover { position: relative; min-height: 250px; overflow: hidden; background: linear-gradient(145deg, #0a2b3d, #176f73); }
 .showcase-editor-cover > img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; }
@@ -2616,14 +2619,18 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .showcase-include { position: absolute; z-index: 2; top: 13px; left: 13px; display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 99px; color: #315365; background: rgba(255,255,255,.92); box-shadow: 0 6px 20px rgba(4,30,43,.14); font-size: 9px; font-weight: 900; backdrop-filter: blur(8px); }
 .showcase-include input { width: 14px; height: 14px; accent-color: #1a9990; }
 .showcase-editor-fields { display: flex; flex-direction: column; min-width: 0; padding: 20px 22px; }
-.showcase-editor-fields > header { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.showcase-editor-fields > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; margin-bottom: 16px; }
 .showcase-editor-fields > header span { color: #73909c; font: 700 9px ui-monospace, monospace; }
 .showcase-editor-fields > header h3 { margin: 4px 0 0; color: #153549; font-size: 17px; }
 .showcase-editor-fields > header > small { align-self: start; padding: 5px 8px; border-radius: 7px; color: #267f7c; background: #eaf7f5; font-size: 8px; font-weight: 800; }
+.showcase-drag-handle { position: relative; width: 42px; height: 42px; display: grid; grid-template-columns: repeat(2, 4px); grid-template-rows: repeat(3, 4px); place-content: center; gap: 3px; padding: 0 0 10px; border: 1px solid #d8e6e8; border-radius: 11px; color: #4f7e88; background: #f7fbfb; cursor: grab; touch-action: none; user-select: none; }
+.showcase-drag-handle:active { cursor: grabbing; background: #edf8f7; }
+.showcase-drag-handle i { width: 4px; height: 4px; border-radius: 50%; background: #75a4aa; pointer-events: none; }
+.showcase-drag-handle span { position: absolute; right: 0; bottom: 3px; left: 0; color: #7b969e !important; font: 800 7px ui-monospace, monospace !important; text-align: center; pointer-events: none; }
 .showcase-editor-form { display: grid; grid-template-columns: minmax(0, 1.4fr) 110px; gap: 12px; }
 .showcase-editor-form label { min-width: 0; }
 .showcase-editor-form label > small { color: #9aabb2; font-size: 8px; font-weight: 500; text-transform: none; letter-spacing: 0; }
-.showcase-summary-field { grid-column: 1 / -1; }
+.showcase-title-field, .showcase-summary-field { grid-column: 1 / -1; }
 .showcase-editor-form textarea { resize: vertical; }
 .showcase-editor-fields > footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: auto; padding-top: 16px; }
 .showcase-editor-fields > footer .notice { flex: 1; margin: 0; }
@@ -2712,6 +2719,7 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .guest-showcase-footer { width: min(1100px, calc(100% - 32px)); display: flex; justify-content: space-between; align-items: center; margin: 60px auto 0; padding: 22px 0 30px; border-top: 1px solid rgba(105,206,202,.16); }
 .guest-showcase-footer .company-logo { width: 150px; opacity: .7; }
 .guest-showcase-footer span { color: #658892; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.guest-showcase-footer strong { display: inline-block; margin-top: 4px; color: #8db3bc; font-size: 9px; letter-spacing: .1em; }
 .guest-showcase-empty { width: min(600px, calc(100% - 32px)); margin: 20px auto 80px; padding: 55px 25px; border: 1px solid rgba(88,195,190,.24); border-radius: 24px; background: rgba(5,31,43,.7); text-align: center; backdrop-filter: blur(14px); }
 .guest-showcase-empty span { color: #50c9c0; font-size: 9px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
 .guest-showcase-empty h2 { margin: 12px 0 0; }
@@ -2750,15 +2758,15 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   .guest-showcase-copy footer { padding-top: 24px; }
   .guest-showcase-controls { grid-template-columns: 38px 1fr 38px; gap: 10px; }
   .guest-showcase-controls > button { width: 38px; height: 38px; }
-  .guest-showcase-footer { margin-top: 42px; }
+  .guest-showcase-footer { align-items: flex-start; flex-direction: column; gap: 15px; margin-top: 42px; }
 }
 @media (max-width: 460px) {
   .showcase-qr-panel { grid-template-columns: 1fr; text-align: center; }
   .showcase-qr-panel > img { width: 170px; justify-self: center; }
   .showcase-qr-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .showcase-editor-fields { padding: 17px; }
-  .showcase-editor-fields > header { flex-direction: column; }
-  .showcase-editor-fields > header > small { align-self: flex-start; }
+  .showcase-editor-fields > header { grid-template-columns: auto minmax(0, 1fr); }
+  .showcase-editor-fields > header > small { grid-column: 2; align-self: flex-start; justify-self: start; }
   .showcase-editor-form { grid-template-columns: 1fr; }
   .showcase-summary-field { grid-column: auto; }
   .guest-showcase-header > span { display: none; }

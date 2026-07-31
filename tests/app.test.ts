@@ -147,6 +147,18 @@ describe("DTU Control Centre API", () => {
     const originalUrl = initial.body.url;
     const token = originalUrl.split("/showcase/")[1];
 
+    const secondProject = await request(app).post("/api/staff/projects")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "Visitor Display System", departmentName: "DTU", description: "Second showcase system", priority: "medium" });
+    expect(secondProject.status).toBe(201);
+    const reordered = await request(app).patch("/api/staff/showcase/order")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ projectIds: [secondProject.body.id, briefingProjectId] });
+    expect(reordered.status).toBe(200);
+    const orderedView = await request(app).get("/api/staff/showcase").set("Cookie", cookie);
+    expect(orderedView.body.projects.slice(0, 2).map((project: { id: number }) => project.id))
+      .toEqual([secondProject.body.id, briefingProjectId]);
+
     const card = await request(app).patch(`/api/staff/showcase/projects/${briefingProjectId}`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)
       .field("visible", "true")
