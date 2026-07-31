@@ -136,6 +136,61 @@ describe("DTU Control Centre API", () => {
     expect(tooMany.status).toBe(400);
   });
 
+  it("publishes a reusable read-only guest showcase and can close it after a visit", async () => {
+    const memberView = await request(app).get("/api/staff/showcase").set("Cookie", managedCookie);
+    expect(memberView.status).toBe(403);
+
+    const initial = await request(app).get("/api/staff/showcase").set("Cookie", cookie);
+    expect(initial.status).toBe(200);
+    expect(initial.body.settings.enabled).toBe(0);
+    expect(initial.body.dataUrl).toMatch(/^data:image\/png;base64,/);
+    const originalUrl = initial.body.url;
+    const token = originalUrl.split("/showcase/")[1];
+
+    const card = await request(app).patch(`/api/staff/showcase/projects/${briefingProjectId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("visible", "true")
+      .field("sortOrder", "1")
+      .field("title", "Smart Production")
+      .field("summary", "A visitor-safe overview of the production display.")
+      .field("imageMode", "custom")
+      .attach("image", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "showcase.jpg", contentType: "image/jpeg" });
+    expect(card.status).toBe(200);
+
+    const opened = await request(app).patch("/api/staff/showcase")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ enabled: true, title: "DTU Systems", intro: "A safe visitor portfolio." });
+    expect(opened.status).toBe(200);
+
+    const publicView = await request(app).get(`/api/public/showcase/${token}`);
+    expect(publicView.status).toBe(200);
+    expect(publicView.body.title).toBe("DTU Systems");
+    expect(publicView.body.projects).toHaveLength(1);
+    expect(publicView.body.projects[0]).toMatchObject({
+      id: briefingProjectId,
+      name: "Smart Production",
+      summary: "A visitor-safe overview of the production display."
+    });
+    expect(publicView.body.projects[0]).not.toHaveProperty("url");
+    expect(publicView.body.projects[0]).not.toHaveProperty("links");
+    const image = await request(app).get(publicView.body.projects[0].imageUrl);
+    expect(image.status).toBe(200);
+    expect(image.headers["content-type"]).toContain("image/jpeg");
+
+    const closed = await request(app).patch("/api/staff/showcase")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ enabled: false });
+    expect(closed.status).toBe(200);
+    expect((await request(app).get(`/api/public/showcase/${token}`)).status).toBe(410);
+
+    await request(app).patch("/api/staff/showcase")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ enabled: true });
+    const reused = await request(app).get("/api/staff/showcase").set("Cookie", cookie);
+    expect(reused.body.url).toBe(originalUrl);
+    expect((await request(app).get(`/api/public/showcase/${token}`)).status).toBe(200);
+  });
+
   it("lets admins change and clear a project owner", async () => {
     const assigned = await request(app).patch(`/api/staff/projects/${briefingProjectId}`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)

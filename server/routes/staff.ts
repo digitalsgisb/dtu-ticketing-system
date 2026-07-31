@@ -16,6 +16,7 @@ import { malaysiaDate } from "../time.js";
 export const staffRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 3 } });
 const progressUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 4 } });
+const showcaseUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
 const statuses = ["new", "triaged", "assigned", "in_progress", "waiting", "resolved", "closed"] as const;
 const priorities = ["low", "medium", "high", "critical"] as const;
 const projectStatuses = ["planned", "in_progress", "on_hold", "complete_monitoring", "completed", "cancelled"] as const;
@@ -80,6 +81,148 @@ function replaceProjectLinks(projectId: number, links: ProjectLinkInput[]) {
     `).run(projectId, link.title, link.url, index);
   });
 }
+
+function showcaseSettings() {
+  return db.prepare("SELECT * FROM showcase_settings WHERE id = 1").get() as {
+    token: string; enabled: number; title: string; intro: string;
+  };
+}
+
+staffRouter.get("/showcase", requireRole("admin", "lead"), async (_req, res) => {
+  const settings = showcaseSettings();
+  const projects = db.prepare(`
+    SELECT p.id, p.project_no, p.name, p.description, p.department_name, p.status,
+      COALESCE(sp.visible, 0) AS visible, COALESCE(sp.sort_order, 0) AS sort_order,
+      sp.title_override, sp.summary_override, COALESCE(sp.image_mode, 'latest') AS image_mode,
+      CASE WHEN sp.custom_image_stored_name IS NOT NULL THEN 1 ELSE 0 END AS has_custom_image,
+      (SELECT pui.id FROM project_update_images pui
+        JOIN project_updates pu ON pu.id = pui.project_update_id
+        WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id
+    FROM projects p LEFT JOIN showcase_projects sp ON sp.project_id = p.id
+    WHERE p.status != 'cancelled'
+    ORDER BY COALESCE(sp.visible, 0) DESC, COALESCE(sp.sort_order, 9999), p.name
+  `).all();
+  const url = `${config.publicBaseUrl.replace(/\/$/, "")}/showcase/${settings.token}`;
+  const dataUrl = await QRCode.toDataURL(url, {
+    width: 720,
+    margin: 2,
+    errorCorrectionLevel: "H",
+    color: { dark: "#071827", light: "#ffffff" }
+  });
+  res.json({ settings, projects, url, dataUrl });
+});
+
+staffRouter.patch("/showcase", requireRole("admin", "lead"), (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const parsed = z.object({
+    enabled: z.boolean().optional(),
+    title: z.string().trim().min(3).max(120).optional(),
+    intro: z.string().trim().min(3).max(500).optional()
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Check the showcase details" });
+  const current = showcaseSettings();
+  db.prepare(`
+    UPDATE showcase_settings SET enabled = ?, title = ?, intro = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = 1
+  `).run(
+    parsed.data.enabled === undefined ? current.enabled : parsed.data.enabled ? 1 : 0,
+    parsed.data.title ?? current.title,
+    parsed.data.intro ?? current.intro,
+    authReq.user.id
+  );
+  audit(authReq.user, "showcase_updated", "showcase", 1, parsed.data, req.ip);
+  res.json({ ok: true });
+});
+
+staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showcaseUpload.single("image"), async (req, res, next) => {
+  let storedName = "";
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const project = db.prepare("SELECT id FROM projects WHERE id = ? AND status != 'cancelled'").get(req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const parsed = z.object({
+      visible: z.preprocess(value => value === true || value === "true", z.boolean()),
+      sortOrder: z.coerce.number().int().min(0).max(999),
+      title: z.string().trim().max(120).optional().default(""),
+      summary: z.string().trim().max(800).optional().default(""),
+      imageMode: z.enum(["latest", "custom", "none"])
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Check this showcase card" });
+    const file = req.file;
+    if (file && (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file))) {
+      return res.status(400).json({ error: "Cover photos must be valid JPG, PNG, or WebP images" });
+    }
+    if (file && !(await storageAvailable(file.size))) return res.status(507).json({ error: "Storage capacity is too low for this cover photo" });
+    const existing = db.prepare("SELECT custom_image_stored_name FROM showcase_projects WHERE project_id = ?").get(req.params.id) as {
+      custom_image_stored_name: string | null;
+    } | undefined;
+    if (parsed.data.imageMode === "custom" && !file && !existing?.custom_image_stored_name) {
+      return res.status(400).json({ error: "Choose a custom cover photo first" });
+    }
+    if (file) {
+      const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
+      storedName = `${crypto.randomUUID()}${ext}`;
+      await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
+    }
+    db.prepare(`
+      INSERT INTO showcase_projects(
+        project_id, visible, sort_order, title_override, summary_override, image_mode,
+        custom_image_name, custom_image_stored_name, custom_image_mime_type, custom_image_size
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET
+        visible = excluded.visible,
+        sort_order = excluded.sort_order,
+        title_override = excluded.title_override,
+        summary_override = excluded.summary_override,
+        image_mode = excluded.image_mode,
+        custom_image_name = COALESCE(excluded.custom_image_name, showcase_projects.custom_image_name),
+        custom_image_stored_name = COALESCE(excluded.custom_image_stored_name, showcase_projects.custom_image_stored_name),
+        custom_image_mime_type = COALESCE(excluded.custom_image_mime_type, showcase_projects.custom_image_mime_type),
+        custom_image_size = COALESCE(excluded.custom_image_size, showcase_projects.custom_image_size),
+        updated_at = CURRENT_TIMESTAMP
+    `).run(
+      req.params.id, parsed.data.visible ? 1 : 0, parsed.data.sortOrder,
+      cleanText(parsed.data.title, 120) || null, cleanText(parsed.data.summary, 800) || null, file ? "custom" : parsed.data.imageMode,
+      file ? cleanText(file.originalname, 255) : null, storedName || null, file?.mimetype ?? null, file?.size ?? null
+    );
+    if (storedName && existing?.custom_image_stored_name) {
+      await fs.promises.rm(path.join(paths.uploads, existing.custom_image_stored_name), { force: true });
+    }
+    audit(authReq.user, "showcase_project_updated", "project", Number(req.params.id), {
+      visible: parsed.data.visible, sortOrder: parsed.data.sortOrder, imageMode: file ? "custom" : parsed.data.imageMode
+    }, req.ip);
+    res.json({ ok: true });
+  } catch (error) {
+    if (storedName) await fs.promises.rm(path.join(paths.uploads, storedName), { force: true });
+    next(error);
+  }
+});
+
+staffRouter.get("/showcase/projects/:id/image", requireRole("admin", "lead"), (req, res) => {
+  const item = db.prepare(`
+    SELECT image_mode, custom_image_stored_name, custom_image_mime_type FROM showcase_projects WHERE project_id = ?
+  `).get(req.params.id) as {
+    image_mode: "latest" | "custom" | "none";
+    custom_image_stored_name: string | null;
+    custom_image_mime_type: string | null;
+  } | undefined;
+  if (!item || item.image_mode === "none") return res.status(404).end();
+  let image: { stored_name: string; mime_type: string } | undefined;
+  if (item.image_mode === "custom" && item.custom_image_stored_name && item.custom_image_mime_type) {
+    image = { stored_name: item.custom_image_stored_name, mime_type: item.custom_image_mime_type };
+  } else {
+    image = db.prepare(`
+      SELECT pui.stored_name, pui.mime_type FROM project_update_images pui
+      JOIN project_updates pu ON pu.id = pui.project_update_id
+      WHERE pu.project_id = ? ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1
+    `).get(req.params.id) as { stored_name: string; mime_type: string } | undefined;
+  }
+  if (!image) return res.status(404).end();
+  res.setHeader("Content-Type", image.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.sendFile(path.resolve(paths.uploads, image.stored_name));
+});
 
 staffRouter.get("/dashboard", (req, res) => {
   const user = (req as AuthenticatedRequest).user;

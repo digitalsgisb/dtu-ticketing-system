@@ -48,6 +48,7 @@ export function Layout() {
     ["/tickets", t("tickets"), <TicketIcon key="ticket" />],
     ["/requests", t("requests"), <RequestIcon key="request" />],
     ...(user?.role !== "member" ? [["/briefing", t("briefing"), <PresentationIcon key="briefing" />] as const] : []),
+    ...(user?.role !== "member" ? [["/showcase", "Guest showcase", <ScreenIcon key="showcase" />] as const] : []),
     ...(user?.role === "admin" ? [["/admin", t("admin"), <SettingsIcon key="settings" />] as const] : [])
   ] as const;
   const currentSection = location.pathname.startsWith("/notifications")

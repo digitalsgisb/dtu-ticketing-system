@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import Database from "better-sqlite3";
 import argon2 from "argon2";
 import { config, paths } from "./config.js";
@@ -180,6 +181,31 @@ CREATE TABLE IF NOT EXISTS project_links (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS showcase_settings (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  token TEXT NOT NULL UNIQUE,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL DEFAULT 'Systems built by DTU',
+  intro TEXT NOT NULL DEFAULT 'A quick look at the digital tools created for our teams.',
+  updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS showcase_projects (
+  project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+  visible INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  title_override TEXT,
+  summary_override TEXT,
+  image_mode TEXT NOT NULL DEFAULT 'latest' CHECK(image_mode IN ('latest','custom','none')),
+  custom_image_name TEXT,
+  custom_image_stored_name TEXT UNIQUE,
+  custom_image_mime_type TEXT,
+  custom_image_size INTEGER,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS public_tracking_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash TEXT NOT NULL UNIQUE,
@@ -231,6 +257,7 @@ CREATE INDEX IF NOT EXISTS idx_project_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_project_updates_project ON project_updates(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_project_update_images_update ON project_update_images(project_update_id);
 CREATE INDEX IF NOT EXISTS idx_project_links_project ON project_links(project_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_showcase_projects_order ON showcase_projects(visible, sort_order);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id);
 `);
@@ -328,6 +355,14 @@ ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
 ensureProjectStatusCheckAllowsMonitoring();
 
+function ensureShowcaseSettings() {
+  db.prepare(`
+    INSERT OR IGNORE INTO showcase_settings(id, token) VALUES (1, ?)
+  `).run(crypto.randomBytes(24).toString("base64url"));
+}
+
+ensureShowcaseSettings();
+
 export function nextIdentifier(kind: "REQ" | "PRJ" | "TKT") {
   const year = kind === "PRJ" ? 0 : malaysiaYear();
   const row = db.prepare("SELECT value FROM counters WHERE name = ? AND year = ?").get(kind, year) as { value: number } | undefined;
@@ -358,10 +393,11 @@ export async function seedDatabase() {
 export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== "test") return;
   for (const table of [
-    "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
+    "showcase_projects", "showcase_settings", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
     "work_items", "projects", "project_requests", "sessions", "login_attempts",
     "import_batches", "users", "departments", "counters"
   ]) {
     db.prepare(`DELETE FROM ${table}`).run();
   }
+  ensureShowcaseSettings();
 }

@@ -17,6 +17,7 @@ import { NotificationsPage } from "./pages/Notifications";
 import { PublicIssuePage, PublicRequestPage, TrackingPage } from "./pages/Public";
 import { WallboardPage } from "./pages/Wallboard";
 import { BriefingProjectPage, ProgressBriefingPage } from "./pages/Briefing";
+import { PublicShowcasePage, ShowcasePage } from "./pages/Showcase";
 import "./styles.css";
 
 function Protected() {
@@ -42,6 +43,7 @@ function App() {
     <Route path="/request" element={<PublicRequestPage />} />
     <Route path="/track/:token" element={<TrackingPage />} />
     <Route path="/wallboard" element={<WallboardPage />} />
+    <Route path="/showcase/:token" element={<PublicShowcasePage />} />
     <Route path="/login" element={<LoginRoute />} />
     <Route element={<Protected />}><Route element={<Layout />}>
       <Route index element={<DashboardPage />} />
@@ -55,6 +57,7 @@ function App() {
       <Route element={<LeadProtected />}>
         <Route path="briefing" element={<ProgressBriefingPage />} />
         <Route path="briefing/:id" element={<BriefingProjectPage />} />
+        <Route path="showcase" element={<ShowcasePage />} />
       </Route>
       <Route path="admin" element={<AdminPage />} />
       <Route path="notifications" element={<NotificationsPage />} />
