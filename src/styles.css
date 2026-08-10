@@ -2639,8 +2639,8 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .showcase-editor { display: grid; grid-template-columns: 260px minmax(0, 1fr); overflow: hidden; border: 1px solid #e0e8eb; border-radius: 18px; background: white; box-shadow: 0 12px 36px rgba(17,48,69,.045); transition: border-color .2s, box-shadow .2s, transform .18s ease; }
 .showcase-editor.is-dragging { border-color: #69bdb7; box-shadow: 0 20px 55px rgba(20,111,111,.18); }
 .showcase-editor.is-selected { border-color: #9fd3ce; box-shadow: 0 16px 44px rgba(29,129,126,.09); }
-.showcase-editor-cover { position: relative; min-height: 250px; overflow: hidden; background: linear-gradient(145deg, #0a2b3d, #176f73); }
-.showcase-editor-cover > img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; }
+.showcase-editor-cover { position: relative; min-height: 250px; overflow: hidden; background: radial-gradient(circle at 75% 20%, rgba(74,205,195,.22), transparent 12rem), linear-gradient(145deg, #082536, #10545d); }
+.showcase-editor-cover > img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: contain; }
 .showcase-editor-cover > div { height: 100%; display: grid; place-items: center; align-content: center; gap: 6px; color: #b8d9da; }
 .showcase-editor-cover > div strong { font: 800 14px ui-monospace, monospace; }
 .showcase-editor-cover > div span { color: #78a9ae; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
@@ -2725,9 +2725,9 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .guest-showcase-card { flex: 0 0 min(820px, calc(100vw - 32px)); display: flex; flex-direction: column; overflow: hidden; padding: 0; scroll-snap-align: center; border: 1px solid rgba(85,205,198,.28); border-radius: 28px; color: inherit; background: linear-gradient(135deg, rgba(8,38,51,.98), rgba(5,26,38,.98)); box-shadow: 0 30px 90px rgba(0,8,15,.42), inset 0 1px rgba(255,255,255,.04); font: inherit; text-align: left; backdrop-filter: blur(18px); cursor: pointer; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
 .guest-showcase-card:hover { transform: translateY(-5px); border-color: rgba(87,221,212,.55); box-shadow: 0 38px 100px rgba(0,8,15,.5), 0 0 0 1px rgba(74,205,197,.08); }
 .guest-showcase-card:focus-visible { outline: 3px solid rgba(79,215,206,.72); outline-offset: 4px; }
-.guest-showcase-image { position: relative; min-width: 0; width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; overflow: hidden; border-bottom: 1px solid rgba(89,204,198,.2); background: #051722; isolation: isolate; }
+.guest-showcase-image { position: relative; min-width: 0; width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; overflow: hidden; border-bottom: 1px solid rgba(89,204,198,.2); background: radial-gradient(circle at 78% 18%, rgba(57,190,183,.2), transparent 16rem), linear-gradient(145deg, #041722, #0a3844); isolation: isolate; }
 .guest-showcase-image-backdrop { position: absolute; z-index: 0; inset: -24px; width: calc(100% + 48px); height: calc(100% + 48px); object-fit: cover; filter: blur(28px) saturate(.8) brightness(.48); transform: scale(1.06); }
-.guest-showcase-image-foreground { position: relative; z-index: 1; display: block; width: 100%; height: 100%; object-fit: cover; }
+.guest-showcase-image-foreground { position: relative; z-index: 1; display: block; width: 100%; height: 100%; object-fit: contain; }
 .guest-showcase-image::after { content: ""; position: absolute; z-index: 2; inset: 0; background: linear-gradient(180deg, rgba(2,18,27,.06) 45%, rgba(2,18,27,.55)); pointer-events: none; }
 .guest-showcase-image.is-empty { background: radial-gradient(circle at 75% 24%, rgba(59,195,185,.25), transparent 12rem), linear-gradient(135deg, #092739, #155d65); }
 .guest-showcase-image.is-empty > div { height: 100%; display: grid; place-items: center; align-content: center; }

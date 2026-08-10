@@ -351,7 +351,7 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
           <option value="custom">Custom cover photo</option>
           <option value="none">No photo</option>
         </select></label>
-        <label>Upload custom cover <small>recommended 16:9 · 1600 × 900 px</small><input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={e => {
+        <label>Upload custom cover <small>16:9 · 1600 × 900 px · transparent PNG supported</small><input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={e => {
           const next = e.target.files?.[0] ?? null;
           setFile(next);
           if (next) setImageMode("custom");
