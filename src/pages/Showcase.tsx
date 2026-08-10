@@ -47,6 +47,16 @@ type GuestProject = {
   highlights: string[];
 };
 
+function reorderProjects(projects: ShowcaseProject[], projectId: number, targetId: number) {
+  const from = projects.findIndex(project => project.id === projectId);
+  const to = projects.findIndex(project => project.id === targetId);
+  if (from < 0 || to < 0 || from === to) return projects;
+  const next = [...projects];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
 export function ShowcasePage() {
   const [data, setData] = useState<ShowcaseAdminData | null>(null);
   const [orderedProjects, setOrderedProjects] = useState<ShowcaseProject[]>([]);
@@ -55,6 +65,8 @@ export function ShowcasePage() {
   const [copied, setCopied] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [orderStatus, setOrderStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [projectSearch, setProjectSearch] = useState("");
+  const [includedOnly, setIncludedOnly] = useState(false);
   const orderedProjectsRef = useRef<ShowcaseProject[]>([]);
   const dragStartOrder = useRef<ShowcaseProject[]>([]);
   const dragProjectId = useRef<number | null>(null);
@@ -100,14 +112,7 @@ export function ShowcasePage() {
   };
 
   const moveProject = (projectId: number, targetId: number) => {
-    const projects = orderedProjectsRef.current;
-    const from = projects.findIndex(project => project.id === projectId);
-    const to = projects.findIndex(project => project.id === targetId);
-    if (from < 0 || to < 0 || from === to) return;
-    const next = [...projects];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    setProjectOrder(next);
+    setProjectOrder(reorderProjects(orderedProjectsRef.current, projectId, targetId));
   };
 
   const saveProjectOrder = async (projects: ShowcaseProject[], rollback: ShowcaseProject[]) => {
@@ -157,7 +162,24 @@ export function ShowcasePage() {
     if (Number.isInteger(targetId)) moveProject(dragProjectId.current, targetId);
   };
 
+  const arrangeProject = (projectId: number, destination: "top" | "up" | "down" | "bottom") => {
+    const rollback = orderedProjectsRef.current;
+    const included = rollback.filter(project => project.visible);
+    const index = included.findIndex(project => project.id === projectId);
+    if (index < 0) return;
+    const targetIndex = destination === "top" ? 0 : destination === "bottom" ? included.length - 1
+      : destination === "up" ? Math.max(0, index - 1) : Math.min(included.length - 1, index + 1);
+    const next = reorderProjects(rollback, projectId, included[targetIndex].id);
+    if (next === rollback) return;
+    setProjectOrder(next);
+    void saveProjectOrder(next, rollback);
+  };
+
   const selected = orderedProjects.filter(project => project.visible).length;
+  const includedProjects = orderedProjects.filter(project => project.visible);
+  const search = projectSearch.trim().toLowerCase();
+  const displayedProjects = orderedProjects.filter(project => (!includedOnly || project.visible) && (!search ||
+    `${project.project_no} ${project.name} ${project.department_name}`.toLowerCase().includes(search)));
   return <>
     <PageHeader
       eyebrow="Visitor experience"
@@ -202,9 +224,26 @@ export function ShowcasePage() {
     </div>
 
     <section className="showcase-project-section">
-      <div className="showcase-project-heading"><div><span className="eyebrow">Approved content</span><h2>Portfolio cards</h2><p>Drag the handle to set the display order. Changes save automatically.</p></div><span>{orderStatus === "saving" ? "Saving order…" : orderStatus === "saved" ? "Order saved" : `${orderedProjects.length} available projects`}</span></div>
+      <div className="showcase-project-heading"><div><span className="eyebrow">Approved content</span><h2>Portfolio cards</h2><p>Use the quick order controls on mobile, or drag a card handle on desktop. Changes save automatically.</p></div><span>{orderStatus === "saving" ? "Saving order…" : orderStatus === "saved" ? "Order saved" : `${orderedProjects.length} available projects`}</span></div>
+      {includedProjects.length > 0 && <section className="showcase-quick-order">
+        <header><div><span className="eyebrow">Quick card order</span><h3>Arrange the public portfolio</h3><p>Only included cards appear here. Use the arrows to position them without dragging.</p></div><strong>{includedProjects.length} cards</strong></header>
+        <div>{includedProjects.map((project, index) => <article key={project.id}>
+          <span>{String(index + 1).padStart(2, "0")}</span><div><strong>{project.title_override || project.name}</strong><small>{project.project_no}</small></div>
+          <nav aria-label={`Reorder ${project.name}`}>
+            <button type="button" disabled={index === 0 || orderStatus === "saving"} onClick={() => arrangeProject(project.id, "top")} aria-label={`Move ${project.name} to top`} title="Move to top">⇤</button>
+            <button type="button" disabled={index === 0 || orderStatus === "saving"} onClick={() => arrangeProject(project.id, "up")} aria-label={`Move ${project.name} up`} title="Move up">↑</button>
+            <button type="button" disabled={index === includedProjects.length - 1 || orderStatus === "saving"} onClick={() => arrangeProject(project.id, "down")} aria-label={`Move ${project.name} down`} title="Move down">↓</button>
+            <button type="button" disabled={index === includedProjects.length - 1 || orderStatus === "saving"} onClick={() => arrangeProject(project.id, "bottom")} aria-label={`Move ${project.name} to bottom`} title="Move to bottom">⇥</button>
+          </nav>
+        </article>)}</div>
+      </section>}
+      <div className="showcase-project-tools">
+        <label><span>Find a system</span><input type="search" value={projectSearch} placeholder="Search name, number, or department" onChange={event => setProjectSearch(event.target.value)} /></label>
+        <button type="button" className={includedOnly ? "active" : ""} onClick={() => setIncludedOnly(value => !value)}>{includedOnly ? "Showing included" : "Show included only"}</button>
+        <span>{displayedProjects.length} shown</span>
+      </div>
       <div className="showcase-editor-list">
-        {orderedProjects.map((project, index) => <div
+        {displayedProjects.map(project => <div
           className={`showcase-editor-dropzone ${draggingId === project.id ? "is-dragging" : ""}`}
           key={project.id}
           data-showcase-project-id={project.id}
@@ -221,8 +260,9 @@ export function ShowcasePage() {
           onPointerUp={finishDrag}
           onPointerCancel={finishDrag}
         >
-          <ShowcaseProjectEditor project={project} position={index} dragging={draggingId === project.id} onSaved={load} />
+          <ShowcaseProjectEditor project={project} position={orderedProjects.findIndex(item => item.id === project.id)} dragging={draggingId === project.id} onSaved={load} />
         </div>)}
+        {!displayedProjects.length && <div className="showcase-project-empty">No systems match this view.</div>}
       </div>
     </section>
   </>;
@@ -311,7 +351,7 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
           <option value="custom">Custom cover photo</option>
           <option value="none">No photo</option>
         </select></label>
-        <label>Upload custom cover<input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={e => {
+        <label>Upload custom cover <small>recommended 16:9 · 1600 × 900 px</small><input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={e => {
           const next = e.target.files?.[0] ?? null;
           setFile(next);
           if (next) setImageMode("custom");
