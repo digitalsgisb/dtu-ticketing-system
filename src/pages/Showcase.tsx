@@ -44,6 +44,7 @@ type GuestProject = {
   imageUrl: string | null;
   galleryCount: number;
   featureCount: number;
+  highlights: string[];
 };
 
 export function ShowcasePage() {
@@ -403,6 +404,7 @@ export function PublicShowcasePage() {
   const [data, setData] = useState<{ title: string; intro: string; projects: GuestProject[] } | null>(null);
   const [error, setError] = useState("");
   const [active, setActive] = useState(0);
+  const [openProjectId, setOpenProjectId] = useState<number | null>(null);
   const rail = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const load = () => void api(`/api/public/showcase/${token}`).then(next => {
@@ -433,16 +435,17 @@ export function PublicShowcasePage() {
           Math.abs(card.offsetLeft + card.offsetWidth / 2 - centre) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - centre) ? index : best, 0);
         setActive(next);
       }}>
-        {data.projects.map((project, index) => <article className="guest-showcase-card" key={project.id}>
+        {data.projects.map((project, index) => <button type="button" className="guest-showcase-card" key={project.id} aria-haspopup="dialog" aria-label={`Open ${project.name} project details`} onClick={() => setOpenProjectId(project.id)}>
           <div className={`guest-showcase-image ${project.imageUrl ? "" : "is-empty"}`}>
             {project.imageUrl ? <>
               <img className="guest-showcase-image-backdrop" src={project.imageUrl} alt="" aria-hidden="true" />
               <img className="guest-showcase-image-foreground" src={project.imageUrl} alt={`Preview of ${project.name}`} />
             </> : <div><span>{String(index + 1).padStart(2, "0")}</span><strong>DTU</strong></div>}
             <span className="guest-card-count">{String(index + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span>
+            <span className="guest-card-open-mark" aria-hidden="true">↗</span>
           </div>
-          <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A digital solution designed and delivered by the DTU team."}</p><div className="guest-showcase-card-meta"><span>{project.featureCount || "—"} capabilities</span><span>{project.galleryCount || "—"} visuals</span></div><Link className="guest-showcase-explore" to={`/showcase/${token}/projects/${project.id}`}>Explore case study <b>→</b></Link><footer><i /><span>Designed and developed by Digital Transformation Unit</span></footer></div>
-        </article>)}
+          <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A focused digital solution created around the team's day-to-day work."}</p>{project.highlights?.length > 0 && <ul>{project.highlights.map(highlight => <li key={highlight}>{highlight}</li>)}</ul>}</div>
+        </button>)}
       </div>
       <nav className="guest-showcase-controls" aria-label="Showcase navigation">
         <button aria-label="Previous system" disabled={active === 0} onClick={() => move(active - 1)}>←</button>
@@ -451,7 +454,8 @@ export function PublicShowcasePage() {
       </nav>
       <p className="guest-showcase-hint">Swipe to explore</p>
     </> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
-    <footer className="guest-showcase-footer"><CompanyLogo /><span>Designed and developed by<br /><strong>Digital Transformation Unit</strong></span></footer>
+    <footer className="guest-showcase-footer"><CompanyLogo /></footer>
+    {openProjectId && <PortfolioCaseModal token={token || ""} projectId={openProjectId} onClose={() => setOpenProjectId(null)} />}
   </main>;
 }
 
@@ -467,54 +471,100 @@ type PortfolioCaseData = {
   next: { id: number; name: string } | null;
 };
 
-export function PublicShowcaseDetailPage() {
-  const { token, projectId } = useParams();
-  const [data, setData] = useState<PortfolioCaseData | null>(null);
-  const [error, setError] = useState("");
+function PortfolioCaseContent({ data, token, inModal = false, onNavigate }: { data: PortfolioCaseData; token: string; inModal?: boolean; onNavigate?: (id: number) => void }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [lightbox, setLightbox] = useState(false);
-  useEffect(() => {
-    setData(null); setError(""); setSelectedImage(0); setLightbox(false);
-    window.scrollTo({ top: 0, behavior: "auto" });
-    void api(`/api/public/showcase/${token}/projects/${projectId}`).then(setData).catch(e => setError(e.message));
-  }, [token, projectId]);
-  useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setLightbox(false); };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, []);
-
-  if (error) return <div className="guest-showcase guest-showcase-closed"><CompanyLogo /><div><span>Portfolio case study</span><h1>Unable to open this project.</h1><p>{error}</p><Link className="guest-showcase-explore" to={`/showcase/${token}`}>Back to portfolio</Link></div></div>;
-  if (!data) return <div className="guest-showcase"><Loading /></div>;
   const { project } = data;
+  const sectionPrefix = inModal ? `popup-${project.id}` : `case-${project.id}`;
   const images = [
     ...(project.coverImageUrl ? [{ id: 0, caption: `${project.name} overview`, imageUrl: project.coverImageUrl }] : []),
     ...data.gallery
   ];
   const currentImage = images[Math.min(selectedImage, Math.max(0, images.length - 1))];
-  return <main className="guest-showcase portfolio-case-page">
-    <header className="guest-showcase-header portfolio-case-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><Link to={`/showcase/${token}`}>← All projects</Link></header>
+
+  useEffect(() => { setSelectedImage(0); setLightbox(false); }, [project.id]);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape" && lightbox) setLightbox(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [lightbox]);
+
+  const projectLink = (item: { id: number; name: string }, direction: "previous" | "next") => onNavigate
+    ? <button type="button" onClick={() => onNavigate(item.id)}><span>{direction === "previous" ? "← Previous project" : "Next project →"}</span><strong>{item.name}</strong></button>
+    : <Link to={`/showcase/${token}/projects/${item.id}`}><span>{direction === "previous" ? "← Previous project" : "Next project →"}</span><strong>{item.name}</strong></Link>;
+
+  return <div className={`portfolio-case-content ${inModal ? "is-modal" : ""}`}>
     <section className="portfolio-case-hero">
-      <div><span className="eyebrow">{project.department} · Case study</span><h1>{project.name}</h1><p>{project.summary}</p><div className="portfolio-case-stats"><span><strong>{String(project.features.length).padStart(2, "0")}</strong> capabilities</span><span><strong>{String(images.length).padStart(2, "0")}</strong> visuals</span></div></div>
-      {project.coverImageUrl && <button className="portfolio-case-cover" type="button" onClick={() => { setSelectedImage(0); setLightbox(true); }}><img src={project.coverImageUrl} alt={`Overview of ${project.name}`} /><span>Tap to explore</span></button>}
+      <div><span className="eyebrow">{project.department} · Case study</span><h1>{project.name}</h1><p>{project.summary}</p><div className="portfolio-case-stats"><span><strong>{String(project.features.length).padStart(2, "0")}</strong> key functions</span><span><strong>{String(images.length).padStart(2, "0")}</strong> project images</span></div></div>
+      {project.coverImageUrl && <button className="portfolio-case-cover" type="button" onClick={() => { setSelectedImage(0); setLightbox(true); }}><img src={project.coverImageUrl} alt={`Overview of ${project.name}`} /><span>View full image</span></button>}
     </section>
-    <nav className="portfolio-case-nav" aria-label="Case study sections"><a href="#overview">Overview</a>{project.features.length > 0 && <a href="#capabilities">Capabilities</a>}{images.length > 0 && <a href="#gallery">Gallery</a>}{project.impact && <a href="#impact">Impact</a>}</nav>
+    <nav className="portfolio-case-nav" aria-label="Case study sections"><a href={`#${sectionPrefix}-overview`}>Overview</a>{project.features.length > 0 && <a href={`#${sectionPrefix}-capabilities`}>What it does</a>}{images.length > 0 && <a href={`#${sectionPrefix}-gallery`}>Gallery</a>}{project.impact && <a href={`#${sectionPrefix}-impact`}>Impact</a>}</nav>
     <div className="portfolio-case-body">
-      <section id="overview" className="portfolio-story-grid">
+      <section id={`${sectionPrefix}-overview`} className="portfolio-story-grid">
         <article className="portfolio-story-overview"><span>01 · Overview</span><h2>Built around the work, not around the software.</h2><p>{project.overview || project.summary}</p></article>
         {project.problem && <article><span>The challenge</span><h3>What needed to change</h3><p>{project.problem}</p></article>}
         <article><span>The solution</span><h3>How the system responds</h3><p>{project.solution || project.summary}</p></article>
       </section>
-      {project.features.length > 0 && <section id="capabilities" className="portfolio-capabilities"><header><span className="eyebrow">02 · What it does</span><h2>Core system capabilities</h2><p>A practical look at the functions designed for day-to-day users.</p></header><div>{project.features.map((feature, index) => <article key={`${feature}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h3>{feature}</h3><i /></article>)}</div></section>}
-      {images.length > 0 && currentImage && <section id="gallery" className="portfolio-gallery"><header><span className="eyebrow">03 · Product gallery</span><h2>See the system in action</h2><p>Explore approved screens, workflows, and delivery progress.</p></header><div className="portfolio-gallery-stage"><button type="button" onClick={() => setLightbox(true)}><img src={currentImage.imageUrl} alt={currentImage.caption || project.name} /></button><footer><span>{currentImage.caption || project.name}</span><strong>{String(selectedImage + 1).padStart(2, "0")} / {String(images.length).padStart(2, "0")}</strong></footer></div>{images.length > 1 && <div className="portfolio-gallery-thumbs">{images.map((image, index) => <button key={`${image.id}-${index}`} className={selectedImage === index ? "active" : ""} type="button" onClick={() => setSelectedImage(index)}><img src={image.imageUrl} alt="" /><span>{String(index + 1).padStart(2, "0")}</span></button>)}</div>}</section>}
-      {(project.impact || project.contribution) && <section id="impact" className="portfolio-impact">
+      {project.features.length > 0 && <section id={`${sectionPrefix}-capabilities`} className="portfolio-capabilities"><header><span className="eyebrow">02 · What it does</span><h2>Core system functions</h2><p>A practical look at the functions designed for day-to-day users.</p></header><div>{project.features.map((feature, index) => <article key={`${feature}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h3>{feature}</h3><i /></article>)}</div></section>}
+      {images.length > 0 && currentImage && <section id={`${sectionPrefix}-gallery`} className="portfolio-gallery"><header><span className="eyebrow">03 · Product gallery</span><h2>See the system in action</h2><p>Explore approved screens, workflows, and delivery progress.</p></header><div className="portfolio-gallery-stage"><button type="button" onClick={() => setLightbox(true)}><img src={currentImage.imageUrl} alt={currentImage.caption || project.name} /></button><footer><span>{currentImage.caption || project.name}</span><strong>{String(selectedImage + 1).padStart(2, "0")} / {String(images.length).padStart(2, "0")}</strong></footer></div>{images.length > 1 && <div className="portfolio-gallery-thumbs">{images.map((image, index) => <button key={`${image.id}-${index}`} className={selectedImage === index ? "active" : ""} type="button" onClick={() => setSelectedImage(index)}><img src={image.imageUrl} alt="" /><span>{String(index + 1).padStart(2, "0")}</span></button>)}</div>}</section>}
+      {(project.impact || project.contribution) && <section id={`${sectionPrefix}-impact`} className="portfolio-impact">
         {project.impact && <article><span className="eyebrow">04 · Outcome</span><h2>Impact on the work</h2><p>{project.impact}</p></article>}
         {project.contribution && <article><span className="eyebrow">Contribution</span><h2>Role in the delivery</h2><p>{project.contribution}</p></article>}
       </section>}
       {project.technologies.length > 0 && <section className="portfolio-technologies"><span>Built with</span><div>{project.technologies.map(item => <b key={item}>{item}</b>)}</div></section>}
     </div>
-    <nav className="portfolio-project-nav">{data.previous ? <Link to={`/showcase/${token}/projects/${data.previous.id}`}><span>← Previous project</span><strong>{data.previous.name}</strong></Link> : <i />}{data.next ? <Link to={`/showcase/${token}/projects/${data.next.id}`}><span>Next project →</span><strong>{data.next.name}</strong></Link> : <i />}</nav>
-    <footer className="guest-showcase-footer"><CompanyLogo /><span>Designed and developed by<br /><strong>Digital Transformation Unit</strong></span></footer>
+    <nav className="portfolio-project-nav">{data.previous ? projectLink(data.previous, "previous") : <i />}{data.next ? projectLink(data.next, "next") : <i />}</nav>
     {lightbox && currentImage && <div className="portfolio-lightbox" role="dialog" aria-modal="true" onClick={() => setLightbox(false)}><button type="button" aria-label="Close image">×</button><img onClick={event => event.stopPropagation()} src={currentImage.imageUrl} alt={currentImage.caption || project.name} /><footer onClick={event => event.stopPropagation()}><span>{currentImage.caption || project.name}</span><strong>{selectedImage + 1} / {images.length}</strong></footer></div>}
+  </div>;
+}
+
+function PortfolioCaseModal({ token, projectId, onClose }: { token: string; projectId: number; onClose: () => void }) {
+  const [activeProjectId, setActiveProjectId] = useState(projectId);
+  const [data, setData] = useState<PortfolioCaseData | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => { setActiveProjectId(projectId); }, [projectId]);
+  useEffect(() => {
+    let current = true;
+    setData(null); setError("");
+    void api(`/api/public/showcase/${token}/projects/${activeProjectId}`).then(next => { if (current) setData(next); }).catch(e => { if (current) setError(e.message); });
+    return () => { current = false; };
+  }, [token, activeProjectId]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector(".portfolio-lightbox")) onClose();
+    };
+    window.addEventListener("keydown", close);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", close); };
+  }, [onClose]);
+
+  return <div className="portfolio-modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <section className="portfolio-modal" role="dialog" aria-modal="true" aria-label={data ? `${data.project.name} project details` : "Project details"} onMouseDown={event => event.stopPropagation()}>
+      <header className="portfolio-modal-header"><CompanyLogo /><span>{data?.portfolioTitle || "Project portfolio"}</span><button type="button" onClick={onClose} aria-label="Close project details">×</button></header>
+      {error && <div className="portfolio-modal-message"><span>Project details</span><h2>Unable to open this project.</h2><p>{error}</p></div>}
+      {!data && !error && <div className="portfolio-modal-loading"><Loading /></div>}
+      {data && <PortfolioCaseContent data={data} token={token} inModal onNavigate={setActiveProjectId} />}
+    </section>
+  </div>;
+}
+
+export function PublicShowcaseDetailPage() {
+  const { token = "", projectId = "" } = useParams();
+  const [data, setData] = useState<PortfolioCaseData | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setData(null); setError("");
+    window.scrollTo({ top: 0, behavior: "auto" });
+    void api(`/api/public/showcase/${token}/projects/${projectId}`).then(setData).catch(e => setError(e.message));
+  }, [token, projectId]);
+
+  if (error) return <div className="guest-showcase guest-showcase-closed"><CompanyLogo /><div><span>Portfolio case study</span><h1>Unable to open this project.</h1><p>{error}</p><Link className="guest-showcase-explore" to={`/showcase/${token}`}>Back to portfolio</Link></div></div>;
+  if (!data) return <div className="guest-showcase"><Loading /></div>;
+  return <main className="guest-showcase portfolio-case-page">
+    <header className="guest-showcase-header portfolio-case-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><Link to={`/showcase/${token}`}>← All projects</Link></header>
+    <PortfolioCaseContent data={data} token={token} />
+    <footer className="guest-showcase-footer"><CompanyLogo /></footer>
   </main>;
 }

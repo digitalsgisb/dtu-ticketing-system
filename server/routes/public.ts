@@ -98,7 +98,8 @@ publicRouter.get("/showcase/:token", (req, res) => {
     department: project.department_name,
     imageUrl: project.has_image ? `/api/public/showcase/${req.params.token}/projects/${project.id}/image` : null,
     galleryCount: Number(project.gallery_count) + (project.has_image ? 1 : 0),
-    featureCount: portfolioList(project.features_text).length
+    featureCount: portfolioList(project.features_text).length,
+    highlights: portfolioList(project.features_text).slice(0, 3)
   }));
   res.setHeader("Cache-Control", "no-store");
   res.json({ title: settings.title, intro: settings.intro, projects });

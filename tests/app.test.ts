@@ -203,7 +203,11 @@ describe("DTU Control Centre API", () => {
     });
     expect(publicView.body.projects[0]).not.toHaveProperty("url");
     expect(publicView.body.projects[0]).not.toHaveProperty("links");
-    expect(publicView.body.projects[0]).toMatchObject({ galleryCount: 3, featureCount: 3 });
+    expect(publicView.body.projects[0]).toMatchObject({
+      galleryCount: 3,
+      featureCount: 3,
+      highlights: ["Live production overview", "Progress tracking", "Exception highlighting"]
+    });
     const image = await request(app).get(publicView.body.projects[0].imageUrl);
     expect(image.status).toBe(200);
     expect(image.headers["content-type"]).toContain("image/jpeg");
