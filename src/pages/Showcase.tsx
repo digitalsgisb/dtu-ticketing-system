@@ -463,6 +463,7 @@ export function PublicShowcasePage() {
 
   if (error) return <div className="guest-showcase guest-showcase-closed"><CompanyLogo /><div><span>Guest showcase</span><h1>Thanks for visiting.</h1><p>{error}</p></div></div>;
   if (!data) return <div className="guest-showcase"><Loading /></div>;
+  const totalSlides = data.projects.length + 1;
   return <main className="guest-showcase">
     <header className="guest-showcase-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><span>DTU · Digital solutions</span></header>
     <section className="guest-showcase-intro"><span className="eyebrow">Made for the way we work</span><h1>{data.title}</h1><p>{data.intro}</p><div><strong>{String(data.projects.length).padStart(2, "0")}</strong><span>systems<br />in this showcase</span></div></section>
@@ -486,11 +487,15 @@ export function PublicShowcasePage() {
           </div>
           <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A focused digital solution created around the team's day-to-day work."}</p>{project.highlights?.length > 0 && <ul>{project.highlights.map(highlight => <li key={highlight}>{highlight}</li>)}</ul>}</div>
         </button>)}
+        <article className="guest-showcase-card guest-showcase-more">
+          <div className="guest-showcase-more-art" aria-hidden="true"><span>+</span><i /><i /><i /></div>
+          <div className="guest-showcase-copy"><span>Beyond this showcase</span><h2>And many more.</h2><p>More digital tools, improvements, and ideas continue to be designed for the way our teams work.</p></div>
+        </article>
       </div>
       <nav className="guest-showcase-controls" aria-label="Showcase navigation">
         <button aria-label="Previous system" disabled={active === 0} onClick={() => move(active - 1)}>←</button>
-        <div>{data.projects.map((project, index) => <button key={project.id} className={index === active ? "active" : ""} aria-label={`View ${project.name}`} onClick={() => move(index)} />)}</div>
-        <button aria-label="Next system" disabled={active === data.projects.length - 1} onClick={() => move(active + 1)}>→</button>
+        <div>{data.projects.map((project, index) => <button key={project.id} className={index === active ? "active" : ""} aria-label={`View ${project.name}`} onClick={() => move(index)} />)}<button className={active === totalSlides - 1 ? "active" : ""} aria-label="View more systems" onClick={() => move(totalSlides - 1)} /></div>
+        <button aria-label="Next system" disabled={active === totalSlides - 1} onClick={() => move(active + 1)}>→</button>
       </nav>
       <p className="guest-showcase-hint">Swipe to explore</p>
     </> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
