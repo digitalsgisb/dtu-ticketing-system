@@ -446,6 +446,8 @@ export function PublicShowcasePage() {
   const [active, setActive] = useState(0);
   const [openProjectId, setOpenProjectId] = useState<number | null>(null);
   const rail = useRef<HTMLDivElement>(null);
+  const activeRef = useRef(0);
+  const lastInteraction = useRef(Date.now());
   useEffect(() => {
     const load = () => void api(`/api/public/showcase/${token}`).then(next => {
       setData(next);
@@ -457,9 +459,43 @@ export function PublicShowcasePage() {
   }, [token]);
 
   const move = (index: number) => {
-    const cards = rail.current?.querySelectorAll<HTMLElement>(".guest-showcase-card");
-    cards?.[Math.max(0, Math.min(index, cards.length - 1))]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const element = rail.current;
+    const cards = element?.querySelectorAll<HTMLElement>(".guest-showcase-card");
+    const card = cards?.[Math.max(0, Math.min(index, cards.length - 1))];
+    if (!element || !card) return;
+    element.scrollTo({ left: card.offsetLeft - (element.clientWidth - card.offsetWidth) / 2, behavior: "smooth" });
   };
+
+  useEffect(() => { activeRef.current = active; }, [active]);
+  useEffect(() => {
+    const recordInteraction = () => { lastInteraction.current = Date.now(); };
+    const passive = { passive: true } as AddEventListenerOptions;
+    window.addEventListener("pointerdown", recordInteraction, passive);
+    window.addEventListener("touchstart", recordInteraction, passive);
+    window.addEventListener("wheel", recordInteraction, passive);
+    window.addEventListener("scroll", recordInteraction, passive);
+    window.addEventListener("keydown", recordInteraction);
+    return () => {
+      window.removeEventListener("pointerdown", recordInteraction);
+      window.removeEventListener("touchstart", recordInteraction);
+      window.removeEventListener("wheel", recordInteraction);
+      window.removeEventListener("scroll", recordInteraction);
+      window.removeEventListener("keydown", recordInteraction);
+    };
+  }, []);
+  useEffect(() => {
+    if (!data?.projects.length || openProjectId !== null) return;
+    lastInteraction.current = Date.now();
+    const interval = window.setInterval(() => {
+      if (document.hidden || Date.now() - lastInteraction.current < 10_000) return;
+      const total = data.projects.length + 1;
+      const next = (activeRef.current + 1) % total;
+      activeRef.current = next;
+      move(next);
+      lastInteraction.current = Date.now();
+    }, 500);
+    return () => window.clearInterval(interval);
+  }, [data?.projects.length, openProjectId]);
 
   if (error) return <div className="guest-showcase guest-showcase-closed"><CompanyLogo /><div><span>Guest showcase</span><h1>Thanks for visiting.</h1><p>{error}</p></div></div>;
   if (!data) return <div className="guest-showcase"><Loading /></div>;
@@ -474,6 +510,7 @@ export function PublicShowcasePage() {
         const centre = element.scrollLeft + element.clientWidth / 2;
         const next = cards.reduce((best, card, index) =>
           Math.abs(card.offsetLeft + card.offsetWidth / 2 - centre) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - centre) ? index : best, 0);
+        activeRef.current = next;
         setActive(next);
       }}>
         {data.projects.map((project, index) => <button type="button" className="guest-showcase-card" key={project.id} aria-haspopup="dialog" aria-label={`Open ${project.name} project details`} onClick={() => setOpenProjectId(project.id)}>
@@ -497,7 +534,7 @@ export function PublicShowcasePage() {
         <div>{data.projects.map((project, index) => <button key={project.id} className={index === active ? "active" : ""} aria-label={`View ${project.name}`} onClick={() => move(index)} />)}<button className={active === totalSlides - 1 ? "active" : ""} aria-label="View more systems" onClick={() => move(totalSlides - 1)} /></div>
         <button aria-label="Next system" disabled={active === totalSlides - 1} onClick={() => move(active + 1)}>→</button>
       </nav>
-      <p className="guest-showcase-hint">Swipe to explore</p>
+      <p className="guest-showcase-hint">Swipe to explore · advances automatically when idle</p>
     </> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
     <footer className="guest-showcase-footer"><CompanyLogo /></footer>
     {openProjectId && <PortfolioCaseModal token={token || ""} projectId={openProjectId} onClose={() => setOpenProjectId(null)} />}
