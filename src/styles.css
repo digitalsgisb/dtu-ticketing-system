@@ -2649,9 +2649,9 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   min-height: 100svh;
   overflow-x: hidden;
   color: #edf9fa;
-  background: linear-gradient(125deg, #03131f 0%, #062a38 35%, #0a4650 62%, #041925 100%);
-  background-size: 280% 280%;
-  animation: guestGradientShift 18s ease-in-out infinite;
+  background: linear-gradient(120deg, #020d17 0%, #06384a 24%, #0b6869 48%, #104264 70%, #031521 100%);
+  background-size: 360% 360%;
+  animation: guestGradientShift 10s ease-in-out infinite;
 }
 .guest-showcase::before {
   content: "";
@@ -2660,11 +2660,11 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   inset: -20%;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 28%, rgba(40, 195, 185, .2), transparent 24rem),
-    radial-gradient(circle at 85% 18%, rgba(36, 117, 154, .23), transparent 27rem),
-    radial-gradient(circle at 62% 88%, rgba(25, 159, 140, .16), transparent 26rem);
-  filter: blur(4px);
-  animation: guestAuroraFloat 15s ease-in-out infinite alternate;
+    radial-gradient(circle at 18% 28%, rgba(49, 226, 211, .33), transparent 25rem),
+    radial-gradient(circle at 85% 18%, rgba(44, 136, 211, .32), transparent 29rem),
+    radial-gradient(circle at 62% 88%, rgba(31, 200, 167, .26), transparent 28rem);
+  filter: blur(2px);
+  animation: guestAuroraFloat 9s ease-in-out infinite alternate;
 }
 .guest-showcase::after {
   content: "";
@@ -2680,8 +2680,9 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   mask-image: linear-gradient(to bottom, #000, transparent 70%);
 }
 @keyframes guestGradientShift {
-  0%, 100% { background-position: 0% 45%; }
-  50% { background-position: 100% 55%; }
+  0%, 100% { background-position: 0% 42%; }
+  35% { background-position: 60% 62%; }
+  70% { background-position: 100% 36%; }
 }
 @keyframes guestAuroraFloat {
   0% { transform: translate3d(-2%, -1%, 0) scale(1); }
@@ -2700,7 +2701,7 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .guest-showcase-intro > div span { color: #7fa3ae; font-size: 8px; line-height: 1.4; letter-spacing: .1em; text-transform: uppercase; }
 .guest-showcase-rail { display: flex; gap: 18px; overflow-x: auto; padding: 12px max(16px, calc((100vw - 1100px) / 2)) 26px; scroll-padding-inline: max(16px, calc((100vw - 1100px) / 2)); scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-inline: contain; }
 .guest-showcase-rail::-webkit-scrollbar { display: none; }
-.guest-showcase-card { flex: 0 0 min(820px, calc(100vw - 32px)); display: flex; flex-direction: column; overflow: hidden; padding: 0; scroll-snap-align: center; border: 1px solid rgba(85,205,198,.28); border-radius: 28px; color: inherit; background: rgba(5,27,39,.88); box-shadow: 0 30px 90px rgba(0,8,15,.42), inset 0 1px rgba(255,255,255,.04); font: inherit; text-align: left; backdrop-filter: blur(18px); cursor: pointer; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.guest-showcase-card { flex: 0 0 min(820px, calc(100vw - 32px)); display: flex; flex-direction: column; overflow: hidden; padding: 0; scroll-snap-align: center; border: 1px solid rgba(85,205,198,.28); border-radius: 28px; color: inherit; background: linear-gradient(135deg, rgba(8,38,51,.98), rgba(5,26,38,.98)); box-shadow: 0 30px 90px rgba(0,8,15,.42), inset 0 1px rgba(255,255,255,.04); font: inherit; text-align: left; backdrop-filter: blur(18px); cursor: pointer; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
 .guest-showcase-card:hover { transform: translateY(-5px); border-color: rgba(87,221,212,.55); box-shadow: 0 38px 100px rgba(0,8,15,.5), 0 0 0 1px rgba(74,205,197,.08); }
 .guest-showcase-card:focus-visible { outline: 3px solid rgba(79,215,206,.72); outline-offset: 4px; }
 .guest-showcase-image { position: relative; min-width: 0; display: grid; place-items: center; overflow: hidden; border-bottom: 1px solid rgba(89,204,198,.2); background: #051722; isolation: isolate; }
@@ -2714,7 +2715,7 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .guest-card-count { position: absolute; z-index: 3; left: 22px; bottom: 19px; padding: 6px 9px; border: 1px solid rgba(132,220,215,.22); border-radius: 7px; color: white; background: rgba(2,18,27,.5); font: 800 10px ui-monospace, monospace; letter-spacing: .12em; backdrop-filter: blur(8px); }
 .guest-card-open-mark { position: absolute; z-index: 3; right: 20px; top: 18px; width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid rgba(131,226,219,.3); border-radius: 50%; color: #b9f5f0; background: rgba(2,24,34,.62); font-size: 18px; backdrop-filter: blur(10px); transition: transform .25s ease, background .25s ease; }
 .guest-showcase-card:hover .guest-card-open-mark { transform: translate(2px,-2px); background: rgba(27,133,128,.62); }
-.guest-showcase-copy { min-height: 310px; display: flex; flex-direction: column; justify-content: center; padding: 42px 46px; background: linear-gradient(135deg, rgba(8,38,51,.98), rgba(5,26,38,.98)); }
+.guest-showcase-copy { flex: 1; min-height: 310px; display: flex; flex-direction: column; justify-content: center; padding: 42px 46px; background: transparent; }
 .guest-showcase-copy > span { color: #51c9c0; font-size: 9px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
 .guest-showcase-copy h2 { max-width: 700px; margin: 13px 0 17px; color: #f2fcfd; font-size: clamp(34px, 4.2vw, 52px); line-height: 1; letter-spacing: -.05em; }
 .guest-showcase-copy p { max-width: 690px; margin: 0; color: #b0c7ce; font-size: 15px; line-height: 1.75; }
