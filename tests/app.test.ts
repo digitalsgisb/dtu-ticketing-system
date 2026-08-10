@@ -165,9 +165,27 @@ describe("DTU Control Centre API", () => {
       .field("sortOrder", "1")
       .field("title", "Smart Production")
       .field("summary", "A visitor-safe overview of the production display.")
+      .field("overview", "A production visibility platform that brings operational information into one focused workspace.")
+      .field("problem", "Teams previously relied on fragmented status updates and manual follow-up.")
+      .field("solution", "The system presents current work, progress, and exceptions in a clear visual workflow.")
+      .field("features", "Live production overview\nProgress tracking\nException highlighting")
+      .field("impact", "Leaders can understand the current production picture more quickly.")
+      .field("contribution", "Designed and developed by the Digital Transformation Unit.")
+      .field("technologies", "React\nExpress\nSQLite")
       .field("imageMode", "custom")
       .attach("image", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "showcase.jpg", contentType: "image/jpeg" });
     expect(card.status).toBe(200);
+
+    const galleryUpload = await request(app).post(`/api/staff/showcase/projects/${briefingProjectId}/gallery/upload`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "dashboard.jpg", contentType: "image/jpeg" })
+      .attach("images", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), { filename: "workflow.png", contentType: "image/png" });
+    expect(galleryUpload.status).toBe(201);
+    expect(galleryUpload.body.ids).toHaveLength(2);
+    const caption = await request(app).patch(`/api/staff/showcase/gallery/${galleryUpload.body.ids[0]}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ caption: "Production dashboard" });
+    expect(caption.status).toBe(200);
 
     const opened = await request(app).patch("/api/staff/showcase")
       .set("Cookie", cookie).set("x-csrf-token", csrf)
@@ -185,9 +203,26 @@ describe("DTU Control Centre API", () => {
     });
     expect(publicView.body.projects[0]).not.toHaveProperty("url");
     expect(publicView.body.projects[0]).not.toHaveProperty("links");
+    expect(publicView.body.projects[0]).toMatchObject({ galleryCount: 3, featureCount: 3 });
     const image = await request(app).get(publicView.body.projects[0].imageUrl);
     expect(image.status).toBe(200);
     expect(image.headers["content-type"]).toContain("image/jpeg");
+
+    const detail = await request(app).get(`/api/public/showcase/${token}/projects/${briefingProjectId}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.project).toMatchObject({
+      name: "Smart Production",
+      problem: "Teams previously relied on fragmented status updates and manual follow-up.",
+      features: ["Live production overview", "Progress tracking", "Exception highlighting"],
+      technologies: ["React", "Express", "SQLite"]
+    });
+    expect(detail.body.project).not.toHaveProperty("url");
+    expect(detail.body.project).not.toHaveProperty("links");
+    expect(detail.body.gallery).toHaveLength(2);
+    expect(detail.body.gallery[0].caption).toBe("Production dashboard");
+    const galleryImage = await request(app).get(detail.body.gallery[0].imageUrl);
+    expect(galleryImage.status).toBe(200);
+    expect(galleryImage.headers["content-type"]).toContain("image/jpeg");
 
     const closed = await request(app).patch("/api/staff/showcase")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

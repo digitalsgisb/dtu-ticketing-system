@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
-import { ErrorNotice } from "../components/UI";
+import { ErrorNotice, PasswordInput } from "../components/UI";
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 
@@ -41,7 +41,7 @@ export function LoginPage() {
           <p>{lang === "en" ? "Sign in to the DTU operations workspace." : "Log masuk ke ruang kerja operasi DTU."}</p>
           <ErrorNotice message={error} />
           <label>{lang === "en" ? "Username" : "Nama pengguna"}<input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" /></label>
-          <label>{lang === "en" ? "Password" : "Kata laluan"}<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" autoFocus /></label>
+          <label>{lang === "en" ? "Password" : "Kata laluan"}<PasswordInput value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" autoFocus /></label>
           <button className="button button-primary button-large" disabled={busy}>{busy ? "…" : lang === "en" ? "Enter control centre" : "Masuk pusat kawalan"}</button>
         </form>
       </div>

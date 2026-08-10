@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
 import { humanize } from "../api";
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
@@ -70,4 +70,23 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
 
 export function ErrorNotice({ message }: { message?: string }) {
   return message ? <div className="notice notice-error">{message}</div> : null;
+}
+
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="password-field">
+      <input {...props} type={visible ? "text" : "password"} />
+      <button
+        type="button"
+        className={`password-toggle ${visible ? "is-visible" : ""}`}
+        onClick={() => setVisible(value => !value)}
+        aria-label={visible ? "Hide password" : "Show password"}
+        aria-pressed={visible}
+      >
+        <i aria-hidden="true" />
+      </button>
+    </div>
+  );
 }

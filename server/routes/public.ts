@@ -27,6 +27,16 @@ const upload = multer({
 
 const urgency = z.enum(["low", "medium", "high", "critical"]);
 
+function showcaseAccess(token: string) {
+  return db.prepare(`
+    SELECT token, enabled, title, intro FROM showcase_settings WHERE id = 1 AND token = ?
+  `).get(token) as { token: string; enabled: number; title: string; intro: string } | undefined;
+}
+
+function portfolioList(value: string | null | undefined) {
+  return String(value ?? "").split(/\r?\n|,/).map(item => cleanText(item, 120)).filter(Boolean).slice(0, 16);
+}
+
 async function storeFiles(files: Express.Multer.File[], workItemId: number) {
   const total = files.reduce((sum, file) => sum + file.size, 0);
   if (!(await storageAvailable(total))) throw new Error("Storage capacity is currently too low for uploads");
@@ -60,15 +70,14 @@ publicRouter.get("/config", (_req, res) => {
 });
 
 publicRouter.get("/showcase/:token", (req, res) => {
-  const settings = db.prepare(`
-    SELECT token, enabled, title, intro FROM showcase_settings WHERE id = 1 AND token = ?
-  `).get(req.params.token) as { token: string; enabled: number; title: string; intro: string } | undefined;
+  const settings = showcaseAccess(req.params.token);
   if (!settings) return res.status(404).json({ error: "This showcase link is not valid" });
   if (!settings.enabled) return res.status(410).json({ error: "This visitor showcase is currently closed" });
 
   const projects = db.prepare(`
     SELECT p.id, p.name, p.description, p.department_name,
-      sp.title_override, sp.summary_override, sp.image_mode,
+      sp.title_override, sp.summary_override, sp.image_mode, sp.features_text,
+      (SELECT COUNT(*) FROM showcase_project_gallery spg WHERE spg.project_id = p.id) AS gallery_count,
       CASE
         WHEN sp.image_mode = 'custom' AND sp.custom_image_stored_name IS NOT NULL THEN 1
         WHEN sp.image_mode = 'latest' AND EXISTS (
@@ -87,14 +96,91 @@ publicRouter.get("/showcase/:token", (req, res) => {
     name: project.title_override || project.name,
     summary: project.summary_override || project.description,
     department: project.department_name,
-    imageUrl: project.has_image ? `/api/public/showcase/${req.params.token}/projects/${project.id}/image` : null
+    imageUrl: project.has_image ? `/api/public/showcase/${req.params.token}/projects/${project.id}/image` : null,
+    galleryCount: Number(project.gallery_count) + (project.has_image ? 1 : 0),
+    featureCount: portfolioList(project.features_text).length
   }));
   res.setHeader("Cache-Control", "no-store");
   res.json({ title: settings.title, intro: settings.intro, projects });
 });
 
+publicRouter.get("/showcase/:token/projects/:projectId", (req, res) => {
+  const settings = showcaseAccess(req.params.token);
+  if (!settings) return res.status(404).json({ error: "This showcase link is not valid" });
+  if (!settings.enabled) return res.status(410).json({ error: "This visitor showcase is currently closed" });
+  const project = db.prepare(`
+    SELECT p.id, p.name, p.description, p.department_name,
+      sp.title_override, sp.summary_override, sp.detail_overview, sp.problem_statement,
+      sp.solution_description, sp.features_text, sp.impact_statement, sp.contribution,
+      sp.technologies_text, sp.image_mode,
+      CASE
+        WHEN sp.image_mode = 'custom' AND sp.custom_image_stored_name IS NOT NULL THEN 1
+        WHEN sp.image_mode = 'latest' AND EXISTS (
+          SELECT 1 FROM project_update_images pui JOIN project_updates pu ON pu.id = pui.project_update_id
+          WHERE pu.project_id = p.id
+        ) THEN 1 ELSE 0
+      END AS has_image
+    FROM showcase_projects sp JOIN projects p ON p.id = sp.project_id
+    WHERE sp.project_id = ? AND sp.visible = 1 AND p.status != 'cancelled'
+  `).get(req.params.projectId) as any;
+  if (!project) return res.status(404).json({ error: "Portfolio project not found" });
+  const gallery = db.prepare(`
+    SELECT id, caption FROM showcase_project_gallery WHERE project_id = ? ORDER BY sort_order, id
+  `).all(project.id).map((item: any) => ({
+    id: item.id,
+    caption: item.caption,
+    imageUrl: `/api/public/showcase/${req.params.token}/projects/${project.id}/gallery/${item.id}`
+  }));
+  const navigation = db.prepare(`
+    SELECT p.id, COALESCE(sp.title_override, p.name) AS name
+    FROM showcase_projects sp JOIN projects p ON p.id = sp.project_id
+    WHERE sp.visible = 1 AND p.status != 'cancelled' ORDER BY sp.sort_order, p.name
+  `).all() as { id: number; name: string }[];
+  const index = navigation.findIndex(item => item.id === project.id);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    portfolioTitle: settings.title,
+    project: {
+      id: project.id,
+      name: project.title_override || project.name,
+      summary: project.summary_override || project.description,
+      department: project.department_name,
+      overview: project.detail_overview || project.description,
+      problem: project.problem_statement || "",
+      solution: project.solution_description || project.summary_override || project.description,
+      features: portfolioList(project.features_text),
+      impact: project.impact_statement || "",
+      contribution: project.contribution || "",
+      technologies: portfolioList(project.technologies_text),
+      coverImageUrl: project.has_image ? `/api/public/showcase/${req.params.token}/projects/${project.id}/image` : null
+    },
+    gallery,
+    previous: index > 0 ? navigation[index - 1] : null,
+    next: index >= 0 && index < navigation.length - 1 ? navigation[index + 1] : null
+  });
+});
+
+publicRouter.get("/showcase/:token/projects/:projectId/gallery/:galleryId", (req, res) => {
+  const settings = showcaseAccess(req.params.token);
+  if (!settings?.enabled) return res.status(404).end();
+  const item = db.prepare(`
+    SELECT COALESCE(spg.custom_image_stored_name, pui.stored_name) AS stored_name,
+      COALESCE(spg.custom_image_mime_type, pui.mime_type) AS mime_type
+    FROM showcase_project_gallery spg
+    JOIN showcase_projects sp ON sp.project_id = spg.project_id AND sp.visible = 1
+    JOIN projects p ON p.id = sp.project_id AND p.status != 'cancelled'
+    LEFT JOIN project_update_images pui ON pui.id = spg.source_image_id
+    WHERE spg.id = ? AND spg.project_id = ?
+  `).get(req.params.galleryId, req.params.projectId) as { stored_name: string | null; mime_type: string | null } | undefined;
+  if (!item?.stored_name || !item.mime_type) return res.status(404).end();
+  res.setHeader("Content-Type", item.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.sendFile(path.resolve(paths.uploads, item.stored_name));
+});
+
 publicRouter.get("/showcase/:token/projects/:projectId/image", (req, res) => {
-  const settings = db.prepare("SELECT enabled FROM showcase_settings WHERE id = 1 AND token = ?").get(req.params.token) as { enabled: number } | undefined;
+  const settings = showcaseAccess(req.params.token);
   if (!settings?.enabled) return res.status(404).end();
   const item = db.prepare(`
     SELECT sp.image_mode, sp.custom_image_stored_name, sp.custom_image_mime_type

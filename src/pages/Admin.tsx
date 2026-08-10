@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, json } from "../api";
 import { useAuth } from "../auth";
-import { Badge, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
+import { Badge, ErrorNotice, Loading, Modal, PageHeader, PasswordInput } from "../components/UI";
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -72,7 +72,7 @@ function UsersPanel({ users, currentUserId, onChanged }: { users: any[]; current
             <label>Role<select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}><option>member</option><option>lead</option><option>admin</option></select></label>
             <label>Language<select value={form.language} onChange={event => setForm({ ...form, language: event.target.value })}><option value="en">English</option><option value="ms">Bahasa Melayu</option></select></label>
           </div>
-          <label>Temporary password<input type="password" required minLength={12} value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /><small>At least 12 characters with upper, lower, and numeric characters. User must change it after first sign-in.</small></label>
+          <label>Temporary password<PasswordInput required minLength={12} value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} autoComplete="new-password" /><small>At least 12 characters with upper, lower, and numeric characters. User must change it after first sign-in.</small></label>
           <button className="button button-primary">Create account</button>
         </form>
       </section>
@@ -128,7 +128,7 @@ function UserEditor({ user, isCurrentUser, onClose, onSaved }: { user: any; isCu
       <h3>Reset password</h3>
       <ErrorNotice message={passwordError} />
       {message && <div className="notice notice-success">{message}</div>}
-      <label>New temporary password<input type="password" required minLength={12} value={password} onChange={event => setPassword(event.target.value)} /><small>At least 12 characters with upper, lower, and numeric characters.</small></label>
+      <label>New temporary password<PasswordInput required minLength={12} value={password} onChange={event => setPassword(event.target.value)} autoComplete="new-password" /><small>At least 12 characters with upper, lower, and numeric characters.</small></label>
       <button className="button button-secondary">Reset and sign out user</button>
     </form>
   </Modal>;

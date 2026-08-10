@@ -16,9 +16,17 @@ type ShowcaseProject = {
   sort_order: number;
   title_override: string | null;
   summary_override: string | null;
+  detail_overview: string | null;
+  problem_statement: string | null;
+  solution_description: string | null;
+  features_text: string | null;
+  impact_statement: string | null;
+  contribution: string | null;
+  technologies_text: string | null;
   image_mode: "latest" | "custom" | "none";
   has_custom_image: number;
   latest_image_id: number | null;
+  gallery_count: number;
 };
 
 type ShowcaseAdminData = {
@@ -34,6 +42,8 @@ type GuestProject = {
   summary: string;
   department: string;
   imageUrl: string | null;
+  galleryCount: number;
+  featureCount: number;
 };
 
 export function ShowcasePage() {
@@ -221,6 +231,14 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
   const [visible, setVisible] = useState(Boolean(project.visible));
   const [title, setTitle] = useState(project.title_override ?? "");
   const [summary, setSummary] = useState(project.summary_override ?? "");
+  const [overview, setOverview] = useState(project.detail_overview ?? "");
+  const [problem, setProblem] = useState(project.problem_statement ?? "");
+  const [solution, setSolution] = useState(project.solution_description ?? "");
+  const [features, setFeatures] = useState(project.features_text ?? "");
+  const [impact, setImpact] = useState(project.impact_statement ?? "");
+  const [contribution, setContribution] = useState(project.contribution ?? "");
+  const [technologies, setTechnologies] = useState(project.technologies_text ?? "");
+  const [caseOpen, setCaseOpen] = useState(false);
   const [imageMode, setImageMode] = useState(project.image_mode);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -235,6 +253,13 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
     setVisible(Boolean(project.visible));
     setTitle(project.title_override ?? "");
     setSummary(project.summary_override ?? "");
+    setOverview(project.detail_overview ?? "");
+    setProblem(project.problem_statement ?? "");
+    setSolution(project.solution_description ?? "");
+    setFeatures(project.features_text ?? "");
+    setImpact(project.impact_statement ?? "");
+    setContribution(project.contribution ?? "");
+    setTechnologies(project.technologies_text ?? "");
     setImageMode(project.image_mode);
   }, [project]);
 
@@ -248,6 +273,13 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
       body.set("sortOrder", String(position));
       body.set("title", title);
       body.set("summary", summary);
+      body.set("overview", overview);
+      body.set("problem", problem);
+      body.set("solution", solution);
+      body.set("features", features);
+      body.set("impact", impact);
+      body.set("contribution", contribution);
+      body.set("technologies", technologies);
       body.set("imageMode", imageMode);
       if (file) body.set("image", await compressProgressImage(file));
       await api(`/api/staff/showcase/projects/${project.id}`, { method: "PATCH", body });
@@ -284,9 +316,86 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
           if (next) setImageMode("custom");
         }} /></label>
       </div>
-      <footer><ErrorNotice message={error} /><button className="button button-secondary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : saved ? "Saved" : "Save card"}</button></footer>
+      <footer><ErrorNotice message={error} /><button className="button button-secondary" type="button" onClick={() => setCaseOpen(open => !open)}>{caseOpen ? "Close case study" : `Edit case study · ${project.gallery_count || 0} images`}</button><button className="button button-secondary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : saved ? "Saved" : "Save card"}</button></footer>
     </div>
+    {caseOpen && <section className="showcase-case-editor">
+      <header><div><span className="eyebrow">Professional case study</span><h3>Tell the story behind the system</h3><p>These fields appear only in the approved public portfolio. Actual system links remain private.</p></div><button className="button button-primary" disabled={busy} onClick={() => void save()}>Save case study</button></header>
+      <div className="showcase-case-fields">
+        <label>Overview<textarea rows={4} maxLength={4000} value={overview} placeholder="What is this system and who is it for?" onChange={event => setOverview(event.target.value)} /></label>
+        <label>The challenge<textarea rows={4} maxLength={3000} value={problem} placeholder="What problem or manual process needed to be improved?" onChange={event => setProblem(event.target.value)} /></label>
+        <label>The solution<textarea rows={4} maxLength={4000} value={solution} placeholder="How does the system solve that problem?" onChange={event => setSolution(event.target.value)} /></label>
+        <label>What the system does <small>one feature per line</small><textarea rows={6} maxLength={4000} value={features} placeholder={'Live production status\nAutomated alerts\nManagement reporting'} onChange={event => setFeatures(event.target.value)} /></label>
+        <label>Impact and outcome<textarea rows={4} maxLength={3000} value={impact} placeholder="Time saved, visibility improved, errors reduced, or another measurable outcome." onChange={event => setImpact(event.target.value)} /></label>
+        <label>Your contribution <small>useful for interview sharing</small><textarea rows={4} maxLength={2000} value={contribution} placeholder="Your role in discovery, design, development, deployment, or support." onChange={event => setContribution(event.target.value)} /></label>
+        <label className="showcase-case-wide">Technologies <small>separate with commas</small><input maxLength={1200} value={technologies} placeholder="React, Node.js, SQLite, Raspberry Pi" onChange={event => setTechnologies(event.target.value)} /></label>
+      </div>
+      <ShowcaseGalleryManager projectId={project.id} />
+    </section>}
   </article>;
+}
+
+type GalleryItem = { id: number; caption: string; original_name: string; imageUrl: string; source_image_id: number | null };
+type ProgressGalleryImage = { id: number; original_name: string; created_at: string; gallery_id: number | null; imageUrl: string };
+
+function ShowcaseGalleryManager({ projectId }: { projectId: number }) {
+  const [data, setData] = useState<{ gallery: GalleryItem[]; progressImages: ProgressGalleryImage[]; maximum: number } | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const load = () => api(`/api/staff/showcase/projects/${projectId}/gallery`).then(setData).catch(e => setError(e.message));
+  useEffect(() => { void load(); }, [projectId]);
+
+  const upload = async () => {
+    if (!files.length) return;
+    setBusy(true); setError("");
+    try {
+      const body = new FormData();
+      for (const file of files) body.append("images", await compressProgressImage(file));
+      await api(`/api/staff/showcase/projects/${projectId}/gallery/upload`, { method: "POST", body });
+      setFiles([]);
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const addProgress = async (image: ProgressGalleryImage) => {
+    setBusy(true); setError("");
+    try {
+      await api(`/api/staff/showcase/projects/${projectId}/gallery/progress`, json("POST", { sourceImageId: image.id, caption: image.original_name.replace(/\.[^.]+$/, "") }));
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const remove = async (id: number) => {
+    setBusy(true); setError("");
+    try { await api(`/api/staff/showcase/gallery/${id}`, { method: "DELETE" }); await load(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  if (!data) return <div className="showcase-gallery-loading"><Loading /></div>;
+  return <div className="showcase-gallery-manager">
+    <header><div><span className="eyebrow">Approved image gallery</span><h3>Show the system from more angles</h3><p>{data.gallery.length} of {data.maximum} images selected. Only images shown here become public.</p></div></header>
+    <ErrorNotice message={error} />
+    {data.gallery.length > 0 && <div className="showcase-gallery-selected">{data.gallery.map(item => <GalleryEditorItem key={item.id} item={item} busy={busy} onRemoved={() => void remove(item.id)} onChanged={load} />)}</div>}
+    <div className="showcase-gallery-add">
+      <label>Upload portfolio screenshots<input type="file" accept=".jpg,.jpeg,.png,.webp" multiple onChange={event => setFiles(Array.from(event.target.files ?? []).slice(0, 8))} /></label>
+      <button className="button button-primary" type="button" disabled={busy || !files.length} onClick={() => void upload()}>{busy ? "Adding…" : `Add ${files.length || ""} image${files.length === 1 ? "" : "s"}`}</button>
+    </div>
+    {data.progressImages.length > 0 && <div className="showcase-progress-library"><h4>Reuse progress update photos</h4><div>{data.progressImages.map(image => <article key={image.id} className={image.gallery_id ? "is-added" : ""}><img src={image.imageUrl} alt="" /><span>{image.original_name}</span><button type="button" disabled={busy || Boolean(image.gallery_id)} onClick={() => void addProgress(image)}>{image.gallery_id ? "Added" : "Add"}</button></article>)}</div></div>}
+  </div>;
+}
+
+function GalleryEditorItem({ item, busy, onRemoved, onChanged }: { item: GalleryItem; busy: boolean; onRemoved: () => void; onChanged: () => void }) {
+  const [caption, setCaption] = useState(item.caption);
+  const [saving, setSaving] = useState(false);
+  const saveCaption = async () => {
+    setSaving(true);
+    try { await api(`/api/staff/showcase/gallery/${item.id}`, json("PATCH", { caption })); onChanged(); }
+    finally { setSaving(false); }
+  };
+  return <article><img src={item.imageUrl} alt="" /><div><input value={caption} maxLength={180} aria-label="Image caption" onChange={event => setCaption(event.target.value)} /><span>{item.original_name}</span></div><button type="button" disabled={busy || saving} onClick={() => void saveCaption()}>{saving ? "Saving…" : "Save caption"}</button><button type="button" className="is-remove" disabled={busy} onClick={onRemoved}>Remove</button></article>;
 }
 
 export function PublicShowcasePage() {
@@ -332,7 +441,7 @@ export function PublicShowcasePage() {
             </> : <div><span>{String(index + 1).padStart(2, "0")}</span><strong>DTU</strong></div>}
             <span className="guest-card-count">{String(index + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span>
           </div>
-          <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A digital solution designed and delivered by the DTU team."}</p><footer><i /><span>Designed and developed by Digital Transformation Unit</span></footer></div>
+          <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A digital solution designed and delivered by the DTU team."}</p><div className="guest-showcase-card-meta"><span>{project.featureCount || "—"} capabilities</span><span>{project.galleryCount || "—"} visuals</span></div><Link className="guest-showcase-explore" to={`/showcase/${token}/projects/${project.id}`}>Explore case study <b>→</b></Link><footer><i /><span>Designed and developed by Digital Transformation Unit</span></footer></div>
         </article>)}
       </div>
       <nav className="guest-showcase-controls" aria-label="Showcase navigation">
@@ -343,5 +452,69 @@ export function PublicShowcasePage() {
       <p className="guest-showcase-hint">Swipe to explore</p>
     </> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
     <footer className="guest-showcase-footer"><CompanyLogo /><span>Designed and developed by<br /><strong>Digital Transformation Unit</strong></span></footer>
+  </main>;
+}
+
+type PortfolioCaseData = {
+  portfolioTitle: string;
+  project: {
+    id: number; name: string; summary: string; department: string; overview: string;
+    problem: string; solution: string; features: string[]; impact: string;
+    contribution: string; technologies: string[]; coverImageUrl: string | null;
+  };
+  gallery: { id: number; caption: string; imageUrl: string }[];
+  previous: { id: number; name: string } | null;
+  next: { id: number; name: string } | null;
+};
+
+export function PublicShowcaseDetailPage() {
+  const { token, projectId } = useParams();
+  const [data, setData] = useState<PortfolioCaseData | null>(null);
+  const [error, setError] = useState("");
+  const [selectedImage, setSelectedImage] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
+  useEffect(() => {
+    setData(null); setError(""); setSelectedImage(0); setLightbox(false);
+    window.scrollTo({ top: 0, behavior: "auto" });
+    void api(`/api/public/showcase/${token}/projects/${projectId}`).then(setData).catch(e => setError(e.message));
+  }, [token, projectId]);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setLightbox(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, []);
+
+  if (error) return <div className="guest-showcase guest-showcase-closed"><CompanyLogo /><div><span>Portfolio case study</span><h1>Unable to open this project.</h1><p>{error}</p><Link className="guest-showcase-explore" to={`/showcase/${token}`}>Back to portfolio</Link></div></div>;
+  if (!data) return <div className="guest-showcase"><Loading /></div>;
+  const { project } = data;
+  const images = [
+    ...(project.coverImageUrl ? [{ id: 0, caption: `${project.name} overview`, imageUrl: project.coverImageUrl }] : []),
+    ...data.gallery
+  ];
+  const currentImage = images[Math.min(selectedImage, Math.max(0, images.length - 1))];
+  return <main className="guest-showcase portfolio-case-page">
+    <header className="guest-showcase-header portfolio-case-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><Link to={`/showcase/${token}`}>← All projects</Link></header>
+    <section className="portfolio-case-hero">
+      <div><span className="eyebrow">{project.department} · Case study</span><h1>{project.name}</h1><p>{project.summary}</p><div className="portfolio-case-stats"><span><strong>{String(project.features.length).padStart(2, "0")}</strong> capabilities</span><span><strong>{String(images.length).padStart(2, "0")}</strong> visuals</span></div></div>
+      {project.coverImageUrl && <button className="portfolio-case-cover" type="button" onClick={() => { setSelectedImage(0); setLightbox(true); }}><img src={project.coverImageUrl} alt={`Overview of ${project.name}`} /><span>Tap to explore</span></button>}
+    </section>
+    <nav className="portfolio-case-nav" aria-label="Case study sections"><a href="#overview">Overview</a>{project.features.length > 0 && <a href="#capabilities">Capabilities</a>}{images.length > 0 && <a href="#gallery">Gallery</a>}{project.impact && <a href="#impact">Impact</a>}</nav>
+    <div className="portfolio-case-body">
+      <section id="overview" className="portfolio-story-grid">
+        <article className="portfolio-story-overview"><span>01 · Overview</span><h2>Built around the work, not around the software.</h2><p>{project.overview || project.summary}</p></article>
+        {project.problem && <article><span>The challenge</span><h3>What needed to change</h3><p>{project.problem}</p></article>}
+        <article><span>The solution</span><h3>How the system responds</h3><p>{project.solution || project.summary}</p></article>
+      </section>
+      {project.features.length > 0 && <section id="capabilities" className="portfolio-capabilities"><header><span className="eyebrow">02 · What it does</span><h2>Core system capabilities</h2><p>A practical look at the functions designed for day-to-day users.</p></header><div>{project.features.map((feature, index) => <article key={`${feature}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h3>{feature}</h3><i /></article>)}</div></section>}
+      {images.length > 0 && currentImage && <section id="gallery" className="portfolio-gallery"><header><span className="eyebrow">03 · Product gallery</span><h2>See the system in action</h2><p>Explore approved screens, workflows, and delivery progress.</p></header><div className="portfolio-gallery-stage"><button type="button" onClick={() => setLightbox(true)}><img src={currentImage.imageUrl} alt={currentImage.caption || project.name} /></button><footer><span>{currentImage.caption || project.name}</span><strong>{String(selectedImage + 1).padStart(2, "0")} / {String(images.length).padStart(2, "0")}</strong></footer></div>{images.length > 1 && <div className="portfolio-gallery-thumbs">{images.map((image, index) => <button key={`${image.id}-${index}`} className={selectedImage === index ? "active" : ""} type="button" onClick={() => setSelectedImage(index)}><img src={image.imageUrl} alt="" /><span>{String(index + 1).padStart(2, "0")}</span></button>)}</div>}</section>}
+      {(project.impact || project.contribution) && <section id="impact" className="portfolio-impact">
+        {project.impact && <article><span className="eyebrow">04 · Outcome</span><h2>Impact on the work</h2><p>{project.impact}</p></article>}
+        {project.contribution && <article><span className="eyebrow">Contribution</span><h2>Role in the delivery</h2><p>{project.contribution}</p></article>}
+      </section>}
+      {project.technologies.length > 0 && <section className="portfolio-technologies"><span>Built with</span><div>{project.technologies.map(item => <b key={item}>{item}</b>)}</div></section>}
+    </div>
+    <nav className="portfolio-project-nav">{data.previous ? <Link to={`/showcase/${token}/projects/${data.previous.id}`}><span>← Previous project</span><strong>{data.previous.name}</strong></Link> : <i />}{data.next ? <Link to={`/showcase/${token}/projects/${data.next.id}`}><span>Next project →</span><strong>{data.next.name}</strong></Link> : <i />}</nav>
+    <footer className="guest-showcase-footer"><CompanyLogo /><span>Designed and developed by<br /><strong>Digital Transformation Unit</strong></span></footer>
+    {lightbox && currentImage && <div className="portfolio-lightbox" role="dialog" aria-modal="true" onClick={() => setLightbox(false)}><button type="button" aria-label="Close image">×</button><img onClick={event => event.stopPropagation()} src={currentImage.imageUrl} alt={currentImage.caption || project.name} /><footer onClick={event => event.stopPropagation()}><span>{currentImage.caption || project.name}</span><strong>{selectedImage + 1} / {images.length}</strong></footer></div>}
   </main>;
 }

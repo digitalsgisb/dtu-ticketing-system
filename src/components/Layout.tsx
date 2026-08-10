@@ -5,7 +5,7 @@ import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { BellIcon, GridIcon, PresentationIcon, ProjectIcon, RequestIcon, ScreenIcon, SettingsIcon, TicketIcon } from "./Icons";
 import { api, json } from "../api";
-import { ErrorNotice, Modal } from "./UI";
+import { ErrorNotice, Modal, PasswordInput } from "./UI";
 import { CompanyLogo } from "./CompanyLogo";
 
 export function Layout() {
@@ -132,9 +132,9 @@ function PasswordChange({ onChanged }: { onChanged: () => void }) {
     <form className="form-stack" onSubmit={submit}>
       <p className="muted">For security, replace the temporary password before using the control centre.</p>
       <ErrorNotice message={error} />
-      <label>Temporary password<input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
-      <label>New password<input type="password" autoComplete="new-password" required minLength={12} value={newPassword} onChange={e => setNewPassword(e.target.value)} /><small>At least 12 characters with upper, lower, and numeric characters.</small></label>
-      <label>Confirm new password<input type="password" autoComplete="new-password" required value={confirm} onChange={e => setConfirm(e.target.value)} /></label>
+      <label>Temporary password<PasswordInput autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+      <label>New password<PasswordInput autoComplete="new-password" required minLength={12} value={newPassword} onChange={e => setNewPassword(e.target.value)} /><small>At least 12 characters with upper, lower, and numeric characters.</small></label>
+      <label>Confirm new password<PasswordInput autoComplete="new-password" required value={confirm} onChange={e => setConfirm(e.target.value)} /></label>
       <button className="button button-primary button-large">Save password</button>
     </form>
   </Modal>;

@@ -203,7 +203,30 @@ CREATE TABLE IF NOT EXISTS showcase_projects (
   custom_image_stored_name TEXT UNIQUE,
   custom_image_mime_type TEXT,
   custom_image_size INTEGER,
+  detail_overview TEXT,
+  problem_statement TEXT,
+  solution_description TEXT,
+  features_text TEXT,
+  impact_statement TEXT,
+  contribution TEXT,
+  technologies_text TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS showcase_project_gallery (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  source_image_id INTEGER REFERENCES project_update_images(id) ON DELETE CASCADE,
+  custom_image_name TEXT,
+  custom_image_stored_name TEXT UNIQUE,
+  custom_image_mime_type TEXT,
+  custom_image_size INTEGER,
+  caption TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK(source_image_id IS NOT NULL OR custom_image_stored_name IS NOT NULL),
+  UNIQUE(project_id, source_image_id)
 );
 
 CREATE TABLE IF NOT EXISTS public_tracking_tokens (
@@ -258,6 +281,7 @@ CREATE INDEX IF NOT EXISTS idx_project_updates_project ON project_updates(projec
 CREATE INDEX IF NOT EXISTS idx_project_update_images_update ON project_update_images(project_update_id);
 CREATE INDEX IF NOT EXISTS idx_project_links_project ON project_links(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_showcase_projects_order ON showcase_projects(visible, sort_order);
+CREATE INDEX IF NOT EXISTS idx_showcase_gallery_project ON showcase_project_gallery(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id);
 `);
@@ -353,6 +377,13 @@ function ensureProjectStatusCheckAllowsMonitoring() {
 ensureColumn("projects", "current_update", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
+ensureColumn("showcase_projects", "detail_overview", "TEXT");
+ensureColumn("showcase_projects", "problem_statement", "TEXT");
+ensureColumn("showcase_projects", "solution_description", "TEXT");
+ensureColumn("showcase_projects", "features_text", "TEXT");
+ensureColumn("showcase_projects", "impact_statement", "TEXT");
+ensureColumn("showcase_projects", "contribution", "TEXT");
+ensureColumn("showcase_projects", "technologies_text", "TEXT");
 ensureProjectStatusCheckAllowsMonitoring();
 
 function ensureShowcaseSettings() {
@@ -393,7 +424,7 @@ export async function seedDatabase() {
 export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== "test") return;
   for (const table of [
-    "showcase_projects", "showcase_settings", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
+    "showcase_project_gallery", "showcase_projects", "showcase_settings", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
     "work_items", "projects", "project_requests", "sessions", "login_attempts",
     "import_batches", "users", "departments", "counters"
   ]) {
