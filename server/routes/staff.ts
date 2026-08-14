@@ -457,10 +457,13 @@ staffRouter.get("/project-links", (_req, res) => {
   const rows = db.prepare(`
     SELECT p.id AS project_id, p.project_no, p.name AS project_name,
       p.department_name, p.status, p.updated_at AS project_updated_at,
+      (SELECT pui.id FROM project_update_images pui
+        JOIN project_updates pu ON pu.id = pui.project_update_id
+        WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id,
       pl.id, pl.title, pl.url, pl.sort_order
     FROM project_links pl
     JOIN projects p ON p.id = pl.project_id
-    ORDER BY p.name COLLATE NOCASE, p.project_no COLLATE NOCASE, pl.sort_order, pl.id
+    ORDER BY p.project_no COLLATE NOCASE, pl.sort_order, pl.id
   `).all() as Array<Record<string, unknown>>;
 
   const projects = new Map<number, Record<string, unknown> & { links: Record<string, unknown>[] }>();
@@ -474,6 +477,7 @@ staffRouter.get("/project-links", (_req, res) => {
         department_name: row.department_name,
         status: row.status,
         updated_at: row.project_updated_at,
+        latest_image_id: row.latest_image_id,
         links: []
       });
     }

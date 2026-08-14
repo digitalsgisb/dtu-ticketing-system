@@ -364,6 +364,11 @@ describe("DTU Control Centre API", () => {
     expect(detail.body.updates[0].images).toHaveLength(1);
     expect(detail.body.project.latest_image_id).toBe(detail.body.updates[0].images[0].id);
 
+    const linkDirectory = await request(app).get("/api/staff/project-links").set("Cookie", managedCookie);
+    expect(linkDirectory.status).toBe(200);
+    const linkedProject = linkDirectory.body.projects.find((project: { id: number }) => project.id === briefingProjectId);
+    expect(linkedProject.latest_image_id).toBe(detail.body.updates[0].images[0].id);
+
     const image = await request(app).get(`/api/staff/briefing/images/${detail.body.updates[0].images[0].id}`).set("Cookie", cookie);
     expect(image.status).toBe(200);
     expect(image.headers["content-type"]).toContain("image/jpeg");

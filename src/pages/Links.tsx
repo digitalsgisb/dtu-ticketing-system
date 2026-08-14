@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import { ArrowIcon, LinkIcon, SearchIcon } from "../components/Icons";
+import { ArrowIcon, LinkIcon, ProjectIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, PageHeader } from "../components/UI";
 
 type SystemLink = {
@@ -18,6 +18,7 @@ type LinkProject = {
   department_name: string;
   status: string;
   updated_at: string;
+  latest_image_id: number | null;
   links: SystemLink[];
 };
 
@@ -35,12 +36,16 @@ function displayUrl(value: string) {
   }
 }
 
+function compareProjectNumbers(left: LinkProject, right: LinkProject) {
+  return left.project_no.localeCompare(right.project_no, undefined, { numeric: true, sensitivity: "base" });
+}
+
 export function LinksPage() {
   const [data, setData] = useState<LinksResponse | null>(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [projectId, setProjectId] = useState("all");
-  const [sort, setSort] = useState("project_asc");
+  const [sort, setSort] = useState("project_no_asc");
 
   useEffect(() => {
     void api<LinksResponse>("/api/staff/project-links").then(setData).catch(err => setError((err as Error).message));
@@ -58,9 +63,10 @@ export function LinksPage() {
     });
 
     return projects.sort((left, right) => {
-      if (sort === "project_desc") return right.name.localeCompare(left.name, undefined, { sensitivity: "base" });
-      if (sort === "links_desc") return right.links.length - left.links.length || left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
-      return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      if (sort === "project_no_desc") return compareProjectNumbers(right, left);
+      if (sort === "name_asc") return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      if (sort === "links_desc") return right.links.length - left.links.length || compareProjectNumbers(left, right);
+      return compareProjectNumbers(left, right);
     });
   }, [data, projectId, search, sort]);
 
@@ -78,16 +84,25 @@ export function LinksPage() {
     {data && <>
       <section className="links-toolbar" aria-label="Filter and sort system links">
         <div className="search-box"><SearchIcon /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search projects or links" aria-label="Search projects or links" /></div>
-        <label>Project<select value={projectId} onChange={event => setProjectId(event.target.value)}><option value="all">All projects</option>{data.projects.map(project => <option key={project.id} value={project.id}>{project.project_no} · {project.name}</option>)}</select></label>
-        <label>Sort<select value={sort} onChange={event => setSort(event.target.value)}><option value="project_asc">Project A–Z</option><option value="project_desc">Project Z–A</option><option value="links_desc">Most links</option></select></label>
-        <span className="links-result-count"><strong>{visibleLinkCount}</strong> of {data.linkCount} links · <strong>{visibleProjects.length}</strong> projects</span>
+        <label>Project<select value={projectId} onChange={event => setProjectId(event.target.value)}><option value="all">All projects</option>{data.projects.map(project => <option key={project.id} value={project.id}>{project.project_no} - {project.name}</option>)}</select></label>
+        <label>Sort<select value={sort} onChange={event => setSort(event.target.value)}><option value="project_no_asc">Project number</option><option value="project_no_desc">Project number descending</option><option value="name_asc">Project name A-Z</option><option value="links_desc">Most links</option></select></label>
+        <span className="links-result-count"><strong>{visibleLinkCount}</strong> of {data.linkCount} links - <strong>{visibleProjects.length}</strong> projects</span>
       </section>
 
       {visibleProjects.length ? <div className="links-project-list">
         {visibleProjects.map(project => <section className="links-project-group" key={project.id}>
-          <header>
-            <div><span className="mono">{project.project_no}</span><Link to={`/projects/${project.id}`}><h2>{project.name}</h2></Link><small>{project.department_name}</small></div>
-            <div><Badge value={project.status} /><span>{project.links.length} {project.links.length === 1 ? "link" : "links"}</span></div>
+          <header className="links-project-summary">
+            <Link className={`links-project-image${project.latest_image_id ? " has-image" : ""}`} to={`/projects/${project.id}`} aria-label={`Open ${project.name}`}>
+              {project.latest_image_id
+                ? <img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} />
+                : <span><ProjectIcon /><small>No progress image</small></span>}
+            </Link>
+            <div className="links-project-copy">
+              <div><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
+              <Link to={`/projects/${project.id}`}><h2>{project.name}</h2></Link>
+              <small>{project.department_name}</small>
+              <footer><span>{project.links.length} {project.links.length === 1 ? "system link" : "system links"}</span><Link to={`/projects/${project.id}`}>Open project <ArrowIcon /></Link></footer>
+            </div>
           </header>
           <div className="links-directory-grid">
             {project.links.map(link => <a className="links-directory-card" href={link.url} target="_blank" rel="noreferrer" key={link.id}>
