@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
-import { BellIcon, GridIcon, PresentationIcon, ProjectIcon, RequestIcon, ScreenIcon, SettingsIcon, TicketIcon } from "./Icons";
+import { BellIcon, GridIcon, LinkIcon, PresentationIcon, ProjectIcon, RequestIcon, ScreenIcon, SettingsIcon, TicketIcon } from "./Icons";
 import { api, json } from "../api";
 import { ErrorNotice, Modal, PasswordInput } from "./UI";
 import { CompanyLogo } from "./CompanyLogo";
@@ -15,7 +15,7 @@ export function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const projectSectionActive = location.pathname.startsWith("/projects") || location.pathname.startsWith("/my-projects");
+  const projectSectionActive = location.pathname.startsWith("/projects") || location.pathname.startsWith("/my-projects") || location.pathname.startsWith("/links");
   const [projectsOpen, setProjectsOpen] = useState(projectSectionActive);
 
   useEffect(() => {
@@ -53,6 +53,8 @@ export function Layout() {
   ] as const;
   const currentSection = location.pathname.startsWith("/notifications")
     ? "Notifications"
+    : location.pathname.startsWith("/links")
+      ? t("systemLinks")
     : projectSectionActive
       ? t("projects")
     : items.find(([to]) => to === "/" ? location.pathname === "/" : location.pathname.startsWith(to))?.[1] ?? t("dashboard");
@@ -75,6 +77,7 @@ export function Layout() {
             <div className="nav-subnav" aria-hidden={!projectsOpen}>
               <NavLink to="/projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("allProjects")}</NavLink>
               <NavLink to="/my-projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
+              <NavLink to="/links" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}><LinkIcon />{t("systemLinks")}</NavLink>
             </div>
           </div>
           {items.map(([to, label, icon]) => (

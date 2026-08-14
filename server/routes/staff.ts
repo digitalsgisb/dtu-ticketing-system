@@ -453,6 +453,41 @@ staffRouter.get("/projects", (_req, res) => {
   `).all());
 });
 
+staffRouter.get("/project-links", (_req, res) => {
+  const rows = db.prepare(`
+    SELECT p.id AS project_id, p.project_no, p.name AS project_name,
+      p.department_name, p.status, p.updated_at AS project_updated_at,
+      pl.id, pl.title, pl.url, pl.sort_order
+    FROM project_links pl
+    JOIN projects p ON p.id = pl.project_id
+    ORDER BY p.name COLLATE NOCASE, p.project_no COLLATE NOCASE, pl.sort_order, pl.id
+  `).all() as Array<Record<string, unknown>>;
+
+  const projects = new Map<number, Record<string, unknown> & { links: Record<string, unknown>[] }>();
+  for (const row of rows) {
+    const projectId = Number(row.project_id);
+    if (!projects.has(projectId)) {
+      projects.set(projectId, {
+        id: projectId,
+        project_no: row.project_no,
+        name: row.project_name,
+        department_name: row.department_name,
+        status: row.status,
+        updated_at: row.project_updated_at,
+        links: []
+      });
+    }
+    projects.get(projectId)!.links.push({
+      id: row.id,
+      title: row.title,
+      url: row.url,
+      sort_order: row.sort_order
+    });
+  }
+
+  res.json({ projects: [...projects.values()], linkCount: rows.length });
+});
+
 staffRouter.post("/projects", requireRole("admin", "lead"), (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const parsed = z.object({

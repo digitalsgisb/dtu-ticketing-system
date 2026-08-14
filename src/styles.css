@@ -84,7 +84,7 @@ button { cursor: pointer; }
   transition: max-height .26s cubic-bezier(.2,.8,.2,1), opacity .18s ease, transform .26s cubic-bezier(.2,.8,.2,1);
 }
 .nav-group.is-open .nav-subnav {
-  max-height: 88px;
+  max-height: 132px;
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -95,6 +95,7 @@ button { cursor: pointer; }
   font-size: 12px;
   color: #7f9eaf;
 }
+.sidebar nav .nav-subnav a svg { width: 13px; height: 13px; flex: 0 0 auto; }
 .sidebar nav .nav-subnav a.active { color: white; background: rgba(44,184,178,.12); box-shadow: inset 2px 0 var(--cyan); }
 @media (prefers-reduced-motion: reduce) {
   .nav-group-trigger i, .nav-subnav { transition: none; }
@@ -1631,6 +1632,56 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 }
 @media (max-width: 620px) {
   .system-link-grid, .project-link-row { grid-template-columns: 1fr; }
+}
+
+/* Shared project link directory */
+.links-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(190px, .45fr) minmax(150px, .28fr);
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+}
+.links-toolbar .search-box { min-height: 42px; }
+.links-toolbar label { gap: 5px; color: #7a8d98; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.links-toolbar select { min-height: 42px; padding: 8px 10px; font-size: 11px; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.links-result-count { grid-column: 1 / -1; color: #7b8d97; font-size: 10px; }
+.links-result-count strong { color: #176e78; }
+.links-project-list { display: grid; gap: 16px; }
+.links-project-group { overflow: hidden; border: 1px solid #dce6eb; border-radius: 16px; background: white; box-shadow: 0 10px 30px rgba(12, 49, 65, .035); }
+.links-project-group > header { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 20px; border-bottom: 1px solid #e7eef1; background: linear-gradient(100deg, #f9fcfc, #fff); }
+.links-project-group > header > div:first-child { min-width: 0; }
+.links-project-group h2 { margin: 3px 0 2px; color: var(--navy); font-size: 17px; letter-spacing: -.02em; }
+.links-project-group h2:hover { color: #17777f; }
+.links-project-group header small { color: #7b909c; font-size: 10px; }
+.links-project-group > header > div:last-child { display: flex; align-items: center; gap: 10px; }
+.links-project-group > header > div:last-child > span:last-child { color: #78909d; font-size: 10px; white-space: nowrap; }
+.links-directory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 14px; }
+.links-directory-card { min-width: 0; min-height: 76px; display: grid; grid-template-columns: 40px minmax(0, 1fr) 24px; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #dfe9ed; border-radius: 12px; background: #fbfdfd; transition: transform .18s, border-color .18s, background .18s, box-shadow .18s; }
+.links-directory-card:hover { transform: translateY(-2px); border-color: #9fcac9; background: #f4fbfa; box-shadow: 0 8px 22px rgba(18, 78, 82, .07); }
+.links-directory-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: #1d8386; background: #e4f3f1; }
+.links-directory-icon svg { width: 18px; height: 18px; }
+.links-directory-copy { min-width: 0; display: grid; gap: 5px; }
+.links-directory-copy strong, .links-directory-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links-directory-copy strong { color: var(--navy); font-size: 13px; }
+.links-directory-copy small { color: #66808e; font-size: 10px; }
+.links-directory-open { color: #7fa2aa; transition: transform .18s, color .18s; }
+.links-directory-open svg { width: 16px; height: 16px; }
+.links-directory-card:hover .links-directory-open { color: #177f82; transform: translateX(2px); }
+@media (max-width: 900px) {
+  .links-toolbar { grid-template-columns: 1fr 1fr; }
+  .links-toolbar .search-box { grid-column: 1 / -1; }
+  .links-directory-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .links-toolbar { grid-template-columns: 1fr; }
+  .links-toolbar .search-box, .links-result-count { grid-column: auto; }
+  .links-project-group > header { align-items: flex-start; }
+  .links-project-group > header > div:last-child { align-items: flex-end; flex-direction: column; }
 }
 
 /* Interactive, space-efficient wallboard */

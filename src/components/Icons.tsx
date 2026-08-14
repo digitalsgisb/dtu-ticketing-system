@@ -17,3 +17,4 @@ export const ArrowIcon = () => <Icon><path d="M5 12h14m-5-5 5 5-5 5"/></Icon>;
 export const AlertIcon = () => <Icon><path d="M12 3 2.5 20h19z"/><path d="M12 9v4m0 3h.01"/></Icon>;
 export const CheckIcon = () => <Icon><path d="m5 12 4 4L19 6"/></Icon>;
 export const ClockIcon = () => <Icon><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></Icon>;
+export const LinkIcon = () => <Icon><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></Icon>;

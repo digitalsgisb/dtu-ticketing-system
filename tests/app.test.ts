@@ -121,6 +121,22 @@ describe("DTU Control Centre API", () => {
     expect(detail.body.links[0]).toMatchObject({ title: "Live system", url: "https://production.example.com/" });
     expect(detail.body.links[1]).toMatchObject({ title: "Admin console", url: "https://admin.example.com/console" });
 
+    const adminDirectory = await request(app).get("/api/staff/project-links").set("Cookie", cookie);
+    expect(adminDirectory.status).toBe(200);
+    expect(adminDirectory.body.linkCount).toBe(2);
+    expect(adminDirectory.body.projects[0]).toMatchObject({
+      id: briefingProjectId,
+      name: "Smart Production Board",
+      links: [
+        { title: "Live system", url: "https://production.example.com/" },
+        { title: "Admin console", url: "https://admin.example.com/console" }
+      ]
+    });
+
+    const memberDirectory = await request(app).get("/api/staff/project-links").set("Cookie", managedCookie);
+    expect(memberDirectory.status).toBe(200);
+    expect(memberDirectory.body.projects[0].links).toHaveLength(2);
+
     const briefingList = await request(app).get("/api/staff/briefing").set("Cookie", cookie);
     expect(briefingList.status).toBe(200);
     const briefingProject = briefingList.body.projects.find((project: { id: number }) => project.id === briefingProjectId);

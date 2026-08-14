@@ -18,6 +18,7 @@ import { PublicIssuePage, PublicRequestPage, TrackingPage } from "./pages/Public
 import { WallboardPage } from "./pages/Wallboard";
 import { BriefingProjectPage, ProgressBriefingPage } from "./pages/Briefing";
 import { PublicShowcaseDetailPage, PublicShowcasePage, ShowcasePage } from "./pages/Showcase";
+import { LinksPage } from "./pages/Links";
 import "./styles.css";
 
 function Protected() {
@@ -51,6 +52,7 @@ function App() {
       <Route path="my-projects" element={<ProjectsPage myProjectsOnly />} />
       <Route path="projects" element={<ProjectsPage />} />
       <Route path="projects/:id" element={<ProjectDetailPage />} />
+      <Route path="links" element={<LinksPage />} />
       <Route path="tickets" element={<TicketsPage />} />
       <Route path="tickets/:id" element={<TicketDetailPage />} />
       <Route path="requests" element={<RequestsPage />} />
