@@ -676,8 +676,15 @@ body {
     radial-gradient(circle at 20% 0%, rgba(43, 179, 172, .14), transparent 260px),
     linear-gradient(180deg, #071b2b 0%, #061522 100%);
   border-right: 1px solid rgba(255,255,255,.05);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(72, 203, 193, .28) transparent;
 }
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(72, 203, 193, .28); border-radius: 999px; }
 .sidebar::after {
   content: "";
   position: absolute;
