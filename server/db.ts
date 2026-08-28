@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS project_updates (
   author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   author_name TEXT NOT NULL,
   body TEXT NOT NULL,
+  next_action TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL CHECK(status IN ('planned','in_progress','on_hold','complete_monitoring','completed','cancelled')),
   progress INTEGER NOT NULL CHECK(progress BETWEEN 0 AND 100),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -326,6 +327,7 @@ function ensureProjectStatusCheckAllowsMonitoring() {
             qr_token TEXT NOT NULL UNIQUE,
             source_request_id INTEGER REFERENCES project_requests(id),
             current_update TEXT NOT NULL DEFAULT '',
+            next_action TEXT NOT NULL DEFAULT '',
             progress_updated_at TEXT,
             progress_updated_by INTEGER REFERENCES users(id),
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -333,11 +335,11 @@ function ensureProjectStatusCheckAllowsMonitoring() {
           );
           INSERT INTO projects(
             id, project_no, name, description, department_id, department_name, owner_id, status, priority,
-            start_date, due_date, progress, qr_token, source_request_id, current_update,
+            start_date, due_date, progress, qr_token, source_request_id, current_update, next_action,
             progress_updated_at, progress_updated_by, created_at, updated_at
           )
           SELECT id, project_no, name, description, department_id, department_name, owner_id, status, priority,
-            start_date, due_date, progress, qr_token, source_request_id, current_update,
+            start_date, due_date, progress, qr_token, source_request_id, current_update, next_action,
             progress_updated_at, progress_updated_by, created_at, updated_at
           FROM __projects_status_migration_old;
           DROP TABLE __projects_status_migration_old;
@@ -352,12 +354,13 @@ function ensureProjectStatusCheckAllowsMonitoring() {
             author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             author_name TEXT NOT NULL,
             body TEXT NOT NULL,
+            next_action TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL CHECK(status IN ('planned','in_progress','on_hold','complete_monitoring','completed','cancelled')),
             progress INTEGER NOT NULL CHECK(progress BETWEEN 0 AND 100),
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
           );
-          INSERT INTO project_updates(id, project_id, author_user_id, author_name, body, status, progress, created_at)
-          SELECT id, project_id, author_user_id, author_name, body, status, progress, created_at
+          INSERT INTO project_updates(id, project_id, author_user_id, author_name, body, next_action, status, progress, created_at)
+          SELECT id, project_id, author_user_id, author_name, body, next_action, status, progress, created_at
           FROM __project_updates_status_migration_old;
           DROP TABLE __project_updates_status_migration_old;
         `);
@@ -375,8 +378,10 @@ function ensureProjectStatusCheckAllowsMonitoring() {
 }
 
 ensureColumn("projects", "current_update", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("projects", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
+ensureColumn("project_updates", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
 ensureColumn("showcase_projects", "problem_statement", "TEXT");
 ensureColumn("showcase_projects", "solution_description", "TEXT");

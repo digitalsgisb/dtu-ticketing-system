@@ -289,18 +289,21 @@ describe("DTU Control Centre API", () => {
       .field("status", "in_progress")
       .field("progress", "45")
       .field("currentUpdate", "Prototype approved; integration work is now underway.")
+      .field("nextAction", "Project owner will complete the integration test by Friday.")
       .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "owner-progress.jpg", contentType: "image/jpeg" });
     expect(updated.status).toBe(200);
 
-    const row = db.prepare("SELECT status, progress, current_update, progress_updated_by FROM projects WHERE id = ?").get(created.body.id) as {
+    const row = db.prepare("SELECT status, progress, current_update, next_action, progress_updated_by FROM projects WHERE id = ?").get(created.body.id) as {
       status: string;
       progress: number;
       current_update: string;
+      next_action: string;
       progress_updated_by: number;
     };
     expect(row.status).toBe("in_progress");
     expect(row.progress).toBe(45);
     expect(row.current_update).toContain("integration work");
+    expect(row.next_action).toContain("integration test");
     expect(row.progress_updated_by).toBe(managedUserId);
     const imageCount = db.prepare(`
       SELECT COUNT(*) AS count FROM project_update_images pui
@@ -312,6 +315,7 @@ describe("DTU Control Centre API", () => {
     const detail = await request(app).get(`/api/staff/projects/${created.body.id}`).set("Cookie", managedCookie);
     expect(detail.status).toBe(200);
     expect(detail.body.updates[0].images).toHaveLength(1);
+    expect(detail.body.updates[0].next_action).toContain("Friday");
     expect(detail.body.project.latest_image_id).toBe(detail.body.updates[0].images[0].id);
     expect(detail.body.navigationProjects.some((project: { id: number }) => project.id === created.body.id)).toBe(true);
     const projectList = await request(app).get("/api/staff/projects").set("Cookie", managedCookie);
@@ -354,6 +358,7 @@ describe("DTU Control Centre API", () => {
       .field("status", "in_progress")
       .field("progress", "60")
       .field("currentUpdate", "Management review completed; rollout preparation has started.")
+      .field("nextAction", "The team will begin the controlled rollout next week.")
       .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "progress.jpg", contentType: "image/jpeg" });
     expect(response.status).toBe(201);
 
@@ -361,6 +366,7 @@ describe("DTU Control Centre API", () => {
     expect(detail.status).toBe(200);
     expect(detail.body.project.progress).toBe(60);
     expect(detail.body.updates[0].body).toContain("rollout preparation");
+    expect(detail.body.updates[0].next_action).toContain("controlled rollout");
     expect(detail.body.updates[0].images).toHaveLength(1);
     expect(detail.body.project.latest_image_id).toBe(detail.body.updates[0].images[0].id);
 

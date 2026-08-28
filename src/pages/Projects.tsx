@@ -44,6 +44,15 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   }, [projects]);
 
   const effectiveScope = myProjectsOnly ? "mine" : scope;
+  const hasActiveFilters = Boolean(search.trim()) || filter !== "all" || (!myProjectsOnly && scope !== "all") || progressFilter !== "all" || deadlineFilter !== "all" || sort !== "updated_desc";
+  const resetFilters = () => {
+    setSearch("");
+    setFilter("all");
+    if (!myProjectsOnly) setScope("all");
+    setProgressFilter("all");
+    setDeadlineFilter("all");
+    setSort("updated_desc");
+  };
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return [...(projects ?? [])].filter(project => {
@@ -61,7 +70,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
         || (deadlineFilter === "next14" && dueDays !== null && dueDays >= 0 && dueDays <= 14)
         || (deadlineFilter === "next30" && dueDays !== null && dueDays >= 0 && dueDays <= 30)
         || (deadlineFilter === "none" && dueDays === null);
-      const haystack = `${project.name} ${project.project_no} ${project.department_name} ${project.owner_name ?? ""} ${project.current_update ?? ""}`.toLowerCase();
+      const haystack = `${project.name} ${project.project_no} ${project.department_name} ${project.owner_name ?? ""} ${project.current_update ?? ""} ${project.next_action ?? ""}`.toLowerCase();
       return matchesStatus && matchesScope && matchesProgress && matchesDeadline && haystack.includes(query);
     }).sort((left, right) => compareProjects(left, right, sort));
   }, [projects, search, filter, effectiveScope, user, progressFilter, deadlineFilter, sort]);
@@ -83,25 +92,32 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
         actions={canCreateProject && !myProjectsOnly ? <button className="button button-primary" onClick={() => setShowCreate(true)}><PlusIcon />{t("newProject")}</button> : undefined}
       />
       <div className="project-toolbar">
-        <div className="project-filter-tabs">
-          {projectStatusFilters.map(([value, label]) => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>)}
+        <div className="project-toolbar-heading">
+          <div><span className="eyebrow">Find projects</span><h2>Choose what you want to see</h2><p>Search first, then narrow the results only if needed.</p></div>
+          {hasActiveFilters && <button type="button" className="project-filter-reset" onClick={resetFilters}>Clear all filters</button>}
         </div>
-        <div className="search-box"><SearchIcon /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`${t("search")} projects...`} /></div>
+        <div className="search-box project-search-box"><SearchIcon /><input aria-label="Search projects" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by project name, ID, owner, department, or update…" /></div>
+        <div className="project-filter-section">
+          <div className="project-filter-label"><strong>Project status</strong><small>Select a delivery stage</small></div>
+          <div className="project-filter-tabs" role="group" aria-label="Filter projects by status">
+            {projectStatusFilters.map(([value, label]) => <button type="button" aria-pressed={filter === value} key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value === "all" ? "All statuses" : label}</button>)}
+          </div>
+        </div>
         <div className="project-advanced-filters">
-          {!myProjectsOnly && <label>Scope<select value={scope} onChange={event => setScope(event.target.value)}>
-            <option value="all">All projects</option><option value="mine">My projects</option>
+          {!myProjectsOnly && <label>Ownership<select value={scope} onChange={event => setScope(event.target.value)}>
+            <option value="all">Anyone's projects</option><option value="mine">Owned by me</option>
           </select></label>}
-          <label>Progress<select value={progressFilter} onChange={event => setProgressFilter(event.target.value)}>
-            <option value="all">Any progress</option><option value="early">0-34%</option><option value="mid">35-74%</option><option value="late">75-99%</option><option value="done">100%</option>
+          <label>Completion<select value={progressFilter} onChange={event => setProgressFilter(event.target.value)}>
+            <option value="all">Any completion level</option><option value="early">Getting started (0–34%)</option><option value="mid">In delivery (35–74%)</option><option value="late">Nearly done (75–99%)</option><option value="done">Complete (100%)</option>
           </select></label>
-          <label>Deadline<select value={deadlineFilter} onChange={event => setDeadlineFilter(event.target.value)}>
-            <option value="all">Any deadline</option><option value="overdue">Overdue</option><option value="next14">Next 14 days</option><option value="next30">Next 30 days</option><option value="none">No deadline</option>
+          <label>Due date<select value={deadlineFilter} onChange={event => setDeadlineFilter(event.target.value)}>
+            <option value="all">Any due date</option><option value="overdue">Already overdue</option><option value="next14">Due within 14 days</option><option value="next30">Due within 30 days</option><option value="none">No due date set</option>
           </select></label>
-          <label>Sort by<select value={sort} onChange={event => setSort(event.target.value)}>
-            <option value="updated_desc">Latest update</option><option value="project_no_asc">Project ID ascending</option><option value="project_no_desc">Project ID descending</option><option value="created_desc">Newest project</option><option value="deadline_asc">Nearest deadline</option><option value="progress_desc">Highest progress</option><option value="progress_asc">Lowest progress</option><option value="priority">Priority first</option>
+          <label>Order results by<select value={sort} onChange={event => setSort(event.target.value)}>
+            <option value="updated_desc">Most recently updated</option><option value="project_no_asc">Project ID: low to high</option><option value="project_no_desc">Project ID: high to low</option><option value="created_desc">Newest projects first</option><option value="deadline_asc">Due date: soonest first</option><option value="progress_desc">Completion: highest first</option><option value="progress_asc">Completion: lowest first</option><option value="priority">Highest priority first</option>
           </select></label>
         </div>
-        <div className="project-result-summary"><strong>{filtered.length}</strong> of {projects.length} projects shown</div>
+        <div className="project-result-summary" aria-live="polite"><strong>Showing {filtered.length}</strong> of {projects.length} projects{hasActiveFilters ? " with the selected filters" : ""}</div>
       </div>
       {filtered.length ? <div className="project-grid">{filtered.map(project => {
         const displayedProgress = projectProgress(project);

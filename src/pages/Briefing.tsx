@@ -89,7 +89,7 @@ export function ProgressBriefingPage() {
         || (freshnessFilter === "stale14" && (updateAge === null || updateAge > 14))
         || (freshnessFilter === "no_update" && !project.current_update);
       const linkText = (project.links ?? []).map((link: any) => `${link.title} ${link.url}`).join(" ");
-      const haystack = `${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.department_name ?? ""} ${project.current_update ?? ""} ${linkText}`.toLowerCase();
+      const haystack = `${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.department_name ?? ""} ${project.current_update ?? ""} ${project.next_action ?? ""} ${linkText}`.toLowerCase();
       return matchesStatus && matchesProgress && matchesDeadline && matchesFreshness && haystack.includes(query);
     }).sort((left: any, right: any) => compareProjects(left, right, sort));
   }, [data, filter, progressFilter, deadlineFilter, freshnessFilter, sort, search]);
@@ -225,13 +225,14 @@ export function BriefingProjectPage() {
     <div className="briefing-detail-grid">
       <main>
         <section className="panel briefing-current-update"><div className="panel-heading"><div><span className="eyebrow">Latest position</span><h2>Current management update</h2></div>{project.progress_updated_at && <time>{formatDate(project.progress_updated_at, true)}</time>}</div>
-          <p>{project.current_update || "No current progress update has been published."}</p>
+          <div className="project-update-content"><div><strong>What changed</strong><p>{project.current_update || "No current progress update has been published."}</p></div><div><strong>Next planned action</strong><p className={!project.next_action ? "project-update-empty" : ""}>{project.next_action || "No next action was recorded for this update."}</p></div></div>
           <small>Updated by {project.progress_updated_by_name || project.owner_name || "DTU"}</small>
         </section>
         <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Delivery narrative</span><h2>Progress history</h2></div><b>{updates.length} updates</b></div>
           {updates.length ? <div className="briefing-timeline">{updates.map((update: any) => <article key={update.id}>
             <div className="briefing-timeline-marker"><i /></div>
             <div><header><div><strong>{update.author_name}</strong><span>{formatDate(update.created_at, true)}</span></div><div><Badge value={update.status} /><b>{update.progress}%</b></div></header><p>{update.body}</p>
+              {update.next_action && <div className="update-next-action"><strong>Next planned action</strong><p>{update.next_action}</p></div>}
               {update.images.length > 0 && <div className="briefing-inline-gallery">{update.images.map((image: any) => <button key={image.id} onClick={() => setSelectedImage({ ...image, update })}><img src={`/api/staff/briefing/images/${image.id}`} alt={image.original_name} /></button>)}</div>}
             </div>
           </article>)}</div> : <Empty title="No progress history yet" body="Publish the first management update for this project." />}
@@ -302,7 +303,7 @@ function BriefingSystemLinks({ links }: { links: any[] }) {
 }
 
 function BriefingUpdateModal({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ status: project.status, progress: project.progress, currentUpdate: "" });
+  const [form, setForm] = useState({ status: project.status, progress: project.progress, currentUpdate: "", nextAction: "" });
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -328,6 +329,7 @@ function BriefingUpdateModal({ project, onClose, onSaved }: { project: any; onCl
     body.set("status", form.status);
     body.set("progress", String(form.progress));
     body.set("currentUpdate", form.currentUpdate);
+    body.set("nextAction", form.nextAction);
     files.forEach(file => body.append("images", file));
     try {
       await api(`/api/staff/briefing/projects/${project.id}/updates`, { method: "POST", body });
@@ -345,7 +347,10 @@ function BriefingUpdateModal({ project, onClose, onSaved }: { project: any; onCl
       setForm({ ...form, status, progress: completeLikeProjectStatuses.has(status) ? 100 : form.progress });
     }}>{projectStatusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       <label>Progress ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={completeLikeProjectStatuses.has(form.status)} value={form.progress} onChange={event => setForm({ ...form, progress: Number(event.target.value) })} /></label></div>
-    <label>Management update<textarea required minLength={3} maxLength={3000} rows={6} value={form.currentUpdate} onChange={event => setForm({ ...form, currentUpdate: event.target.value })} placeholder="What moved forward, what is next, what decision is needed, and what is blocked?" /></label>
+    <div className="progress-update-fields">
+      <label><span>Current update</span><small>Summarise what changed, what was completed, and any blocker or decision needed.</small><textarea required minLength={3} maxLength={3000} rows={4} value={form.currentUpdate} onChange={event => setForm({ ...form, currentUpdate: event.target.value })} placeholder="Example: Management approved the pilot scope; two access issues remain open." /></label>
+      <label><span>Next planned action</span><small>State the next concrete step, owner, and target date when known.</small><textarea required minLength={3} maxLength={1000} rows={3} value={form.nextAction} onChange={event => setForm({ ...form, nextAction: event.target.value })} placeholder="Example: Project owner will resolve access and start the pilot by 5 September." /></label>
+    </div>
     <label className="briefing-photo-picker">Progress photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={event => void chooseFiles(event.target.files)} /><small>Up to 4 images. Large photos are compressed to presentation size before upload.</small></label>
     {previews.length > 0 && <div className="briefing-upload-previews">{previews.map((preview, index) => <img src={preview} alt={`Selected progress ${index + 1}`} key={preview} />)}</div>}
     <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose}>Cancel</button><button className="button button-primary" disabled={saving}>{saving ? "Publishing…" : "Publish update"}</button></div>

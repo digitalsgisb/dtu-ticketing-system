@@ -67,24 +67,26 @@ export function Layout() {
           <CompanyLogo />
           <small>DTU Control Centre</small>
         </div>
-        <span className="sidebar-section-label">Workspace</span>
-        <nav>
-          <div className={`nav-group ${projectsOpen ? "is-open" : ""}`}>
-            <button type="button" className={`nav-group-trigger ${projectSectionActive ? "active" : ""}`} onClick={() => setProjectsOpen(open => !open)} aria-expanded={projectsOpen}>
-              <ProjectIcon /><span>{t("projects")}</span><i />
-            </button>
-            <div className="nav-subnav" aria-hidden={!projectsOpen}>
-              <NavLink to="/projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("allProjects")}</NavLink>
-              <NavLink to="/my-projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
+        <div className="sidebar-workspace">
+          <span className="sidebar-section-label">Workspace</span>
+          <nav>
+            <div className={`nav-group ${projectsOpen ? "is-open" : ""}`}>
+              <button type="button" className={`nav-group-trigger ${projectSectionActive ? "active" : ""}`} onClick={() => setProjectsOpen(open => !open)} aria-expanded={projectsOpen}>
+                <ProjectIcon /><span>{t("projects")}</span><i />
+              </button>
+              <div className="nav-subnav" aria-hidden={!projectsOpen}>
+                <NavLink to="/projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("allProjects")}</NavLink>
+                <NavLink to="/my-projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
+              </div>
             </div>
-          </div>
-          {items.map(([to, label, icon]) => (
-            <NavLink key={to} to={to} end={to === "/"} onClick={() => setMobileOpen(false)}>
-              {icon}<span>{label}</span>
-            </NavLink>
-          ))}
-          <NavLink to="/wallboard" target="_blank"><ScreenIcon /><span>{t("wallboard")}</span></NavLink>
-        </nav>
+            {items.map(([to, label, icon]) => (
+              <NavLink key={to} to={to} end={to === "/"} onClick={() => setMobileOpen(false)}>
+                {icon}<span>{label}</span>
+              </NavLink>
+            ))}
+            <NavLink to="/wallboard" target="_blank"><ScreenIcon /><span>{t("wallboard")}</span></NavLink>
+          </nav>
+        </div>
         <div className="sidebar-footer">
           <div className="user-card">
             <div className="avatar">{user?.name.split(" ").map(s => s[0]).slice(0, 2).join("")}</div>

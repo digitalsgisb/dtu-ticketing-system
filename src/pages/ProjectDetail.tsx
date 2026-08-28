@@ -140,7 +140,7 @@ export function ProjectDetailPage() {
         {project.progress_updated_at && <time>{formatDate(project.progress_updated_at, true)}</time>}
       </div>
       {project.current_update
-        ? <><p>{project.current_update}</p><small>Updated by {project.progress_updated_by_name || project.owner_name || "project owner"}</small></>
+        ? <><div className="project-update-content"><div><strong>What changed</strong><p>{project.current_update}</p></div><div><strong>Next planned action</strong><p className={!project.next_action ? "project-update-empty" : ""}>{project.next_action || "No next action was recorded for this update."}</p></div></div><small>Updated by {project.progress_updated_by_name || project.owner_name || "project owner"}</small></>
         : <p className="project-update-empty">No progress note yet. The project owner can add the first delivery update here.</p>}
     </section>
     <section className="panel">
@@ -148,6 +148,7 @@ export function ProjectDetailPage() {
       {updates.length ? <div className="briefing-timeline">{updates.map((update: any) => <article key={update.id}>
         <div className="briefing-timeline-marker"><i /></div>
         <div><header><div><strong>{update.author_name}</strong><span>{formatDate(update.created_at, true)}</span></div><div><Badge value={update.status} /><b>{update.progress}%</b></div></header><p>{update.body}</p>
+          {update.next_action && <div className="update-next-action"><strong>Next planned action</strong><p>{update.next_action}</p></div>}
           {update.images.length > 0 && <div className="briefing-inline-gallery">{update.images.map((image: any) => <button key={image.id} onClick={() => setSelectedImage({ ...image, update })}><img src={`/api/staff/projects/progress-images/${image.id}`} alt={image.original_name} /></button>)}</div>}
         </div>
       </article>)}</div> : <Empty title="No progress history yet" body={canUpdateProgress ? "Publish the first project progress update with supporting photos." : "The project owner can publish the first progress update."} />}
@@ -185,7 +186,7 @@ function SystemLinks({ links }: { links: any[] }) {
 
 function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
-  const [form, setForm] = useState({ status: project.status, progress: project.progress, currentUpdate: "" });
+  const [form, setForm] = useState({ status: project.status, progress: project.progress, currentUpdate: "", nextAction: "" });
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -210,6 +211,7 @@ function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: 
     body.set("status", form.status);
     body.set("progress", String(form.progress));
     body.set("currentUpdate", form.currentUpdate);
+    body.set("nextAction", form.nextAction);
     files.forEach(file => body.append("images", file));
     try {
       await api(`/api/staff/projects/${project.id}/progress`, { method: "PATCH", body });
@@ -230,7 +232,10 @@ function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: 
         }}>{projectStatusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
         <label>{t("progress")} ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={completeLikeProjectStatuses.has(form.status)} value={form.progress} onChange={e => setForm({ ...form, progress: Number(e.target.value) })} /></label>
       </div>
-      <label>Current update<textarea required minLength={3} maxLength={1000} rows={5} value={form.currentUpdate} onChange={e => setForm({ ...form, currentUpdate: e.target.value })} placeholder="What has moved forward, what is next, and is anything blocked?" /></label>
+      <div className="progress-update-fields">
+        <label><span>Current update</span><small>What changed since the previous update? Mention outcomes, progress, or blockers.</small><textarea required minLength={3} maxLength={1000} rows={4} value={form.currentUpdate} onChange={e => setForm({ ...form, currentUpdate: e.target.value })} placeholder="Example: User testing is complete and the feedback has been grouped into three fixes." /></label>
+        <label><span>Next planned action</span><small>What will happen next? Include the owner or target date when known.</small><textarea required minLength={3} maxLength={1000} rows={3} value={form.nextAction} onChange={e => setForm({ ...form, nextAction: e.target.value })} placeholder="Example: Hafiz will close the three fixes and prepare the pilot by 5 September." /></label>
+      </div>
       <label className="briefing-photo-picker">Progress photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => void chooseFiles(e.target.files)} /><small>Up to 4 images. Large photos are compressed before upload.</small></label>
       {previews.length > 0 && <div className="briefing-upload-previews">{previews.map((preview, index) => <img src={preview} alt={`Selected progress ${index + 1}`} key={preview} />)}</div>}
       <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose}>{t("cancel")}</button><button className="button button-primary" disabled={saving}>{saving ? "Saving..." : "Publish update"}</button></div>

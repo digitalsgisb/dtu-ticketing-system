@@ -584,7 +584,8 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
     const parsed = z.object({
       status: z.enum(mutableProjectStatuses).optional(),
       progress: z.coerce.number().int().min(0).max(100).optional(),
-      currentUpdate: z.string().trim().min(3).max(1000)
+      currentUpdate: z.string().trim().min(3).max(1000),
+      nextAction: z.string().trim().max(1000).optional().default("")
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Add a progress update between 3 and 1000 characters" });
     const files = (req.files as Express.Multer.File[]) ?? [];
@@ -597,6 +598,7 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
     const status = parsed.data.status ?? existing.status;
     const progress = completeLikeProjectStatuses.has(status) ? 100 : (parsed.data.progress ?? existing.progress);
     const body = cleanText(parsed.data.currentUpdate, 1000);
+    const nextAction = cleanText(parsed.data.nextAction, 1000);
     for (const file of files) {
       const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
       const storedName = `${crypto.randomUUID()}${ext}`;
@@ -605,14 +607,14 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
     }
     const updateId = db.transaction(() => {
       db.prepare(`
-        UPDATE projects SET status = ?, progress = ?, current_update = ?,
+        UPDATE projects SET status = ?, progress = ?, current_update = ?, next_action = ?,
           progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(status, progress, body, authReq.user.id, existing.id);
+      `).run(status, progress, body, nextAction, authReq.user.id, existing.id);
       const result = db.prepare(`
-        INSERT INTO project_updates(project_id, author_user_id, author_name, body, status, progress)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(existing.id, authReq.user.id, authReq.user.name, body, status, progress);
+        INSERT INTO project_updates(project_id, author_user_id, author_name, body, next_action, status, progress)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(existing.id, authReq.user.id, authReq.user.name, body, nextAction, status, progress);
       const id = Number(result.lastInsertRowid);
       files.forEach((file, index) => {
         db.prepare(`
@@ -627,6 +629,7 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
       status,
       progress,
       currentUpdate: parsed.data.currentUpdate,
+      nextAction: parsed.data.nextAction,
       images: files.length
     }, req.ip);
     res.json({ ok: true, id: updateId });
@@ -741,6 +744,7 @@ staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"),
     if (!project) return res.status(404).json({ error: "Project not found" });
     const parsed = z.object({
       currentUpdate: z.string().trim().min(3).max(3000),
+      nextAction: z.string().trim().max(1000).optional().default(""),
       status: z.enum(projectStatuses),
       progress: z.coerce.number().int().min(0).max(100)
     }).safeParse(req.body);
@@ -755,6 +759,7 @@ staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"),
     const status = parsed.data.status;
     const progress = completeLikeProjectStatuses.has(status) ? 100 : parsed.data.progress;
     const body = cleanText(parsed.data.currentUpdate, 3000);
+    const nextAction = cleanText(parsed.data.nextAction, 1000);
     for (const file of files) {
       const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
       const storedName = `${crypto.randomUUID()}${ext}`;
@@ -763,9 +768,9 @@ staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"),
     }
     const updateId = db.transaction(() => {
       const result = db.prepare(`
-        INSERT INTO project_updates(project_id, author_user_id, author_name, body, status, progress)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(project.id, authReq.user.id, authReq.user.name, body, status, progress);
+        INSERT INTO project_updates(project_id, author_user_id, author_name, body, next_action, status, progress)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(project.id, authReq.user.id, authReq.user.name, body, nextAction, status, progress);
       const id = Number(result.lastInsertRowid);
       files.forEach((file, index) => {
         db.prepare(`
@@ -774,10 +779,10 @@ staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"),
         `).run(id, cleanText(file.originalname, 255), storedNames[index], file.mimetype, file.size);
       });
       db.prepare(`
-        UPDATE projects SET status = ?, progress = ?, current_update = ?,
+        UPDATE projects SET status = ?, progress = ?, current_update = ?, next_action = ?,
           progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(status, progress, body, authReq.user.id, project.id);
+      `).run(status, progress, body, nextAction, authReq.user.id, project.id);
       return id;
     })();
     audit(authReq.user, "briefing_update_created", "project", project.id, { updateId, status, progress, images: files.length }, req.ip);
