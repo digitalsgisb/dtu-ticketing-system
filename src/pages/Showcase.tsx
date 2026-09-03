@@ -502,7 +502,7 @@ export function PublicShowcasePage() {
   const totalSlides = data.projects.length + 1;
   return <main className="guest-showcase">
     <header className="guest-showcase-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><span>DTU · Digital solutions</span></header>
-    <section className="guest-showcase-intro"><span className="eyebrow">Made for the way we work</span><h1>{data.title}</h1><p>{data.intro}</p><div><strong>{String(data.projects.length).padStart(2, "0")}</strong><span>systems<br />in this showcase</span></div></section>
+    <section className="guest-showcase-intro"><span className="eyebrow">Made for the way we work</span><h1>{data.title}</h1><p>{data.intro}</p><div><strong>{String(data.projects.length).padStart(2, "0")}</strong><span>systems<br />in this showcase</span></div><a className="guest-showcase-export" href={`/api/public/showcase/${token}/portfolio.pdf`} download><span>Export PDF portfolio</span><b aria-hidden="true">↓</b></a></section>
     {data.projects.length ? <>
       <div className="guest-showcase-rail" ref={rail} onScroll={event => {
         const element = event.currentTarget;

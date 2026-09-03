@@ -244,11 +244,19 @@ describe("DTU Control Centre API", () => {
     expect(galleryImage.status).toBe(200);
     expect(galleryImage.headers["content-type"]).toContain("image/jpeg");
 
+    const portfolioPdf = await request(app).get(`/api/public/showcase/${token}/portfolio.pdf`);
+    expect(portfolioPdf.status).toBe(200);
+    expect(portfolioPdf.headers["content-type"]).toContain("application/pdf");
+    expect(portfolioPdf.headers["content-disposition"]).toContain("DTU-Digital-Innovation-Portfolio.pdf");
+    expect(Buffer.isBuffer(portfolioPdf.body)).toBe(true);
+    expect(portfolioPdf.body.subarray(0, 5).toString()).toBe("%PDF-");
+
     const closed = await request(app).patch("/api/staff/showcase")
       .set("Cookie", cookie).set("x-csrf-token", csrf)
       .send({ enabled: false });
     expect(closed.status).toBe(200);
     expect((await request(app).get(`/api/public/showcase/${token}`)).status).toBe(410);
+    expect((await request(app).get(`/api/public/showcase/${token}/portfolio.pdf`)).status).toBe(410);
 
     await request(app).patch("/api/staff/showcase")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

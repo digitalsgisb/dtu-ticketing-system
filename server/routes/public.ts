@@ -9,6 +9,7 @@ import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
 import { randomToken, storageAvailable, tokenHash, validUpload, verifyTurnstile } from "../security.js";
 import { audit, cleanText, notifyRoles, sendMailSafely } from "../services.js";
+import { writeShowcasePortfolioPdf, type PortfolioPdfImage, type PortfolioPdfProject } from "../portfolioPdf.js";
 
 export const publicRouter = Router();
 
@@ -103,6 +104,81 @@ publicRouter.get("/showcase/:token", (req, res) => {
   }));
   res.setHeader("Cache-Control", "no-store");
   res.json({ title: settings.title, intro: settings.intro, projects });
+});
+
+publicRouter.get("/showcase/:token/portfolio.pdf", async (req, res, next) => {
+  const settings = showcaseAccess(req.params.token);
+  if (!settings) return res.status(404).json({ error: "This showcase link is not valid" });
+  if (!settings.enabled) return res.status(410).json({ error: "This visitor showcase is currently closed" });
+
+  try {
+    const rows = db.prepare(`
+      SELECT p.id, p.name, p.description, p.department_name,
+        sp.title_override, sp.summary_override, sp.detail_overview, sp.problem_statement,
+        sp.solution_description, sp.features_text, sp.impact_statement, sp.contribution,
+        sp.technologies_text, sp.image_mode, sp.custom_image_stored_name, sp.custom_image_mime_type,
+        (SELECT pui.stored_name FROM project_update_images pui
+          JOIN project_updates pu ON pu.id = pui.project_update_id
+          WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_stored_name,
+        (SELECT pui.mime_type FROM project_update_images pui
+          JOIN project_updates pu ON pu.id = pui.project_update_id
+          WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_mime_type
+      FROM showcase_projects sp JOIN projects p ON p.id = sp.project_id
+      WHERE sp.visible = 1 AND p.status != 'cancelled'
+      ORDER BY sp.sort_order, p.name
+    `).all() as any[];
+
+    const projects: PortfolioPdfProject[] = rows.map(row => {
+      const coverStoredName = row.image_mode === "custom" ? row.custom_image_stored_name
+        : row.image_mode === "latest" ? row.latest_stored_name : null;
+      const coverMimeType = row.image_mode === "custom" ? row.custom_image_mime_type
+        : row.image_mode === "latest" ? row.latest_mime_type : null;
+      const cover: PortfolioPdfImage | null = coverStoredName && coverMimeType ? {
+        caption: `${row.title_override || row.name} overview`,
+        path: path.resolve(paths.uploads, coverStoredName),
+        mimeType: coverMimeType
+      } : null;
+      const gallery = db.prepare(`
+        SELECT spg.caption, COALESCE(spg.custom_image_stored_name, pui.stored_name) AS stored_name,
+          COALESCE(spg.custom_image_mime_type, pui.mime_type) AS mime_type
+        FROM showcase_project_gallery spg
+        LEFT JOIN project_update_images pui ON pui.id = spg.source_image_id
+        WHERE spg.project_id = ? ORDER BY spg.sort_order, spg.id
+      `).all(row.id).flatMap((item: any) => item.stored_name && item.mime_type ? [{
+        caption: item.caption || "",
+        path: path.resolve(paths.uploads, item.stored_name),
+        mimeType: item.mime_type
+      }] : []);
+      return {
+        name: row.title_override || row.name,
+        summary: row.summary_override || row.description || "",
+        department: row.department_name,
+        overview: row.detail_overview || row.description || "",
+        problem: row.problem_statement || "",
+        solution: row.solution_description || row.summary_override || row.description || "",
+        features: portfolioList(row.features_text),
+        impact: row.impact_statement || "",
+        contribution: row.contribution || "",
+        technologies: portfolioList(row.technologies_text),
+        cover,
+        gallery
+      };
+    });
+
+    res.status(200);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="DTU-Digital-Innovation-Portfolio.pdf"');
+    res.setHeader("Cache-Control", "no-store");
+    await writeShowcasePortfolioPdf({
+      title: settings.title,
+      intro: settings.intro,
+      generatedAt: new Date(),
+      logoPath: path.join(config.root, "public", "sugihara-grand-logo.png"),
+      projects
+    }, res);
+  } catch (error) {
+    next(error);
+  }
 });
 
 publicRouter.get("/showcase/:token/projects/:projectId", (req, res) => {
