@@ -47,8 +47,9 @@ function EmployeeRequestQrModal({ qr, onClose }: { qr: any; onClose: () => void 
       <small>{qr.url}</small>
     </div>
     <div className="request-qr-actions">
-      <a className="button button-secondary" href={qr.url} target="_blank" rel="noreferrer">Open employee form</a>
+      <a className="button button-secondary" href="/request" target="_blank" rel="noreferrer">Open employee form</a>
       <button className="button button-secondary" onClick={() => void copy()}>{copied ? "Link copied" : "Copy link"}</button>
+      <a className="button button-secondary" href={qr.dataUrl} download="DTU-project-request-QR.png">Download QR only</a>
       <button className="button button-primary" onClick={() => window.print()}>Print QR poster</button>
     </div>
   </Modal>;
