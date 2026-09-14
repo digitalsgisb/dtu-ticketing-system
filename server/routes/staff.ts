@@ -416,7 +416,11 @@ staffRouter.get("/dashboard", (req, res) => {
     activeProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE status IN ('planned','in_progress','on_hold','complete_monitoring')").get() as { n: number }).n,
     openIssues: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE type = 'issue' AND status NOT IN ('resolved','closed')").get() as { n: number }).n,
     overdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE due_date < ? AND status NOT IN ('resolved','closed')").get(today) as { n: number }).n,
-    untriaged: (db.prepare("SELECT COUNT(*) AS n FROM project_requests WHERE status IN ('submitted','triage')").get() as { n: number }).n
+    untriaged: (db.prepare("SELECT COUNT(*) AS n FROM project_requests WHERE status IN ('submitted','triage')").get() as { n: number }).n,
+    personalOpen: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE assignee_id = ? AND status NOT IN ('resolved','closed')").get(user.id) as { n: number }).n,
+    personalOverdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE assignee_id = ? AND due_date < ? AND status NOT IN ('resolved','closed')").get(user.id, today) as { n: number }).n,
+    ownedProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE owner_id = ? AND status NOT IN ('completed','cancelled')").get(user.id) as { n: number }).n,
+    unreadNotifications: (db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").get(user.id) as { n: number }).n
   };
   const myWork = db.prepare(`
     SELECT w.*, p.name AS project_name, u.name AS assignee_name
@@ -431,13 +435,19 @@ staffRouter.get("/dashboard", (req, res) => {
     WHERE w.due_date IS NOT NULL AND w.status NOT IN ('resolved','closed')
     ORDER BY w.due_date LIMIT 8
   `).all();
+  const myUpcoming = db.prepare(`
+    SELECT w.id, w.ticket_no, w.title, w.status, w.priority, w.due_date, p.name AS project_name
+    FROM work_items w LEFT JOIN projects p ON p.id = w.project_id
+    WHERE w.assignee_id = ? AND w.due_date IS NOT NULL AND w.status NOT IN ('resolved','closed')
+    ORDER BY w.due_date LIMIT 8
+  `).all(user.id);
   const workload = db.prepare(`
     SELECT u.id, u.name, COUNT(w.id) AS count
     FROM users u LEFT JOIN work_items w ON w.assignee_id = u.id AND w.status NOT IN ('resolved','closed')
     WHERE u.active = 1 GROUP BY u.id ORDER BY count DESC, u.name
   `).all();
   const activity = db.prepare("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT 10").all();
-  res.json({ stats, myWork, upcoming, workload, activity });
+  res.json({ stats, myWork, upcoming, myUpcoming, workload, activity });
 });
 
 staffRouter.get("/projects", (_req, res) => {
@@ -974,11 +984,11 @@ staffRouter.get("/attachments/:id", (req, res) => {
   res.download(path.join(paths.uploads, attachment.stored_name), attachment.original_name);
 });
 
-staffRouter.get("/requests", (_req, res) => {
+staffRouter.get("/requests", requireRole("admin", "lead"), (_req, res) => {
   res.json(db.prepare("SELECT * FROM project_requests ORDER BY updated_at DESC").all());
 });
 
-staffRouter.get("/requests/intake-qr", async (_req, res) => {
+staffRouter.get("/requests/intake-qr", requireRole("admin", "lead"), async (_req, res) => {
   const url = `${config.publicBaseUrl.replace(/\/$/, "")}/request`;
   const dataUrl = await QRCode.toDataURL(url, {
     width: 720,
@@ -989,7 +999,7 @@ staffRouter.get("/requests/intake-qr", async (_req, res) => {
   res.json({ dataUrl, url });
 });
 
-staffRouter.get("/requests/:id", (req, res) => {
+staffRouter.get("/requests/:id", requireRole("admin", "lead"), (req, res) => {
   const item = db.prepare("SELECT * FROM project_requests WHERE id = ?").get(req.params.id);
   if (!item) return res.status(404).json({ error: "Request not found" });
   const comments = db.prepare("SELECT * FROM comments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
@@ -1034,7 +1044,7 @@ staffRouter.patch("/requests/:id", requireRole("admin", "lead"), (req, res) => {
   res.json({ ok: true, projectId });
 });
 
-staffRouter.post("/requests/:id/comments", (req, res) => {
+staffRouter.post("/requests/:id/comments", requireRole("admin", "lead"), (req, res) => {
   const authReq = req as unknown as AuthenticatedRequest;
   const parsed = z.object({ body: z.string().trim().min(1).max(5000), publicVisible: z.boolean().default(false) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Comment is required" });
@@ -1154,7 +1164,12 @@ staffRouter.get("/notifications", (req, res) => {
 staffRouter.get("/notifications/summary", (req, res) => {
   const user = (req as AuthenticatedRequest).user;
   const result = db.prepare("SELECT COUNT(*) AS unreadCount FROM notifications WHERE user_id = ? AND read_at IS NULL").get(user.id) as { unreadCount: number };
-  res.json(result);
+  const latestUnread = db.prepare(`
+    SELECT id, title, body, link FROM notifications
+    WHERE user_id = ? AND read_at IS NULL
+    ORDER BY id DESC LIMIT 5
+  `).all(user.id);
+  res.json({ ...result, latestUnread });
 });
 
 staffRouter.post("/notifications/:id/read", (req, res) => {

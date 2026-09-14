@@ -1,6 +1,6 @@
 # DTU Ticketing & Project Control Centre
 
-A bilingual internal operations system for a Digital Transformation Unit. It combines project intake, portfolio tracking, tasks, support issues, QR reporting, reporter updates, a lab wallboard, CSV migration, and encrypted backups in one Raspberry Pi-friendly application.
+A bilingual internal operations system for a Digital Transformation Unit. It combines project intake, portfolio tracking, tasks, support issues, QR reporting, reporter updates, a lab wallboard, CSV migration, and encrypted backups in one self-hosted application. The current production target is the Gigabyte AI Atom PC.
 
 ## What is implemented
 
@@ -15,6 +15,8 @@ A bilingual internal operations system for a Digital Transformation Unit. It com
 - CSRF checks, login throttling, public rate limits, upload magic-byte checks, randomized filenames, free-space protection, Helmet headers, and public-host route isolation.
 - Preview-before-commit CSV imports for projects and unresolved tickets.
 - Optional SMTP notifications.
+- Installable PWA with a mobile navigation shell, offline status, safe static-asset caching, and opt-in device notifications.
+- Role-focused workspaces for Administrators, Team Leads, and Team Members.
 - Nightly AES-256-GCM encrypted SQLite/attachment backups with Cloudflare R2 retention.
 
 ## Run locally
@@ -109,7 +111,7 @@ git switch main
 git pull --ff-only origin main
 npm ci
 npm run build
-sudo bash deploy/install-pi.sh
+sudo bash deploy/install-ai-pc.sh
 sudo systemctl status dtu-control --no-pager
 curl http://127.0.0.1:3100/api/health
 ```
@@ -222,15 +224,15 @@ npm.cmd run restore
 
 The restore creates a safety copy of the current database before replacing it. Afterward, start the application and verify `/api/health`, sign-in, attachments, and recent records.
 
-## Raspberry Pi 5 deployment
+## Gigabyte AI Atom PC deployment
 
-Use 64-bit Raspberry Pi OS and Node.js 24 LTS.
+Use a 64-bit Linux distribution with `systemd` and Node.js 24 LTS.
 
 ```bash
 sudo timedatectl set-timezone Asia/Kuala_Lumpur
 npm ci
 npm run build
-sudo bash deploy/install-pi.sh
+sudo bash deploy/install-ai-pc.sh
 sudo nano /etc/dtu-control.env
 sudo systemctl start dtu-control dtu-backup.timer
 ```
@@ -244,18 +246,16 @@ journalctl -u dtu-control -f
 curl http://127.0.0.1:3100/api/health
 ```
 
-Install `deploy/dtu-kiosk.desktop` in the Pi desktop user's `~/.config/autostart/` directory to start Chromium on the wallboard after login. Install and configure `cloudflared` separately with the included tunnel example.
+The installer deploys a versioned production release under `/opt/dtu-control/releases` and installs production dependencies for the AI PC. It deliberately excludes local `.env` files, databases, uploads, backups, logs, Git history, Windows dependencies, and development tools.
 
-The installer deploys a versioned production release under `/opt/dtu-control/releases` and installs production dependencies for the Pi's ARM64 architecture. It deliberately excludes local `.env` files, databases, uploads, backups, logs, Git history, Windows dependencies, and development tools.
+For the complete deployment workflow, follow [docs/AI_PC_DEPLOYMENT.md](docs/AI_PC_DEPLOYMENT.md).
 
-For the complete GitHub-to-Pi workflow, follow [docs/GITHUB_AND_PI.md](docs/GITHUB_AND_PI.md).
-
-Because microSD is being used:
+For reliable operation on the AI PC:
 
 - Keep `MIN_FREE_STORAGE_MB` at 512 MB or higher.
 - Confirm the backup timer every month.
 - Perform a restore drill before relying on the system.
-- Move `/var/lib/dtu-control` to a USB SSD when practical.
+- Put `/var/lib/dtu-control` on reliable local storage included in your backup plan.
 
 ## CSV migration
 

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { I18nProvider } from "./i18n";
+import { PwaProvider } from "./pwa";
 import { Layout } from "./components/Layout";
 import { Loading } from "./components/UI";
 import { LoginPage } from "./pages/Login";
@@ -38,6 +39,11 @@ function LeadProtected() {
   return user?.role === "admin" || user?.role === "lead" ? <Outlet /> : <Navigate to="/" replace />;
 }
 
+function AdminProtected() {
+  const { user } = useAuth();
+  return user?.role === "admin" ? <Outlet /> : <Navigate to="/" replace />;
+}
+
 function App() {
   return <Routes>
     <Route path="/p/:token" element={<PublicIssuePage />} />
@@ -55,18 +61,18 @@ function App() {
       <Route path="links" element={<LinksPage />} />
       <Route path="tickets" element={<TicketsPage />} />
       <Route path="tickets/:id" element={<TicketDetailPage />} />
-      <Route path="requests" element={<RequestsPage />} />
-      <Route path="requests/:id" element={<RequestDetailPage />} />
       <Route element={<LeadProtected />}>
+        <Route path="requests" element={<RequestsPage />} />
+        <Route path="requests/:id" element={<RequestDetailPage />} />
         <Route path="briefing" element={<ProgressBriefingPage />} />
         <Route path="briefing/:id" element={<BriefingProjectPage />} />
         <Route path="showcase" element={<ShowcasePage />} />
       </Route>
-      <Route path="admin" element={<AdminPage />} />
+      <Route element={<AdminProtected />}><Route path="admin" element={<AdminPage />} /></Route>
       <Route path="notifications" element={<NotificationsPage />} />
     </Route></Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>;
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(<React.StrictMode><BrowserRouter><I18nProvider><AuthProvider><App /></AuthProvider></I18nProvider></BrowserRouter></React.StrictMode>);
+ReactDOM.createRoot(document.getElementById("root")!).render(<React.StrictMode><BrowserRouter><I18nProvider><PwaProvider><AuthProvider><App /></AuthProvider></PwaProvider></I18nProvider></BrowserRouter></React.StrictMode>);

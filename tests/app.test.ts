@@ -353,6 +353,15 @@ describe("DTU Control Centre API", () => {
     expect(adminView.body.projects.some((project: { id: number }) => project.id === briefingProjectId)).toBe(true);
   });
 
+  it("keeps project request triage in lead and administrator workspaces", async () => {
+    const memberView = await request(app).get("/api/staff/requests").set("Cookie", managedCookie);
+    expect(memberView.status).toBe(403);
+
+    const adminView = await request(app).get("/api/staff/requests").set("Cookie", cookie);
+    expect(adminView.status).toBe(200);
+    expect(Array.isArray(adminView.body)).toBe(true);
+  });
+
   it("generates the employee project request QR", async () => {
     const response = await request(app).get("/api/staff/requests/intake-qr").set("Cookie", cookie);
     expect(response.status).toBe(200);
@@ -442,6 +451,8 @@ describe("DTU Control Centre API", () => {
       .set("Cookie", cookie);
     expect(summary.status).toBe(200);
     expect(summary.body.unreadCount).toBeGreaterThan(0);
+    expect(summary.body.latestUnread.length).toBeGreaterThan(0);
+    expect(summary.body.latestUnread[0]).toMatchObject({ id: expect.any(Number), title: expect.any(String), body: expect.any(String) });
 
     const marked = await request(app).post("/api/staff/notifications/read-all")
       .set("Cookie", cookie).set("x-csrf-token", csrf);
@@ -484,11 +495,17 @@ describe("DTU Control Centre API", () => {
   it("serves public branding while keeping staff login private", async () => {
     const logo = await request(app).get("/sugihara-grand-logo.png").set("Host", "report.example.com");
     const favicon = await request(app).get("/dtu-favicon.svg").set("Host", "report.example.com");
+    const manifest = await request(app).get("/manifest.webmanifest").set("Host", "report.example.com");
+    const serviceWorker = await request(app).get("/sw.js").set("Host", "report.example.com");
     const login = await request(app).get("/login").set("Host", "report.example.com");
     expect(logo.status).toBe(200);
     expect(logo.headers["content-type"]).toContain("image/png");
     expect(favicon.status).toBe(200);
     expect(favicon.headers["content-type"]).toContain("image/svg+xml");
+    expect(manifest.status).toBe(200);
+    expect(manifest.headers["content-type"]).toMatch(/manifest|json/);
+    expect(serviceWorker.status).toBe(200);
+    expect(serviceWorker.headers["content-type"]).toContain("javascript");
     expect(login.status).toBe(404);
   });
 });
