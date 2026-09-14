@@ -360,6 +360,34 @@ describe("DTU Control Centre API", () => {
     expect(response.body.dataUrl).toMatch(/^data:image\/png;base64,/);
   });
 
+  it("accepts and exposes supporting documents on a project proposal", async () => {
+    const response = await request(app).post("/api/public/requests")
+      .field("title", "Digital approval workflow")
+      .field("department", "Quality")
+      .field("requesterName", "Proposal Owner")
+      .field("email", "proposal@example.com")
+      .field("currentProblem", "Paper approvals are difficult to track across departments.")
+      .field("desiredOutcome", "Create a visible digital approval workflow with clear ownership.")
+      .field("urgency", "medium")
+      .attach("attachments", Buffer.from("%PDF-1.4\nDTU proposal"), { filename: "proposal.pdf", contentType: "application/pdf" });
+    expect(response.status).toBe(201);
+    expect(response.body.requestNo).toMatch(/^REQ-/);
+
+    const stored = db.prepare("SELECT id FROM project_requests WHERE request_no = ?").get(response.body.requestNo) as { id: number };
+    const staffView = await request(app).get(`/api/staff/requests/${stored.id}`).set("Cookie", cookie);
+    expect(staffView.status).toBe(200);
+    expect(staffView.body.attachments).toHaveLength(1);
+    expect(staffView.body.attachments[0].original_name).toBe("proposal.pdf");
+
+    const trackingToken = response.body.trackingUrl.split("/track/")[1];
+    const trackingView = await request(app).get(`/api/public/track/${trackingToken}`);
+    expect(trackingView.status).toBe(200);
+    expect(trackingView.body.attachments).toHaveLength(1);
+    const download = await request(app).get(`/api/public/attachments/${trackingView.body.attachments[0].id}/${trackingToken}`);
+    expect(download.status).toBe(200);
+    expect(download.headers["content-disposition"]).toContain("proposal.pdf");
+  });
+
   it("publishes a briefing update with a protected progress photo", async () => {
     const response = await request(app).post(`/api/staff/briefing/projects/${briefingProjectId}/updates`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)

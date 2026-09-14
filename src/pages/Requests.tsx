@@ -85,6 +85,7 @@ export function RequestDetailPage() {
       <div className="detail-main">
         <section className="panel request-brief"><div><span className="eyebrow">Current problem</span><p>{item.current_problem}</p></div><div><span className="eyebrow">Desired outcome</span><p>{item.desired_outcome}</p></div>
           <div className="detail-facts"><div><small>Expected users</small><strong>{item.expected_users || "—"}</strong></div><div><small>Target date</small><strong>{formatDate(item.target_date)}</strong></div><div><small>Contact</small><strong>{item.requester_email}</strong></div></div>
+          {data.attachments?.length > 0 && <div className="request-attachment-block"><span className="eyebrow">Proposal attachments</span><div className="attachment-list">{data.attachments.map((attachment: any) => <a href={`/api/staff/attachments/${attachment.id}`} key={attachment.id}>📎 {attachment.original_name}</a>)}</div></div>}
         </section>
         <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Discussion</span><h2>{t("comments")}</h2></div></div>
           {data.comments.length ? <div className="comment-list">{data.comments.map((c: any) => <article className="comment" key={c.id}><div className="avatar">{c.author_name[0]}</div><div><div><strong>{c.author_name}</strong><span>{formatDate(c.created_at, true)}</span></div><p>{c.body}</p></div></article>)}</div> : <Empty title="No updates yet" />}

@@ -3099,3 +3099,146 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   .portfolio-project-nav a:last-child, .portfolio-project-nav button:last-child { text-align: left; }
   .project-update-content { grid-template-columns: 1fr; }
 }
+
+/* Animated proposal intake and DTU navigation */
+.public-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  height: 82px;
+  background: linear-gradient(115deg, #061827 0%, #0a4050 28%, #087b78 50%, #153d69 72%, #061827 100%);
+  background-size: 320% 320%;
+  box-shadow: 0 12px 35px rgba(3, 33, 48, .16);
+  animation: publicHeaderGradient 7s ease-in-out infinite;
+}
+.public-header::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 18%, rgba(112, 255, 235, .22) 47%, rgba(109, 177, 255, .14) 54%, transparent 78%);
+  transform: translateX(-110%);
+  animation: publicHeaderSheen 4.8s ease-in-out infinite;
+}
+.public-header::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 220px;
+  height: 220px;
+  right: 12%;
+  border: 1px solid rgba(155, 255, 241, .16);
+  border-radius: 50%;
+  box-shadow: 0 0 0 40px rgba(85, 224, 210, .035), 0 0 0 82px rgba(79, 174, 224, .025);
+  animation: publicHeaderOrbit 8s ease-in-out infinite;
+}
+.public-brand .company-logo { width: 174px; filter: drop-shadow(0 8px 18px rgba(0,0,0,.28)); }
+.public-brand small { padding-left: 47px; color: #a8e1df; font-size: 6.5px; letter-spacing: .2em; }
+.public-header .language-button { border-color: rgba(255,255,255,.25); color: #173e52; box-shadow: 0 8px 25px rgba(0,0,0,.15); }
+
+.sidebar {
+  background: linear-gradient(145deg, #041522 0%, #083b4b 27%, #075e62 48%, #102d55 72%, #041522 100%);
+  background-size: 330% 330%;
+  animation: dtuSidebarGradient 8s ease-in-out infinite;
+}
+.sidebar::before {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  pointer-events: none;
+  background: conic-gradient(from 180deg, transparent, rgba(68, 232, 211, .12), transparent 28%, rgba(51, 124, 215, .11), transparent 52%);
+  animation: dtuSidebarAurora 12s linear infinite;
+}
+.sidebar::after {
+  background: linear-gradient(115deg, transparent 10%, rgba(119, 255, 235, .10) 45%, transparent 60%);
+  background-size: 260% 100%;
+  animation: dtuSidebarSheen 5.5s linear infinite;
+}
+.sidebar-glow { animation: dtuSidebarGlow 5s ease-in-out infinite; }
+.sidebar-brand .company-logo { filter: drop-shadow(0 0 18px rgba(71, 220, 205, .18)) drop-shadow(0 10px 22px rgba(0,0,0,.22)); }
+
+.public-request-main { width: min(1220px, calc(100% - 36px)); grid-template-columns: minmax(300px, .8fr) minmax(560px, 1.35fr); gap: clamp(44px, 6vw, 84px); padding: 64px 0 84px; }
+.proposal-intro { top: 116px; }
+.proposal-intro h1 { max-width: 520px; font-size: clamp(42px, 5.3vw, 72px); }
+.proposal-intro > p { max-width: 520px; font-size: 15px; }
+.proposal-orbit { position: relative; width: 210px; height: 210px; display: grid; place-items: center; margin: 38px 0 35px; }
+.proposal-orbit > i { position: absolute; border: 1px solid rgba(23, 139, 142, .18); border-radius: 50%; animation: proposalOrbit 9s linear infinite; }
+.proposal-orbit > i:nth-child(1) { width: 100%; height: 100%; border-style: dashed; }
+.proposal-orbit > i:nth-child(2) { width: 75%; height: 75%; animation-direction: reverse; animation-duration: 6s; }
+.proposal-orbit > i:nth-child(3) { width: 48%; height: 48%; border-color: rgba(25, 124, 151, .28); animation-duration: 4s; }
+.proposal-orbit > i::after { content: ""; position: absolute; top: 10%; left: 14%; width: 9px; height: 9px; border-radius: 50%; background: #35bdb3; box-shadow: 0 0 0 7px rgba(53,189,179,.10), 0 0 22px rgba(53,189,179,.45); }
+.proposal-orbit > div { width: 82px; height: 82px; display: grid; place-items: center; align-content: center; border-radius: 50%; color: white; background: linear-gradient(145deg, #0b7180, #092c48); box-shadow: 0 18px 45px rgba(9, 74, 91, .25); }
+.proposal-orbit span, .proposal-orbit small { font-size: 7px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; opacity: .68; }
+.proposal-orbit strong { font-size: 25px; line-height: 1; }
+.proposal-benefits { display: grid; gap: 9px; max-width: 390px; }
+.proposal-benefits > span { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1px solid rgba(37, 137, 143, .12); border-radius: 11px; color: #54707f; background: rgba(255,255,255,.46); font-size: 11px; font-weight: 700; backdrop-filter: blur(8px); animation: proposalStepIn .5s ease both; }
+.proposal-benefits > span:nth-child(2) { animation-delay: .1s; }.proposal-benefits > span:nth-child(3) { animation-delay: .2s; }
+.proposal-benefits b { color: #22918f; font: 800 9px ui-monospace, monospace; }
+
+.proposal-card { position: relative; overflow: hidden; padding: 0; border-color: rgba(26, 127, 140, .14); border-radius: 25px; box-shadow: 0 28px 80px rgba(7, 42, 61, .13); animation: proposalCardIn .65s cubic-bezier(.2,.8,.2,1) both; }
+.proposal-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: linear-gradient(90deg, #2fc7b8, #188aa0, #356fc1, #2fc7b8); background-size: 240% 100%; animation: proposalAccent 4s linear infinite; }
+.proposal-card-head { padding: 34px 38px 27px; background: radial-gradient(circle at 90% 0, rgba(47,199,184,.13), transparent 240px), linear-gradient(135deg, #f9fcfc, #f2f8f8); border-bottom: 1px solid #e1eaed; }
+.proposal-card-head > span { color: #24898e; font-size: 9px; font-weight: 900; letter-spacing: .17em; text-transform: uppercase; }
+.proposal-card-head h2 { margin: 8px 0 5px; color: #082338; font-size: 27px; letter-spacing: -.035em; }
+.proposal-card-head p { margin: 0; color: #81939d; font-size: 10px; }
+.proposal-form { gap: 0; }
+.proposal-section { display: grid; gap: 17px; padding: 30px 38px; border-bottom: 1px solid #e8eef0; }
+.proposal-section-title { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+.proposal-section-title > b { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 10px; color: #16898e; background: #e9f7f5; font: 900 9px ui-monospace, monospace; }
+.proposal-section-title > div { display: grid; gap: 3px; }
+.proposal-section-title strong { color: #17384b; font-size: 13px; }
+.proposal-section-title small { color: #8b9ba4; font-size: 9px; }
+.proposal-form label { color: #496475; font-size: 10px; }
+.proposal-form input:not([type="file"]), .proposal-form select, .proposal-form textarea { border-color: #d9e5e8; background: #fbfdfd; transition: border-color .2s, box-shadow .2s, transform .2s; }
+.proposal-form input:not([type="file"]):focus, .proposal-form select:focus, .proposal-form textarea:focus { border-color: #2aa9a5; box-shadow: 0 0 0 4px rgba(42,169,165,.10), 0 10px 25px rgba(19,95,108,.06); transform: translateY(-1px); }
+.proposal-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.proposal-upload { position: relative; min-height: 145px; display: grid !important; place-items: center; align-content: center; gap: 7px !important; overflow: hidden; border: 1.5px dashed #96cbc8; border-radius: 16px; color: #51707d !important; background: radial-gradient(circle at 50% 130%, rgba(43,190,180,.16), transparent 190px), #f6fbfa; text-align: center; transition: border-color .2s, transform .2s, box-shadow .2s; }
+.proposal-upload:hover { border-color: #28aaa4; transform: translateY(-2px); box-shadow: 0 15px 35px rgba(21,110,119,.10); }
+.proposal-upload input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.proposal-upload-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; color: white; background: linear-gradient(145deg, #31bdb2, #147c91); box-shadow: 0 9px 22px rgba(23,127,143,.22); font-size: 21px; }
+.proposal-upload strong { color: #264f60; font-size: 12px; }
+.proposal-upload small { color: #8a9da5; font-size: 8px; }
+.proposal-file-list { display: grid; gap: 7px; }
+.proposal-file-list > span { min-width: 0; display: grid; grid-template-columns: 23px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 9px; color: #496473; background: #f1f8f7; font-size: 10px; }
+.proposal-file-list b { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; color: #228b82; background: #d9f1ed; font-size: 9px; }
+.proposal-file-list span span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proposal-file-list small { color: #8b9da6; }
+.proposal-submit { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 38px 34px; background: #f8fbfb; }
+.proposal-submit > div { display: grid; gap: 4px; }
+.proposal-submit strong { color: #1d4254; font-size: 11px; }
+.proposal-submit small { color: #8a9ca5; font-size: 8px; }
+.proposal-submit .button { min-height: 50px; padding-inline: 23px; background: linear-gradient(110deg, #178f92, #176a94, #178f92); background-size: 200% 100%; box-shadow: 0 12px 28px rgba(22,117,136,.22); animation: proposalButton 3s ease-in-out infinite; }
+.request-attachment-block { display: grid; gap: 10px; padding-top: 18px; border-top: 1px solid var(--line); }
+
+@keyframes publicHeaderGradient { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes publicHeaderSheen { 0%,20% { transform: translateX(-110%); } 65%,100% { transform: translateX(110%); } }
+@keyframes publicHeaderOrbit { 50% { transform: translate(-45px, 16px) scale(1.12); opacity: .55; } }
+@keyframes dtuSidebarGradient { 0%,100% { background-position: 0% 20%; } 50% { background-position: 100% 80%; } }
+@keyframes dtuSidebarAurora { to { transform: rotate(360deg); } }
+@keyframes dtuSidebarSheen { from { background-position: 150% 0; } to { background-position: -120% 0; } }
+@keyframes dtuSidebarGlow { 50% { transform: translate(-35px, -45px) scale(1.16); border-color: rgba(93,239,222,.22); } }
+@keyframes proposalOrbit { to { transform: rotate(360deg); } }
+@keyframes proposalStepIn { from { opacity: 0; transform: translateX(-14px); } }
+@keyframes proposalCardIn { from { opacity: 0; transform: translateY(22px) scale(.985); } }
+@keyframes proposalAccent { to { background-position: 240% 0; } }
+@keyframes proposalButton { 50% { background-position: 100% 0; box-shadow: 0 14px 34px rgba(22,117,136,.32); } }
+
+@media (max-width: 900px) {
+  .public-request-main { grid-template-columns: 1fr; }
+  .proposal-intro { position: static; }
+  .proposal-orbit { margin-inline: auto; }
+  .proposal-benefits { max-width: none; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .public-header { height: 72px; }
+  .public-brand .company-logo { width: 150px; }
+  .public-request-main { width: min(100% - 24px, 1220px); padding-top: 28px; }
+  .proposal-intro h1 { font-size: 43px; }
+  .proposal-orbit { width: 175px; height: 175px; }
+  .proposal-benefits { grid-template-columns: 1fr; }
+  .proposal-card-head, .proposal-section { padding-inline: 20px; }
+  .proposal-card-head h2 { font-size: 23px; }
+  .proposal-facts { grid-template-columns: 1fr; }
+  .proposal-submit { align-items: stretch; flex-direction: column; padding: 24px 20px 28px; }
+  .proposal-submit .button { width: 100%; }
+}

@@ -993,7 +993,8 @@ staffRouter.get("/requests/:id", (req, res) => {
   const item = db.prepare("SELECT * FROM project_requests WHERE id = ?").get(req.params.id);
   if (!item) return res.status(404).json({ error: "Request not found" });
   const comments = db.prepare("SELECT * FROM comments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
-  res.json({ item, comments });
+  const attachments = db.prepare("SELECT id, original_name, mime_type, size, created_at FROM attachments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
+  res.json({ item, comments, attachments });
 });
 
 staffRouter.patch("/requests/:id", requireRole("admin", "lead"), (req, res) => {

@@ -7,7 +7,7 @@ import multer from "multer";
 import { z } from "zod";
 import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
-import { randomToken, storageAvailable, tokenHash, validUpload, verifyTurnstile } from "../security.js";
+import { randomToken, storageAvailable, tokenHash, uploadExtension, validProposalUpload, validUpload, verifyTurnstile } from "../security.js";
 import { audit, cleanText, notifyRoles, sendMailSafely } from "../services.js";
 import { writeShowcasePortfolioPdf, type PortfolioPdfImage, type PortfolioPdfProject } from "../portfolioPdf.js";
 
@@ -25,6 +25,10 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 3 }
 });
+const requestUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 5 }
+});
 
 const urgency = z.enum(["low", "medium", "high", "critical"]);
 
@@ -38,22 +42,21 @@ function portfolioList(value: string | null | undefined) {
   return String(value ?? "").split(/\r?\n|,/).map(item => cleanText(item, 120)).filter(Boolean).slice(0, 16);
 }
 
-async function storeFiles(files: Express.Multer.File[], workItemId: number) {
+async function storeFiles(files: Express.Multer.File[], owner: { workItemId?: number; projectRequestId?: number }) {
   const total = files.reduce((sum, file) => sum + file.size, 0);
   if (!(await storageAvailable(total))) throw new Error("Storage capacity is currently too low for uploads");
   const stored: number[] = [];
   try {
     for (const file of files) {
-      if (!validUpload(file)) throw new Error(`Unsupported or invalid file: ${file.originalname}`);
-      const ext = file.mimetype === "image/jpeg" ? ".jpg"
-        : file.mimetype === "image/png" ? ".png"
-        : file.mimetype === "image/webp" ? ".webp" : ".pdf";
+      const isValid = owner.projectRequestId ? validProposalUpload(file) : validUpload(file);
+      if (!isValid) throw new Error(`Unsupported or invalid file: ${file.originalname}`);
+      const ext = uploadExtension(file);
       const storedName = `${crypto.randomUUID()}${ext}`;
       await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
       const result = db.prepare(`
-        INSERT INTO attachments(work_item_id, original_name, stored_name, mime_type, size, public_visible)
-        VALUES (?, ?, ?, ?, ?, 1)
-      `).run(workItemId, cleanText(file.originalname, 255), storedName, file.mimetype, file.size);
+        INSERT INTO attachments(work_item_id, project_request_id, original_name, stored_name, mime_type, size, public_visible)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+      `).run(owner.workItemId ?? null, owner.projectRequestId ?? null, cleanText(file.originalname, 255), storedName, file.mimetype, file.size);
       stored.push(Number(result.lastInsertRowid));
     }
   } catch (error) {
@@ -330,7 +333,7 @@ publicRouter.post("/projects/:token/issues", publicLimiter, upload.array("attach
     });
     const result = transaction();
     try {
-      await storeFiles(files, result.workItemId);
+      await storeFiles(files, { workItemId: result.workItemId });
     } catch (error) {
       db.prepare("DELETE FROM work_items WHERE id = ?").run(result.workItemId);
       throw error;
@@ -346,7 +349,8 @@ publicRouter.post("/projects/:token/issues", publicLimiter, upload.array("attach
   }
 });
 
-publicRouter.post("/requests", publicLimiter, async (req, res) => {
+publicRouter.post("/requests", publicLimiter, requestUpload.array("attachments", 5), async (req, res, next) => {
+  try {
   if (!(await verifyTurnstile(req.body.turnstileToken, req.ip))) return res.status(400).json({ error: "Human verification failed" });
   const parsed = z.object({
     title: z.string().trim().min(3).max(200),
@@ -356,11 +360,15 @@ publicRouter.post("/requests", publicLimiter, async (req, res) => {
     phone: z.string().max(50).optional().default(""),
     currentProblem: z.string().trim().min(10).max(5000),
     desiredOutcome: z.string().trim().min(10).max(5000),
-    expectedUsers: z.coerce.number().int().positive().max(1_000_000).optional(),
+    expectedUsers: z.preprocess(value => value === "" || value === undefined ? undefined : value, z.coerce.number().int().positive().max(1_000_000).optional()),
     urgency,
     targetDate: z.string().max(20).optional().default("")
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please check all required fields", details: parsed.error.flatten() });
+
+  const files = (req.files as Express.Multer.File[]) ?? [];
+  if (files.some(file => !validProposalUpload(file))) return res.status(400).json({ error: "Use PDF, Word, Excel, PowerPoint, TXT, CSV, JPG, PNG, GIF, or WebP files" });
+  if (!(await storageAvailable(files.reduce((sum, file) => sum + file.size, 0)))) return res.status(507).json({ error: "Storage capacity is currently too low for uploads" });
 
   const result = db.transaction(() => {
     const requestNo = nextIdentifier("REQ");
@@ -377,11 +385,20 @@ publicRouter.post("/requests", publicLimiter, async (req, res) => {
     db.prepare("INSERT INTO public_tracking_tokens(token_hash, project_request_id) VALUES (?, ?)").run(tokenHash(trackingToken), requestId);
     return { requestId, requestNo, trackingToken };
   })();
+  try {
+    await storeFiles(files, { projectRequestId: result.requestId });
+  } catch (error) {
+    db.prepare("DELETE FROM project_requests WHERE id = ?").run(result.requestId);
+    throw error;
+  }
   notifyRoles(["admin", "lead"], "new_request", `New project request ${result.requestNo}`, parsed.data.title, `/requests/${result.requestId}`);
   audit({ name: parsed.data.requesterName }, "project_request_created", "project_request", result.requestId, { requestNo: result.requestNo }, req.ip);
   const trackingUrl = `${config.publicBaseUrl}/track/${result.trackingToken}`;
   void sendMailSafely(parsed.data.email, `DTU request received: ${result.requestNo}`, `We received your request. Track it here: ${trackingUrl}`);
   res.status(201).json({ requestNo: result.requestNo, trackingUrl });
+  } catch (error) {
+    next(error);
+  }
 });
 
 publicRouter.get("/track/:token", (req, res) => {
@@ -412,7 +429,11 @@ publicRouter.get("/track/:token", (req, res) => {
     SELECT id, author_name, body, created_at FROM comments
     WHERE project_request_id = ? AND public_visible = 1 ORDER BY created_at ASC
   `).all(token.project_request_id);
-  res.json({ kind: "request", item, comments, attachments: [] });
+  const attachments = db.prepare(`
+    SELECT id, original_name, mime_type, size, created_at FROM attachments
+    WHERE project_request_id = ? AND public_visible = 1 ORDER BY created_at
+  `).all(token.project_request_id);
+  res.json({ kind: "request", item, comments, attachments });
 });
 
 publicRouter.post("/track/:token/replies", publicLimiter, (req, res) => {

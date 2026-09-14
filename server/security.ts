@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 import type { NextFunction, Request, Response } from "express";
 import argon2 from "argon2";
 import { db } from "./db.js";
@@ -108,6 +109,51 @@ const signatures: Record<string, (b: Buffer) => boolean> = {
 
 export function validUpload(file: Express.Multer.File) {
   return Boolean(signatures[file.mimetype]?.(file.buffer));
+}
+
+const proposalTypes: Record<string, { extensions: string[]; valid: (buffer: Buffer) => boolean }> = {
+  "image/gif": { extensions: [".gif"], valid: buffer => ["GIF87a", "GIF89a"].includes(buffer.subarray(0, 6).toString()) },
+  "application/msword": { extensions: [".doc"], valid: compoundOfficeFile },
+  "application/vnd.ms-excel": { extensions: [".xls"], valid: compoundOfficeFile },
+  "application/vnd.ms-powerpoint": { extensions: [".ppt"], valid: compoundOfficeFile },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { extensions: [".docx"], valid: buffer => openXmlFile(buffer, "word/") },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { extensions: [".xlsx"], valid: buffer => openXmlFile(buffer, "xl/") },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": { extensions: [".pptx"], valid: buffer => openXmlFile(buffer, "ppt/") },
+  "text/plain": { extensions: [".txt"], valid: textFile },
+  "text/csv": { extensions: [".csv"], valid: textFile },
+  "application/csv": { extensions: [".csv"], valid: textFile }
+};
+
+function compoundOfficeFile(buffer: Buffer) {
+  return buffer.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+}
+
+function openXmlFile(buffer: Buffer, folder: string) {
+  return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) && buffer.includes(Buffer.from(folder));
+}
+
+function textFile(buffer: Buffer) {
+  return !buffer.includes(0) && !buffer.toString("utf8").includes("\ufffd");
+}
+
+export function validProposalUpload(file: Express.Multer.File) {
+  if (validUpload(file)) return true;
+  const type = proposalTypes[file.mimetype];
+  const extension = path.extname(file.originalname).toLowerCase();
+  return Boolean(type?.extensions.includes(extension) && type.valid(file.buffer));
+}
+
+export function uploadExtension(file: Express.Multer.File) {
+  const known: Record<string, string> = {
+    "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
+    "application/pdf": ".pdf", "application/msword": ".doc", "application/vnd.ms-excel": ".xls",
+    "application/vnd.ms-powerpoint": ".ppt",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "text/plain": ".txt", "text/csv": ".csv", "application/csv": ".csv"
+  };
+  return known[file.mimetype] ?? "";
 }
 
 export async function verifyTurnstile(token: string | undefined, ip?: string) {

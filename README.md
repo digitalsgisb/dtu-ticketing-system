@@ -98,12 +98,12 @@ git push -u origin your-branch-name
 
 After the upstream is configured, `git pull` and `git push` can be used without specifying the remote and branch each time.
 
-### Pull and deploy the update on the Raspberry Pi
+### Pull and deploy the update on the AI PC
 
-After the changes have been pushed to GitHub, connect to the Raspberry Pi and run these commands from the cloned repository—not from `/opt/dtu-control/current`:
+After the changes have been pushed to GitHub, connect to the AI PC as `sugidigital` and run these commands from the cloned repository—not from `/opt/dtu-control/current`:
 
 ```bash
-cd ~/dtu-ticketing-system
+cd /srv/apps/dtu-ticketing-system
 git status --short
 git switch main
 git pull --ff-only origin main

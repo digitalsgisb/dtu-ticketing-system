@@ -86,24 +86,43 @@ export function PublicRequestPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setBusy(true); setError("");
-    const form = Object.fromEntries(new FormData(e.currentTarget).entries());
-    try { setSuccess(await api("/api/public/requests", { method: "POST", body: JSON.stringify(form) })); }
+    try { setSuccess(await api("/api/public/requests", { method: "POST", body: new FormData(e.currentTarget) })); }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
-  return <PublicShell>{success ? <Success reference={success.requestNo} trackingUrl={success.trackingUrl} /> : <main className="public-main">
-    <section className="public-intro"><span className="eyebrow">Digitalization intake</span><h1>{lang === "en" ? "Let’s improve how the work gets done." : "Mari tingkatkan cara kerja dilakukan."}</h1><p>{lang === "en" ? "Describe the current problem and the outcome your department needs. DTU will review feasibility, priority, and next steps." : "Terangkan masalah semasa dan hasil yang diperlukan jabatan anda. DTU akan menyemak kebolehlaksanaan, keutamaan dan langkah seterusnya."}</p></section>
-    <section className="public-card"><form className="form-stack" onSubmit={submit}><ErrorNotice message={error} />
-      <label>{lang === "en" ? "Request title" : "Tajuk permohonan"}<input name="title" required minLength={3} /></label>
-      <div className="form-grid"><label>{lang === "en" ? "Your name" : "Nama anda"}<input name="requesterName" required /></label><label>{lang === "en" ? "Department" : "Jabatan"}<input name="department" required /></label><label>Email<input name="email" type="email" required /></label><label>{lang === "en" ? "Phone (optional)" : "Telefon (pilihan)"}<input name="phone" /></label></div>
-      <label>{lang === "en" ? "What is the current problem?" : "Apakah masalah semasa?"}<textarea name="currentProblem" rows={5} required minLength={10} /></label>
-      <label>{lang === "en" ? "What outcome do you need?" : "Apakah hasil yang diperlukan?"}<textarea name="desiredOutcome" rows={5} required minLength={10} /></label>
-      <div className="form-grid"><label>{lang === "en" ? "Expected number of users" : "Anggaran bilangan pengguna"}<input name="expectedUsers" type="number" min="1" /></label><label>{lang === "en" ? "Urgency" : "Keutamaan"}<select name="urgency" defaultValue="medium"><option value="low">Low / Rendah</option><option value="medium">Medium / Sederhana</option><option value="high">High / Tinggi</option><option value="critical">Critical / Kritikal</option></select></label><label>{lang === "en" ? "Desired target date" : "Tarikh sasaran"}<input name="targetDate" type="date" /></label></div>
-      <TurnstileField />
-      <button className="button button-primary button-large" disabled={busy}>{busy ? "Sending…" : lang === "en" ? "Submit project request" : "Hantar permohonan projek"}</button>
-    </form></section>
+  return <PublicShell>{success ? <Success reference={success.requestNo} trackingUrl={success.trackingUrl} /> : <main className="public-main public-request-main">
+    <section className="public-intro proposal-intro">
+      <span className="eyebrow">Digitalization proposal</span>
+      <h1>{lang === "en" ? "Turn a better way of working into reality." : "Jadikan cara kerja yang lebih baik satu realiti."}</h1>
+      <p>{lang === "en" ? "Share the challenge, the outcome you imagine, and any supporting material. DTU will review feasibility, impact, priority, and the best next step." : "Kongsikan cabaran, hasil yang dibayangkan dan bahan sokongan. DTU akan menyemak kebolehlaksanaan, impak, keutamaan dan langkah terbaik seterusnya."}</p>
+      <div className="proposal-orbit" aria-hidden="true"><i /><i /><i /><div><span>DTU</span><strong>01</strong><small>Proposal</small></div></div>
+      <div className="proposal-benefits"><span><b>01</b>{lang === "en" ? "Describe the need" : "Terangkan keperluan"}</span><span><b>02</b>{lang === "en" ? "Attach evidence" : "Lampirkan bukti"}</span><span><b>03</b>{lang === "en" ? "Track the review" : "Jejak semakan"}</span></div>
+    </section>
+    <section className="public-card proposal-card">
+      <div className="proposal-card-head"><span>New proposal</span><h2>{lang === "en" ? "Tell us what should change" : "Beritahu kami perkara yang perlu berubah"}</h2><p>{lang === "en" ? "Required fields are marked with an asterisk." : "Medan wajib ditandakan dengan asterisk."}</p></div>
+      <form className="form-stack proposal-form" onSubmit={submit} encType="multipart/form-data"><ErrorNotice message={error} />
+        <div className="proposal-section"><div className="proposal-section-title"><b>01</b><div><strong>{lang === "en" ? "Proposal overview" : "Gambaran cadangan"}</strong><small>{lang === "en" ? "Give your idea a clear, memorable title." : "Berikan idea anda tajuk yang jelas."}</small></div></div>
+          <label>{lang === "en" ? "Request title *" : "Tajuk permohonan *"}<input name="title" required minLength={3} placeholder={lang === "en" ? "e.g. Digital production handover" : "cth. Penyerahan pengeluaran digital"} /></label>
+        </div>
+        <div className="proposal-section"><div className="proposal-section-title"><b>02</b><div><strong>{lang === "en" ? "Your details" : "Butiran anda"}</strong><small>{lang === "en" ? "So the DTU team can follow up with you." : "Supaya pasukan DTU boleh menghubungi anda."}</small></div></div>
+          <div className="form-grid"><label>{lang === "en" ? "Your name *" : "Nama anda *"}<input name="requesterName" required /></label><label>{lang === "en" ? "Department *" : "Jabatan *"}<input name="department" required /></label><label>Email *<input name="email" type="email" required placeholder="name@sugihara.com" /></label><label>{lang === "en" ? "Phone (optional)" : "Telefon (pilihan)"}<input name="phone" /></label></div>
+        </div>
+        <div className="proposal-section"><div className="proposal-section-title"><b>03</b><div><strong>{lang === "en" ? "Business need" : "Keperluan perniagaan"}</strong><small>{lang === "en" ? "Help us understand the problem and the result you need." : "Bantu kami memahami masalah dan hasil yang diperlukan."}</small></div></div>
+          <label>{lang === "en" ? "What is the current problem? *" : "Apakah masalah semasa? *"}<textarea name="currentProblem" rows={5} required minLength={10} placeholder={lang === "en" ? "Describe the current process, pain points, and who is affected…" : "Terangkan proses semasa, masalah dan siapa yang terjejas…"} /></label>
+          <label>{lang === "en" ? "What outcome do you need? *" : "Apakah hasil yang diperlukan? *"}<textarea name="desiredOutcome" rows={5} required minLength={10} placeholder={lang === "en" ? "Describe what success would look like…" : "Terangkan rupa kejayaan yang diharapkan…"} /></label>
+          <div className="form-grid proposal-facts"><label>{lang === "en" ? "Expected users" : "Anggaran pengguna"}<input name="expectedUsers" type="number" min="1" /></label><label>{lang === "en" ? "Urgency" : "Keutamaan"}<select name="urgency" defaultValue="medium"><option value="low">Low / Rendah</option><option value="medium">Medium / Sederhana</option><option value="high">High / Tinggi</option><option value="critical">Critical / Kritikal</option></select></label><label>{lang === "en" ? "Desired target date" : "Tarikh sasaran"}<input name="targetDate" type="date" /></label></div>
+        </div>
+        <div className="proposal-section"><div className="proposal-section-title"><b>04</b><div><strong>{lang === "en" ? "Supporting documents" : "Dokumen sokongan"}</strong><small>{lang === "en" ? "Add your proposal, process map, spreadsheet, presentation, or pictures." : "Tambah cadangan, peta proses, hamparan, pembentangan atau gambar."}</small></div></div>
+          <label className="proposal-upload"><input name="attachments" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp" multiple onChange={event => setFiles(Array.from(event.target.files ?? []))} /><span className="proposal-upload-icon">↥</span><strong>{lang === "en" ? "Drop files here or click to browse" : "Lepaskan fail di sini atau klik untuk memilih"}</strong><small>PDF, Word, Excel, PowerPoint, TXT, CSV or images · max 5 files · 10 MB each</small></label>
+          {files.length > 0 && <div className="proposal-file-list">{files.map(file => <span key={`${file.name}-${file.lastModified}`}><b>✓</b><span>{file.name}</span><small>{file.size < 1024 * 1024 ? `${Math.ceil(file.size / 1024)} KB` : `${(file.size / 1024 / 1024).toFixed(1)} MB`}</small></span>)}</div>}
+        </div>
+        <TurnstileField />
+        <div className="proposal-submit"><div><strong>{lang === "en" ? "Ready for DTU review?" : "Sedia untuk semakan DTU?"}</strong><small>{lang === "en" ? "You’ll receive a private tracking link after submission." : "Anda akan menerima pautan penjejakan peribadi selepas dihantar."}</small></div><button className="button button-primary button-large" disabled={busy}>{busy ? "Sending…" : lang === "en" ? "Submit proposal →" : "Hantar cadangan →"}</button></div>
+      </form>
+    </section>
   </main>}</PublicShell>;
 }
 
