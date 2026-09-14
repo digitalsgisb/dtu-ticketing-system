@@ -64,7 +64,16 @@ export function RequestDetailPage() {
   const [comment, setComment] = useState("");
   const [publicVisible, setPublicVisible] = useState(true);
   const [error, setError] = useState("");
-  const load = () => api(`/api/staff/requests/${id}`).then((d: any) => { setData(d); setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "" })); });
+  const [publicBaseUrl, setPublicBaseUrl] = useState("");
+  const [trackingUrl, setTrackingUrl] = useState("");
+  const [trackingBusy, setTrackingBusy] = useState<"open" | "email" | "">("");
+  const [trackingNotice, setTrackingNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [trackingCopied, setTrackingCopied] = useState(false);
+  const load = () => api(`/api/staff/requests/${id}`).then((d: any) => {
+    setData(d);
+    setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "" }));
+    setPublicBaseUrl(current => current || d.item.public_origin || window.location.origin);
+  });
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, [id]);
   if (!data) return <Loading />;
   const item = data.item;
@@ -77,6 +86,38 @@ export function RequestDetailPage() {
     if (!comment.trim()) return;
     await api(`/api/staff/requests/${id}/comments`, json("POST", { body: comment, publicVisible }));
     setComment(""); await load();
+  };
+  const createTrackingLink = async (email: boolean) => {
+    setTrackingNotice(null);
+    setTrackingBusy(email ? "email" : "open");
+    const trackerWindow = email ? null : window.open("about:blank", "_blank");
+    if (trackerWindow) trackerWindow.opener = null;
+    try {
+      const result = await api<{ trackingUrl: string; recipient: string; emailSent: boolean; emailReason?: string }>(
+        `/api/staff/requests/${id}/tracking-link`, json("POST", { email, publicBaseUrl })
+      );
+      setTrackingUrl(result.trackingUrl);
+      setPublicBaseUrl(result.trackingUrl.split("/track/")[0]);
+      if (trackerWindow) trackerWindow.location.replace(result.trackingUrl);
+      if (email) setTrackingNotice(result.emailSent
+        ? { kind: "success", text: `Tracking email sent to ${result.recipient}.` }
+        : { kind: "error", text: `Link created, but email was not sent: ${result.emailReason || "mail delivery failed"}.` });
+      else setTrackingNotice({ kind: "success", text: trackerWindow ? "Secure tracker opened in a new tab." : "Secure link created. Use Open tracker below." });
+      await load();
+    } catch (e) {
+      trackerWindow?.close();
+      setTrackingNotice({ kind: "error", text: (e as Error).message });
+    } finally {
+      setTrackingBusy("");
+    }
+  };
+  const copyTrackingLink = async () => {
+    if (!trackingUrl) return;
+    try {
+      await navigator.clipboard.writeText(trackingUrl);
+      setTrackingCopied(true);
+      window.setTimeout(() => setTrackingCopied(false), 1800);
+    } catch { setTrackingNotice({ kind: "error", text: "Copy failed. Select and copy the link manually." }); }
   };
   return <>
     <PageHeader eyebrow={item.request_no} title={item.title} description={`Requested by ${item.requester_name} · ${item.department_name}`} actions={<><Badge value={item.urgency} kind="priority" /><Badge value={item.status} /></>} />
@@ -92,7 +133,19 @@ export function RequestDetailPage() {
           <div className="comment-form"><textarea rows={3} value={comment} onChange={e => setComment(e.target.value)} placeholder="Ask a question or record a triage note…" /><div><label className="checkbox"><input type="checkbox" checked={publicVisible} onChange={e => setPublicVisible(e.target.checked)} />{t("publicUpdate")}</label><button className="button button-primary" onClick={() => void addComment()}>{t("addComment")}</button></div></div>
         </section>
       </div>
-      <aside className="panel detail-sidebar"><div className="panel-heading"><div><span className="eyebrow">Triage</span><h2>Decision</h2></div></div>
+      <aside className="panel detail-sidebar">
+        <section className="request-tracking-tools">
+          <div className="request-tracking-heading"><div><span className="eyebrow">Requester access</span><h2>Secure tracking link</h2></div><span className="secure-pill">Private</span></div>
+          <p>Create a fresh link you can open, copy, or send to <strong>{item.requester_email}</strong>.</p>
+          <label>Public portal address<input type="url" inputMode="url" value={publicBaseUrl} onChange={e => setPublicBaseUrl(e.target.value)} placeholder="https://requests.your-company.com" /></label>
+          <div className="request-tracking-actions">
+            <button className="button button-secondary" disabled={Boolean(trackingBusy)} onClick={() => void createTrackingLink(false)}>{trackingBusy === "open" ? "Opening…" : "Open tracker"}</button>
+            <button className="button button-primary" disabled={Boolean(trackingBusy)} onClick={() => void createTrackingLink(true)}>{trackingBusy === "email" ? "Sending…" : "Resend tracking email"}</button>
+          </div>
+          {trackingUrl && <div className="request-tracking-result"><small>Latest secure link</small><input value={trackingUrl} readOnly aria-label="Latest secure tracking link" /><div><a className="button button-secondary" href={trackingUrl} target="_blank" rel="noreferrer">Open</a><button className="button button-secondary" onClick={() => void copyTrackingLink()}>{trackingCopied ? "Copied" : "Copy"}</button></div></div>}
+          {trackingNotice && <div className={`notice ${trackingNotice.kind === "success" ? "notice-success" : "notice-error"}`} role="status">{trackingNotice.text}</div>}
+        </section>
+        <div className="panel-heading"><div><span className="eyebrow">Triage</span><h2>Decision</h2></div></div>
         <label>Internal triage notes<textarea rows={5} value={form.triageNotes} onChange={e => setForm({ ...form, triageNotes: e.target.value })} /></label>
         <label>Project owner<select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
         <label>Proposed deadline<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>

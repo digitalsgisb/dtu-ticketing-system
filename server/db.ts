@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS project_requests (
   expected_users INTEGER,
   urgency TEXT NOT NULL CHECK(urgency IN ('low','medium','high','critical')),
   target_date TEXT,
+  public_origin TEXT,
   status TEXT NOT NULL DEFAULT 'submitted' CHECK(status IN ('submitted','triage','needs_information','approved','rejected')),
   triage_notes TEXT,
   created_project_id INTEGER,
@@ -382,6 +383,7 @@ ensureColumn("projects", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
 ensureColumn("project_updates", "next_action", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
 ensureColumn("showcase_projects", "problem_statement", "TEXT");
 ensureColumn("showcase_projects", "solution_description", "TEXT");

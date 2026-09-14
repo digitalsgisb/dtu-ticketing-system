@@ -80,8 +80,15 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   const canCreateProject = user?.role === "admin" || user?.role === "lead";
   const title = myProjectsOnly ? "My Projects" : t("projects");
   const description = myProjectsOnly
-    ? `Projects owned by ${user?.name ?? "you"}. Open a project to update progress and attach progress photos.`
+    ? `Projects owned by ${user?.name ?? "you"}. Use Quick update to post progress and photos without hunting through the project page.`
     : "Plan, deliver, and support every DTU digitalization project.";
+  const rememberProjectContext = () => {
+    sessionStorage.setItem(projectNavigationKey, JSON.stringify({
+      projects: filtered.map(item => ({ id: item.id, project_no: item.project_no, name: item.name })),
+      returnTo: myProjectsOnly ? "/my-projects" : "/projects"
+    }));
+    sessionStorage.setItem(projectScrollKey, String(window.scrollY));
+  };
 
   return (
     <>
@@ -121,13 +128,9 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       </div>
       {filtered.length ? <div className="project-grid">{filtered.map(project => {
         const displayedProgress = projectProgress(project);
-        return <Link to={`/projects/${project.id}`} className="project-card" key={project.id} onClick={() => {
-          sessionStorage.setItem(projectNavigationKey, JSON.stringify({
-            projects: filtered.map(item => ({ id: item.id, project_no: item.project_no, name: item.name })),
-            returnTo: myProjectsOnly ? "/my-projects" : "/projects"
-          }));
-          sessionStorage.setItem(projectScrollKey, String(window.scrollY));
-        }}>
+        const canUpdateProgress = project.status !== "cancelled" && (canCreateProject || isOwnedBy(project, user));
+        return <article className="project-card" key={project.id}>
+          <Link to={`/projects/${project.id}`} className="project-card-main" onClick={rememberProjectContext}>
           <div className="project-card-image">{project.latest_image_id ? <img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} /> : <div><span>{project.project_no}</span><small>Add a photo with a progress update</small></div>}</div>
           <div className="project-card-content">
             <div className="project-card-top"><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
@@ -135,7 +138,9 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
             <div className="project-progress"><div><span>{t("progress")}</span><strong>{displayedProgress}%</strong></div><div className="bar"><i style={{ width: `${displayedProgress}%` }} /></div></div>
             <div className="project-card-meta"><span><small>{t("department")}</small>{project.department_name}</span><span><small>{t("dueDate")}</small>{formatDate(project.due_date)}</span><span><small>Open work</small>{project.open_count || 0}</span></div>
           </div>
-        </Link>;
+          </Link>
+          {canUpdateProgress && <Link to={`/projects/${project.id}?update=1`} className="project-card-quick-update" onClick={rememberProjectContext}><span>Quick update</span><strong>{displayedProgress}% <i>→</i></strong></Link>}
+        </article>;
       })}</div> : <Empty title={myProjectsOnly ? "No owned projects match this view" : "No matching projects"} />}
       {showCreate && <ProjectCreateModal users={users} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
     </>

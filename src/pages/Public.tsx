@@ -10,9 +10,9 @@ function PublicShell({ children }: { children: ReactNode }) {
   return <div className="public-page"><header className="public-header"><Link to="/request" className="brand company-brand public-brand"><CompanyLogo /><small>DTU Secure Request Portal</small></Link><button className="language-button" onClick={() => setLang(lang === "en" ? "ms" : "en")}>{lang === "en" ? "Bahasa Melayu" : "English"}</button></header>{children}<footer className="public-footer">Sugihara Grand Industries · DTU Control Centre · Secure request portal</footer></div>;
 }
 
-function Success({ reference, trackingUrl }: { reference: string; trackingUrl: string }) {
+function Success({ reference, trackingUrl, emailSent }: { reference: string; trackingUrl: string; emailSent?: boolean }) {
   const { lang } = useI18n();
-  return <div className="public-card success-card"><div className="success-check">✓</div><span className="eyebrow">{lang === "en" ? "Submission received" : "Permohonan diterima"}</span><h1>{reference}</h1><p>{lang === "en" ? "DTU has received your submission. Save the private tracking link below." : "DTU telah menerima permohonan anda. Simpan pautan jejak peribadi di bawah."}</p><a className="button button-primary button-large" href={trackingUrl}>{lang === "en" ? "Track my submission" : "Jejak permohonan saya"}</a><small>{trackingUrl}</small></div>;
+  return <div className="public-card success-card"><div className="success-check">✓</div><span className="eyebrow">{lang === "en" ? "Submission received" : "Permohonan diterima"}</span><h1>{reference}</h1><p>{lang === "en" ? "DTU has received your submission. Save the private tracking link below." : "DTU telah menerima permohonan anda. Simpan pautan jejak peribadi di bawah."}</p>{emailSent !== undefined && <div className={`notice ${emailSent ? "notice-success" : "notice-error"}`}>{emailSent ? (lang === "en" ? "A copy of this tracking link has been sent to your email." : "Salinan pautan penjejakan ini telah dihantar ke e-mel anda.") : (lang === "en" ? "We could not send the email copy. Please save the working link below." : "Salinan e-mel tidak dapat dihantar. Sila simpan pautan yang berfungsi di bawah.")}</div>}<a className="button button-primary button-large" href={trackingUrl}>{lang === "en" ? "Track my submission" : "Jejak permohonan saya"}</a><small>{trackingUrl}</small></div>;
 }
 
 declare global {
@@ -58,7 +58,7 @@ export function PublicIssuePage() {
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
-  return <PublicShell>{success ? <Success reference={success.ticketNo} trackingUrl={success.trackingUrl} /> : <main className="public-main">
+  return <PublicShell>{success ? <Success reference={success.ticketNo} trackingUrl={success.trackingUrl} emailSent={success.emailSent} /> : <main className="public-main">
     <section className="public-intro"><span className="eyebrow">Project support</span><h1>{lang === "en" ? "Tell us what went wrong." : "Beritahu kami masalah yang berlaku."}</h1><p>{lang === "en" ? "Your report goes directly to the DTU work queue. Add enough detail for us to investigate quickly." : "Laporan anda akan terus masuk ke senarai kerja DTU. Berikan maklumat yang cukup untuk siasatan pantas."}</p></section>
     <section className="public-card">
       {error && !project ? <ErrorNotice message={error} /> : !project ? <Loading /> : <>
@@ -93,7 +93,7 @@ export function PublicRequestPage() {
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
-  return <PublicShell>{success ? <Success reference={success.requestNo} trackingUrl={success.trackingUrl} /> : <main className="public-main public-request-main">
+  return <PublicShell>{success ? <Success reference={success.requestNo} trackingUrl={success.trackingUrl} emailSent={success.emailSent} /> : <main className="public-main public-request-main">
     <section className="public-intro proposal-intro">
       <span className="eyebrow">Digitalization proposal</span>
       <h1>{lang === "en" ? "Turn a better way of working into reality." : "Jadikan cara kerja yang lebih baik satu realiti."}</h1>

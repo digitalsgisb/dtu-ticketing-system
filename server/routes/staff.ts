@@ -8,8 +8,9 @@ import argon2 from "argon2";
 import { z } from "zod";
 import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
-import { requireRole, storageAvailable, validUpload } from "../security.js";
-import { audit, cleanText, notify, sendMail, sendMailSafely, verifyMailTransport } from "../services.js";
+import { randomToken, requireRole, storageAvailable, tokenHash, validUpload } from "../security.js";
+import { audit, cleanText, notify, sendMail, sendMailSafely, sendTrackingEmail, verifyMailTransport } from "../services.js";
+import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { malaysiaDate } from "../time.js";
 
@@ -988,8 +989,8 @@ staffRouter.get("/requests", requireRole("admin", "lead"), (_req, res) => {
   res.json(db.prepare("SELECT * FROM project_requests ORDER BY updated_at DESC").all());
 });
 
-staffRouter.get("/requests/intake-qr", requireRole("admin", "lead"), async (_req, res) => {
-  const url = `${config.publicBaseUrl.replace(/\/$/, "")}/request`;
+staffRouter.get("/requests/intake-qr", requireRole("admin", "lead"), async (req, res) => {
+  const url = `${publicBaseForRequest(req, config.publicBaseUrl)}/request`;
   const dataUrl = await QRCode.toDataURL(url, {
     width: 720,
     margin: 2,
@@ -1005,6 +1006,55 @@ staffRouter.get("/requests/:id", requireRole("admin", "lead"), (req, res) => {
   const comments = db.prepare("SELECT * FROM comments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
   const attachments = db.prepare("SELECT id, original_name, mime_type, size, created_at FROM attachments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
   res.json({ item, comments, attachments });
+});
+
+staffRouter.post("/requests/:id/tracking-link", requireRole("admin", "lead"), async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const parsed = z.object({
+    email: z.boolean().optional().default(false),
+    publicBaseUrl: z.string().trim().max(1000).optional().default("")
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid tracking link request" });
+  const item = db.prepare(`
+    SELECT id, request_no, title, requester_name, requester_email, public_origin
+    FROM project_requests WHERE id = ?
+  `).get(req.params.id) as {
+    id: number; request_no: string; title: string; requester_name: string;
+    requester_email: string; public_origin: string | null;
+  } | undefined;
+  if (!item) return res.status(404).json({ error: "Request not found" });
+
+  const candidate = parsed.data.publicBaseUrl || item.public_origin || config.publicBaseUrl;
+  const publicBaseUrl = normalizePublicBaseUrl(candidate, !config.isProduction);
+  if (!publicBaseUrl) return res.status(400).json({
+    error: "Enter the real public portal address first, for example https://requests.your-company.com"
+  });
+
+  const token = randomToken();
+  db.transaction(() => {
+    db.prepare("INSERT INTO public_tracking_tokens(token_hash, project_request_id) VALUES (?, ?)")
+      .run(tokenHash(token), item.id);
+    db.prepare("UPDATE project_requests SET public_origin = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(publicBaseUrl, item.id);
+  })();
+  const trackingUrl = `${publicBaseUrl}/track/${token}`;
+  const delivery = parsed.data.email
+    ? await sendTrackingEmail(item.requester_email, {
+      requesterName: item.requester_name,
+      referenceNo: item.request_no,
+      title: item.title,
+      trackingUrl,
+      kind: "request"
+    })
+    : { sent: false, reason: undefined };
+  audit(authReq.user, parsed.data.email ? "project_request_tracking_link_emailed" : "project_request_tracking_link_created",
+    "project_request", item.id, { recipient: parsed.data.email ? item.requester_email : null, emailSent: delivery.sent }, req.ip);
+  res.status(201).json({
+    trackingUrl,
+    recipient: item.requester_email,
+    emailSent: delivery.sent,
+    emailReason: delivery.sent ? undefined : delivery.reason
+  });
 });
 
 staffRouter.patch("/requests/:id", requireRole("admin", "lead"), (req, res) => {

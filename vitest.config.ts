@@ -8,7 +8,9 @@ export default defineConfig({
       NODE_ENV: "test",
       INITIAL_ADMIN_USERNAME: "admin",
       INITIAL_ADMIN_PASSWORD: "ChangeMe123!",
+      PUBLIC_BASE_URL: "https://report.example.com",
       PUBLIC_HOSTNAME: "report.example.com",
+      SMTP_HOST: "",
       DATA_DIR: "./data-test"
     }
   }

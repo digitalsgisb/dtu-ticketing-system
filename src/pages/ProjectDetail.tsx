@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { useAuth } from "../auth";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
@@ -55,6 +55,7 @@ function shortUrl(value: string) {
 export function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { t } = useI18n();
   const [data, setData] = useState<any>(null);
@@ -89,6 +90,14 @@ export function ProjectDetailPage() {
     if (user?.role === "member") return;
     void api<any[]>("/api/staff/users").then(setUsers).catch(() => undefined);
   }, [user?.role]);
+  useEffect(() => {
+    if (!data?.project || new URLSearchParams(location.search).get("update") !== "1") return;
+    const project = data.project;
+    const canManage = user?.role === "admin" || user?.role === "lead";
+    const owns = Number(project.owner_id) === user?.id || String(project.owner_name ?? "").trim().toLowerCase() === user?.name.trim().toLowerCase();
+    if (project.status !== "cancelled" && (canManage || owns)) setUpdatingProgress(true);
+    navigate(location.pathname, { replace: true });
+  }, [data?.project, location.pathname, location.search, navigate, user]);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const { project, workItems, links = [], updates = [] } = data;
@@ -133,6 +142,7 @@ export function ProjectDetailPage() {
       <div className="hero-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
     </section>
     </div>
+    {canUpdateProgress && <button type="button" className="mobile-progress-action" onClick={() => setUpdatingProgress(true)}><span><small>Project progress</small><strong>{displayedProgress}%</strong></span><b>Update now <i>→</i></b></button>}
     <SystemLinks links={links} />
     <section className="project-update-panel">
       <div className="project-update-heading">
@@ -186,22 +196,46 @@ function SystemLinks({ links }: { links: any[] }) {
 
 function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
-  const [form, setForm] = useState({ status: project.status, progress: project.progress, currentUpdate: "", nextAction: "" });
+  const draftKey = `dtu-progress-draft-${project.id}`;
+  const [form, setForm] = useState(() => {
+    try {
+      const draft = JSON.parse(localStorage.getItem(draftKey) || "null");
+      return draft && typeof draft === "object"
+        ? { status: draft.status || project.status, progress: Number(draft.progress ?? project.progress), currentUpdate: draft.currentUpdate || "", nextAction: draft.nextAction || "" }
+        : { status: project.status, progress: project.progress, currentUpdate: "", nextAction: "" };
+    } catch { return { status: project.status, progress: project.progress, currentUpdate: "", nextAction: "" }; }
+  });
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => () => previews.forEach(URL.revokeObjectURL), [previews]);
+  useEffect(() => {
+    localStorage.setItem(draftKey, JSON.stringify(form));
+  }, [draftKey, form]);
+  const setProgress = (value: number) => {
+    const progress = Math.max(0, Math.min(100, value));
+    const status = progress === 100
+      ? (form.status === "completed" ? "completed" : "complete_monitoring")
+      : completeLikeProjectStatuses.has(form.status) ? "in_progress" : form.status;
+    setForm({ ...form, progress, status });
+  };
   const chooseFiles = async (list: FileList | null) => {
     setError("");
-    const selected = Array.from(list ?? []).slice(0, 4);
+    const selected = Array.from(list ?? []).slice(0, Math.max(0, 4 - files.length));
+    if (!selected.length) return;
     try {
       const compressed = await Promise.all(selected.map(compressProgressImage));
-      setFiles(compressed);
-      setPreviews(compressed.map(file => URL.createObjectURL(file)));
+      setFiles(current => [...current, ...compressed].slice(0, 4));
+      setPreviews(current => [...current, ...compressed.map(file => URL.createObjectURL(file))].slice(0, 4));
     } catch (err) {
       setError((err as Error).message);
     }
+  };
+  const removeFile = (index: number) => {
+    URL.revokeObjectURL(previews[index]);
+    setFiles(current => current.filter((_, itemIndex) => itemIndex !== index));
+    setPreviews(current => current.filter((_, itemIndex) => itemIndex !== index));
   };
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -215,30 +249,50 @@ function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: 
     files.forEach(file => body.append("images", file));
     try {
       await api(`/api/staff/projects/${project.id}/progress`, { method: "PATCH", body });
+      localStorage.removeItem(draftKey);
       onSaved();
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
     }
   };
-  return <Modal title="Update project progress" onClose={onClose}>
-    <form className="form-stack" onSubmit={save}>
+  return <Modal title="Quick progress update" onClose={onClose}>
+    <form className="form-stack progress-update-form" onSubmit={save}>
       <ErrorNotice message={error} />
-      <div className="progress-update-summary"><span className="mono">{project.project_no}</span><strong>{project.name}</strong><small>Share a concise update that the team can understand at a glance.</small></div>
-      <div className="form-grid">
-        <label>{t("status")}<select value={form.status} onChange={e => {
-          const status = e.target.value;
-          setForm({ ...form, status, progress: completeLikeProjectStatuses.has(status) ? 100 : form.progress });
-        }}>{projectStatusOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-        <label>{t("progress")} ({form.progress}%)<input type="range" min="0" max="100" step="5" disabled={completeLikeProjectStatuses.has(form.status)} value={form.progress} onChange={e => setForm({ ...form, progress: Number(e.target.value) })} /></label>
-      </div>
+      <div className="progress-update-summary"><span className="mono">{project.project_no}</span><strong>{project.name}</strong><small>Your draft is saved on this device until you publish it.</small></div>
+      <section className="quick-progress-control" aria-labelledby="progress-control-title">
+        <div className="quick-progress-heading"><div><span className="eyebrow">Completion</span><h3 id="progress-control-title">How far along is it?</h3></div><output>{form.progress}%</output></div>
+        <div className="quick-progress-stepper">
+          <button type="button" aria-label="Decrease progress by 5 percent" onClick={() => setProgress(form.progress - 5)}>−5</button>
+          <div className="quick-progress-track"><i style={{ width: `${form.progress}%` }} /></div>
+          <button type="button" aria-label="Increase progress by 5 percent" onClick={() => setProgress(form.progress + 5)}>+5</button>
+        </div>
+        <div className="quick-progress-presets" role="group" aria-label="Set project progress">
+          {[0, 25, 50, 75, 100].map(value => <button type="button" className={form.progress === value ? "active" : ""} aria-pressed={form.progress === value} key={value} onClick={() => setProgress(value)}>{value === 100 ? "Done" : `${value}%`}</button>)}
+        </div>
+      </section>
+      <section className="quick-status-control" aria-labelledby="status-control-title">
+        <div><span className="eyebrow">Status</span><h3 id="status-control-title">What stage is it in?</h3></div>
+        <div className="quick-status-options">
+          {projectStatusOptions.map(([value, label]) => <button type="button" className={form.status === value ? "active" : ""} aria-pressed={form.status === value} key={value} onClick={() => setForm({ ...form, status: value, progress: completeLikeProjectStatuses.has(value) ? 100 : form.progress })}>{label}</button>)}
+        </div>
+      </section>
       <div className="progress-update-fields">
-        <label><span>Current update</span><small>What changed since the previous update? Mention outcomes, progress, or blockers.</small><textarea required minLength={3} maxLength={1000} rows={4} value={form.currentUpdate} onChange={e => setForm({ ...form, currentUpdate: e.target.value })} placeholder="Example: User testing is complete and the feedback has been grouped into three fixes." /></label>
-        <label><span>Next planned action</span><small>What will happen next? Include the owner or target date when known.</small><textarea required minLength={3} maxLength={1000} rows={3} value={form.nextAction} onChange={e => setForm({ ...form, nextAction: e.target.value })} placeholder="Example: Hafiz will close the three fixes and prepare the pilot by 5 September." /></label>
+        <label><span>What changed?</span><small>A short sentence is enough. Mention the outcome, progress, or blocker.</small><textarea required minLength={3} maxLength={1000} rows={3} value={form.currentUpdate} onChange={e => setForm({ ...form, currentUpdate: e.target.value })} placeholder="Example: User testing is complete and three fixes were identified." /></label>
+        <label><span>What happens next? <em>Optional</em></span><small>Add an owner or date if that helps the team.</small><textarea maxLength={1000} rows={2} value={form.nextAction} onChange={e => setForm({ ...form, nextAction: e.target.value })} placeholder="Example: Hafiz will prepare the pilot by Friday." /></label>
       </div>
-      <label className="briefing-photo-picker">Progress photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => void chooseFiles(e.target.files)} /><small>Up to 4 images. Large photos are compressed before upload.</small></label>
-      {previews.length > 0 && <div className="briefing-upload-previews">{previews.map((preview, index) => <img src={preview} alt={`Selected progress ${index + 1}`} key={preview} />)}</div>}
-      <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose}>{t("cancel")}</button><button className="button button-primary" disabled={saving}>{saving ? "Saving..." : "Publish update"}</button></div>
+      <section className="quick-photo-control">
+        <div><span className="eyebrow">Evidence</span><h3>Add photos <small>Optional · up to 4</small></h3></div>
+        <div className="quick-photo-actions">
+          <label className="button button-primary">📷 Take photo<input type="file" accept="image/*" capture="environment" onChange={e => { void chooseFiles(e.target.files); e.target.value = ""; }} /></label>
+          <label className="button button-secondary">＋ Choose photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { void chooseFiles(e.target.files); e.target.value = ""; }} /></label>
+        </div>
+        <small>Large photos are compressed before upload.</small>
+      </section>
+      {previews.length > 0 && <div className="briefing-upload-previews progress-photo-previews">{previews.map((preview, index) => <figure key={preview}><img src={preview} alt={`Selected progress ${index + 1}`} /><button type="button" aria-label={`Remove photo ${index + 1}`} onClick={() => removeFile(index)}>×</button></figure>)}</div>}
+      <div className="form-actions progress-update-actions"><button type="button" className="button button-secondary" onClick={onClose}>{t("cancel")}</button><button className="button button-primary" disabled={saving || form.currentUpdate.trim().length < 3}>{saving ? "Publishing..." : "Publish update"}</button>
+        <small>{files.length ? `${files.length} photo${files.length === 1 ? "" : "s"} ready` : `${form.progress}% · ${projectStatusOptions.find(([value]) => value === form.status)?.[1]}`}</small>
+      </div>
     </form>
   </Modal>;
 }

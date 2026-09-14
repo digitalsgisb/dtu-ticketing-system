@@ -8,7 +8,8 @@ import { z } from "zod";
 import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
 import { randomToken, storageAvailable, tokenHash, uploadExtension, validProposalUpload, validUpload, verifyTurnstile } from "../security.js";
-import { audit, cleanText, notifyRoles, sendMailSafely } from "../services.js";
+import { audit, cleanText, notifyRoles, sendTrackingEmail } from "../services.js";
+import { publicBaseForRequest } from "../publicLinks.js";
 import { writeShowcasePortfolioPdf, type PortfolioPdfImage, type PortfolioPdfProject } from "../portfolioPdf.js";
 
 export const publicRouter = Router();
@@ -340,10 +341,15 @@ publicRouter.post("/projects/:token/issues", publicLimiter, upload.array("attach
     }
     notifyRoles(["admin", "lead"], "new_issue", `New issue ${result.ticketNo}`, `${project.name}: ${parsed.data.title}`, `/tickets/${result.workItemId}`);
     audit({ name: parsed.data.reporterName }, "public_issue_created", "work_item", result.workItemId, { ticketNo: result.ticketNo, projectId: project.id }, req.ip);
-    const trackingUrl = `${config.publicBaseUrl}/track/${result.trackingToken}`;
-    void sendMailSafely(parsed.data.email, `DTU issue received: ${result.ticketNo}`,
-      `We received your report for ${project.name}. Track it here: ${trackingUrl}`);
-    res.status(201).json({ ticketNo: result.ticketNo, trackingUrl });
+    const trackingUrl = `${publicBaseForRequest(req, config.publicBaseUrl)}/track/${result.trackingToken}`;
+    const email = await sendTrackingEmail(parsed.data.email, {
+      requesterName: parsed.data.reporterName,
+      referenceNo: result.ticketNo,
+      title: parsed.data.title,
+      trackingUrl,
+      kind: "issue"
+    });
+    res.status(201).json({ ticketNo: result.ticketNo, trackingUrl, emailSent: email.sent });
   } catch (error) {
     next(error);
   }
@@ -374,12 +380,12 @@ publicRouter.post("/requests", publicLimiter, requestUpload.array("attachments",
     const requestNo = nextIdentifier("REQ");
     const inserted = db.prepare(`
       INSERT INTO project_requests(request_no, title, department_name, requester_name, requester_email,
-        requester_phone, current_problem, desired_outcome, expected_users, urgency, target_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        requester_phone, current_problem, desired_outcome, expected_users, urgency, target_date, public_origin)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(requestNo, cleanText(parsed.data.title, 200), cleanText(parsed.data.department, 150),
       cleanText(parsed.data.requesterName, 120), parsed.data.email, cleanText(parsed.data.phone, 50),
       cleanText(parsed.data.currentProblem), cleanText(parsed.data.desiredOutcome), parsed.data.expectedUsers ?? null,
-      parsed.data.urgency, parsed.data.targetDate || null);
+      parsed.data.urgency, parsed.data.targetDate || null, publicBaseForRequest(req, config.publicBaseUrl));
     const requestId = Number(inserted.lastInsertRowid);
     const trackingToken = randomToken();
     db.prepare("INSERT INTO public_tracking_tokens(token_hash, project_request_id) VALUES (?, ?)").run(tokenHash(trackingToken), requestId);
@@ -393,9 +399,15 @@ publicRouter.post("/requests", publicLimiter, requestUpload.array("attachments",
   }
   notifyRoles(["admin", "lead"], "new_request", `New project request ${result.requestNo}`, parsed.data.title, `/requests/${result.requestId}`);
   audit({ name: parsed.data.requesterName }, "project_request_created", "project_request", result.requestId, { requestNo: result.requestNo }, req.ip);
-  const trackingUrl = `${config.publicBaseUrl}/track/${result.trackingToken}`;
-  void sendMailSafely(parsed.data.email, `DTU request received: ${result.requestNo}`, `We received your request. Track it here: ${trackingUrl}`);
-  res.status(201).json({ requestNo: result.requestNo, trackingUrl });
+  const trackingUrl = `${publicBaseForRequest(req, config.publicBaseUrl)}/track/${result.trackingToken}`;
+  const email = await sendTrackingEmail(parsed.data.email, {
+    requesterName: parsed.data.requesterName,
+    referenceNo: result.requestNo,
+    title: parsed.data.title,
+    trackingUrl,
+    kind: "request"
+  });
+  res.status(201).json({ requestNo: result.requestNo, trackingUrl, emailSent: email.sent });
   } catch (error) {
     next(error);
   }

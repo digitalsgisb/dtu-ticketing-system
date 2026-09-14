@@ -370,6 +370,18 @@ input[type=range] { padding:0; box-shadow:none; border:0; }
 .request-brief > div:not(.detail-facts) { padding-left:15px; border-left:3px solid #58b4ae; }
 .request-brief .detail-facts { border-top:1px solid var(--line); padding-top:18px; }
 .request-brief .detail-facts strong { color:var(--navy); }
+.request-tracking-tools { display:grid; gap:13px; margin:-2px -2px 3px; padding:2px 2px 20px; border-bottom:1px solid var(--line); }
+.request-tracking-heading { display:flex; align-items:start; justify-content:space-between; gap:10px; }
+.request-tracking-heading h2 { margin:4px 0 0; color:var(--navy); font-size:18px; }
+.request-tracking-tools > p { margin:0; color:#617988; font-size:11px; line-height:1.55; }
+.request-tracking-tools > p strong { color:#294a5d; overflow-wrap:anywhere; }
+.secure-pill { padding:5px 8px; border-radius:999px; background:#e9f6f0; color:#277056; font-size:8px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.request-tracking-actions, .request-tracking-result > div { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.request-tracking-actions .button, .request-tracking-result .button { justify-content:center; }
+.request-tracking-result { display:grid; gap:7px; padding:11px; border:1px solid #dce8ea; border-radius:10px; background:#f7fafb; }
+.request-tracking-result small { color:#728894; font-size:8px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.request-tracking-result input { min-height:36px; padding:8px 9px; font-size:9px; background:#fff; }
+@media (max-width:520px) { .request-tracking-actions { grid-template-columns:1fr; } }
 .qr-label { border:2px solid var(--navy); border-radius:14px; padding:22px; text-align:center; color:var(--navy); }
 .qr-label .qr-code { width:240px; max-width:90%; }
 .qr-label h2 { font-size:18px; margin:5px 0; }
@@ -3413,4 +3425,152 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 
 @media (display-mode: standalone) {
   .topbar { user-select: none; }
+}
+
+/* Fast, phone-friendly project progress updates */
+.project-card-main { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.project-card-quick-update {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid #e4edef;
+  color: #176f75;
+  background: linear-gradient(90deg, #f0faf8, #f8fcfb);
+  font-size: 11px;
+  font-weight: 800;
+}
+.project-card-quick-update strong { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.project-card-quick-update i { font-style: normal; transition: transform .2s; }
+.project-card-quick-update:hover i { transform: translateX(3px); }
+.mobile-progress-action { display: none; }
+.progress-update-form h3, .quick-photo-control h3 { margin: 3px 0 0; color: var(--navy); font-size: 15px; }
+.quick-progress-control, .quick-status-control, .quick-photo-control {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid #dfeaec;
+  border-radius: 14px;
+  background: #f8fbfb;
+}
+.quick-progress-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.quick-progress-heading output {
+  min-width: 72px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  color: white;
+  background: linear-gradient(135deg, #17798a, #2aa99f);
+  font-size: 21px;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 9px 22px rgba(30, 139, 142, .18);
+}
+.quick-progress-stepper { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; align-items: center; gap: 10px; }
+.quick-progress-stepper button {
+  width: 48px;
+  height: 44px;
+  border: 1px solid #cfe1e3;
+  border-radius: 11px;
+  color: #226f76;
+  background: white;
+  font-size: 12px;
+  font-weight: 900;
+}
+.quick-progress-track { height: 10px; overflow: hidden; border-radius: 999px; background: #e1ebed; }
+.quick-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #197b8d, #42bcb1); transition: width .2s; }
+.quick-progress-presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.quick-progress-presets button, .quick-status-options button {
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 1px solid #d7e5e7;
+  border-radius: 9px;
+  color: #617b87;
+  background: white;
+  font-size: 9px;
+  font-weight: 800;
+}
+.quick-progress-presets button.active, .quick-status-options button.active { border-color: #228b8c; color: white; background: linear-gradient(135deg, #17788a, #269c97); }
+.quick-status-options { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.quick-status-options::-webkit-scrollbar { display: none; }
+.quick-status-options button { flex: 1 0 auto; min-width: 88px; }
+.progress-update-fields label > span { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.progress-update-fields label > span em { color: #92a1a8; font-size: 9px; font-style: normal; font-weight: 600; }
+.quick-photo-control > div:first-child { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.quick-photo-control h3 small { color: #8c9da7; font-size: 9px; font-weight: 500; }
+.quick-photo-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick-photo-actions label { min-width: 0; color: inherit; }
+.quick-photo-actions input { position: absolute; width: 1px; height: 1px; min-height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+.quick-photo-control > small { color: #889aa4; font-size: 9px; }
+.progress-photo-previews figure { position: relative; margin: 0; }
+.progress-photo-previews figure img { height: 100%; }
+.progress-photo-previews figure button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: 9px;
+  color: white;
+  background: rgba(4, 23, 32, .75);
+  font-size: 18px;
+  backdrop-filter: blur(6px);
+}
+.progress-update-actions { align-items: center; flex-wrap: wrap; }
+.progress-update-actions > small { margin-right: auto; color: #82949e; font-size: 9px; }
+
+@media (max-width: 600px) {
+  .project-card-quick-update { min-height: 54px; padding-inline: 18px; font-size: 12px; }
+  .project-detail-stage { padding-bottom: 78px; }
+  .mobile-progress-action {
+    position: fixed;
+    z-index: 24;
+    right: 14px;
+    bottom: calc(74px + env(safe-area-inset-bottom));
+    left: 14px;
+    min-height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 13px 9px 16px;
+    border: 1px solid rgba(255,255,255,.24);
+    border-radius: 16px;
+    color: white;
+    background: linear-gradient(120deg, rgba(9, 54, 68, .96), rgba(19, 119, 121, .96));
+    box-shadow: 0 14px 35px rgba(4, 30, 41, .28);
+    backdrop-filter: blur(16px);
+  }
+  .mobile-progress-action > span { display: flex; align-items: baseline; gap: 8px; }
+  .mobile-progress-action small { color: #a9c8cd; font-size: 9px; }
+  .mobile-progress-action strong { font-size: 17px; }
+  .mobile-progress-action b { padding: 10px 12px; border-radius: 11px; color: #08222d; background: #5bd3c7; font-size: 11px; }
+  .mobile-progress-action i { margin-left: 6px; font-style: normal; }
+  .progress-update-form { gap: 13px; }
+  .progress-update-summary { padding: 12px 13px; }
+  .quick-progress-control, .quick-status-control, .quick-photo-control, .progress-update-fields { padding: 13px; }
+  .quick-progress-presets { gap: 4px; }
+  .quick-progress-presets button { min-height: 42px; padding-inline: 3px; }
+  .quick-status-options { margin-inline: -13px; padding-inline: 13px; }
+  .quick-photo-actions { grid-template-columns: 1fr; }
+  .quick-photo-actions .button { width: 100%; }
+  .progress-photo-previews { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .progress-update-actions {
+    position: sticky;
+    z-index: 5;
+    bottom: calc(-1 * env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: .75fr 1.25fr;
+    margin: 3px -24px calc(-24px - env(safe-area-inset-bottom));
+    padding: 12px 24px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid #dbe7e9;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 -12px 30px rgba(9, 40, 55, .08);
+    backdrop-filter: blur(14px);
+  }
+  .progress-update-actions > small { grid-column: 1 / -1; grid-row: 1; margin: 0; text-align: center; }
 }

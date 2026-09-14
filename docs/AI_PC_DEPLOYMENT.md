@@ -11,6 +11,10 @@ The Gigabyte AI Atom PC is the current production target. The application runs a
 
 HTTPS is required for installation on phones, service workers outside `localhost`, and browser notification permission. Set the staff-facing `APP_BASE_URL` to its HTTPS address and set `COOKIE_SECURE=true`.
 
+Set `PUBLIC_BASE_URL` and `PUBLIC_HOSTNAME` to the real HTTPS hostname used by employees submitting and tracking requests. The server now falls back to the incoming public hostname when these values are still examples, but configuring them explicitly is recommended for emailed links.
+
+Set the approved SMTP relay and sender in `/etc/dtu-control.env` to enable the branded requester confirmation email. On each request detail page, an admin or lead can enter/correct the public portal address, open a fresh secure tracker, copy it, or email it to the requester. The screen reports delivery failure explicitly when SMTP is unavailable.
+
 ## First installation
 
 ```bash

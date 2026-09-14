@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { app } from "../server/app.js";
 import { db, resetDatabaseForTests, seedDatabase } from "../server/db.js";
+import { trackingEmailContent } from "../server/services.js";
 
 let cookie = "";
 let csrf = "";
@@ -371,6 +372,8 @@ describe("DTU Control Centre API", () => {
 
   it("accepts and exposes supporting documents on a project proposal", async () => {
     const response = await request(app).post("/api/public/requests")
+      .set("Host", "requests.dtu.local")
+      .set("x-forwarded-proto", "https")
       .field("title", "Digital approval workflow")
       .field("department", "Quality")
       .field("requesterName", "Proposal Owner")
@@ -381,8 +384,11 @@ describe("DTU Control Centre API", () => {
       .attach("attachments", Buffer.from("%PDF-1.4\nDTU proposal"), { filename: "proposal.pdf", contentType: "application/pdf" });
     expect(response.status).toBe(201);
     expect(response.body.requestNo).toMatch(/^REQ-/);
+    expect(response.body.trackingUrl).toMatch(/^https:\/\/requests\.dtu\.local\/track\//);
+    expect(response.body.emailSent).toBe(false);
 
-    const stored = db.prepare("SELECT id FROM project_requests WHERE request_no = ?").get(response.body.requestNo) as { id: number };
+    const stored = db.prepare("SELECT id, public_origin FROM project_requests WHERE request_no = ?").get(response.body.requestNo) as { id: number; public_origin: string };
+    expect(stored.public_origin).toBe("https://requests.dtu.local");
     const staffView = await request(app).get(`/api/staff/requests/${stored.id}`).set("Cookie", cookie);
     expect(staffView.status).toBe(200);
     expect(staffView.body.attachments).toHaveLength(1);
@@ -395,6 +401,34 @@ describe("DTU Control Centre API", () => {
     const download = await request(app).get(`/api/public/attachments/${trackingView.body.attachments[0].id}/${trackingToken}`);
     expect(download.status).toBe(200);
     expect(download.headers["content-disposition"]).toContain("proposal.pdf");
+
+    const refreshedLink = await request(app).post(`/api/staff/requests/${stored.id}/tracking-link`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ publicBaseUrl: "https://requests.sugihara.com.my", email: false });
+    expect(refreshedLink.status).toBe(201);
+    expect(refreshedLink.body.trackingUrl).toMatch(/^https:\/\/requests\.sugihara\.com\.my\/track\//);
+    expect(refreshedLink.body.recipient).toBe("proposal@example.com");
+    expect(refreshedLink.body.emailSent).toBe(false);
+    const refreshedToken = refreshedLink.body.trackingUrl.split("/track/")[1];
+    expect((await request(app).get(`/api/public/track/${refreshedToken}`)).status).toBe(200);
+    expect((await request(app).post(`/api/staff/requests/${stored.id}/tracking-link`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
+      .send({ publicBaseUrl: "https://requests.sugihara.com.my" })).status).toBe(403);
+    expect((await request(app).post(`/api/staff/requests/${stored.id}/tracking-link`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ publicBaseUrl: "https://report.example.com" })).status).toBe(400);
+  });
+
+  it("builds a complete, safe branded tracking email", () => {
+    const email = trackingEmailContent({
+      requesterName: "Aisha <script>", referenceNo: "REQ-2026-001", title: "Mobile progress & approvals",
+      trackingUrl: "https://portal.sugihara.com/track/private-token", kind: "request"
+    });
+    expect(email.subject).toContain("REQ-2026-001");
+    expect(email.text).toContain("Best regards,\nDigital Transformation Unit\nSugihara Grand Industries Sdn Bhd");
+    expect(email.html).toContain("Track my submission");
+    expect(email.html).toContain("Aisha &lt;script&gt;");
+    expect(email.html).not.toContain("Aisha <script>");
   });
 
   it("publishes a briefing update with a protected progress photo", async () => {

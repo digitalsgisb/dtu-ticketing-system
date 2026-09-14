@@ -126,19 +126,19 @@ sudo journalctl -u dtu-control --since "10 minutes ago" --no-pager
 
 ## Company branding
 
-The Sugihara Grand Industries logo is stored locally at `public/sugihara-grand-logo.png` and used by the staff portal, login page, public request portal, wallboard, and printable QR labels. Because it is bundled locally, the deployed Pi does not need to contact GitHub to display the logo.
+The Sugihara Grand Industries logo is stored locally at `public/sugihara-grand-logo.png` and used by the staff portal, login page, public request portal, wallboard, and printable QR labels. Because it is bundled locally, the deployed AI PC does not need to contact GitHub to display the logo.
 
 ## Public and private routing
 
 Set:
 
 ```dotenv
-APP_BASE_URL=http://dtu-control.local:3100
-PUBLIC_BASE_URL=https://report.example.com
-PUBLIC_HOSTNAME=report.example.com
+APP_BASE_URL=https://replace-with-your-staff-hostname.invalid
+PUBLIC_BASE_URL=https://replace-with-your-public-hostname.invalid
+PUBLIC_HOSTNAME=replace-with-your-public-hostname.invalid
 ```
 
-Requests received with `Host: report.example.com` can use only:
+Requests received on the configured public hostname can use only:
 
 - `/p/{project-token}`
 - `/request`
@@ -170,7 +170,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=...
 SMTP_PASS=...
-SMTP_FROM=DTU Control Centre <dtu@example.com>
+SMTP_FROM=Digital Transformation Unit <replace-with-approved-sender@your-company-domain.invalid>
 ```
 
 Use port `587` with `SMTP_SECURE=false` for STARTTLS, or port `465` with `SMTP_SECURE=true` for implicit TLS. `APP_BASE_URL` must be the private staff URL because links in staff notification emails use it.
@@ -182,7 +182,7 @@ After restarting the application:
 3. Confirm SMTP shows as configured.
 4. Send a test email from the SMTP integration panel.
 
-Staff members receive matching in-app and email notifications when their account has an email address. These cover assignments, comments, approaching deadlines, new public issues and requests for leads/admins, and public replies. Reporters receive confirmation, status-change, and public-comment emails when they supplied an email address.
+Staff members receive matching in-app and email notifications when their account has an email address. These cover assignments, comments, approaching deadlines, new public issues and requests for leads/admins, and public replies. Requesters receive a branded confirmation email containing their secure tracking link. Admins and leads can also open, copy, or resend a fresh secure link from any existing request detail page. Reporters receive confirmation, status-change, and public-comment emails when they supplied an email address.
 
 The adapter only sends fixed text/HTML bodies and does not expose Nodemailer's raw, URL, file, envelope, or transport-name options to application input.
 
