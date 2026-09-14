@@ -98,7 +98,6 @@ export function PublicRequestPage() {
       <span className="eyebrow">Digitalization proposal</span>
       <h1>{lang === "en" ? "Turn a better way of working into reality." : "Jadikan cara kerja yang lebih baik satu realiti."}</h1>
       <p>{lang === "en" ? "Share the challenge, the outcome you imagine, and any supporting material. DTU will review feasibility, impact, priority, and the best next step." : "Kongsikan cabaran, hasil yang dibayangkan dan bahan sokongan. DTU akan menyemak kebolehlaksanaan, impak, keutamaan dan langkah terbaik seterusnya."}</p>
-      <div className="proposal-orbit" aria-hidden="true"><i /><i /><i /><div><span>DTU</span><strong>01</strong><small>Proposal</small></div></div>
       <div className="proposal-benefits"><span><b>01</b>{lang === "en" ? "Describe the need" : "Terangkan keperluan"}</span><span><b>02</b>{lang === "en" ? "Attach evidence" : "Lampirkan bukti"}</span><span><b>03</b>{lang === "en" ? "Track the review" : "Jejak semakan"}</span></div>
     </section>
     <section className="public-card proposal-card">
