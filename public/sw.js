@@ -1,4 +1,4 @@
-const CACHE_NAME = "dtu-control-v1";
+const CACHE_NAME = "dtu-control-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/dtu-favicon.svg", "/pwa-192.png", "/pwa-512.png"];
 
 self.addEventListener("install", event => {

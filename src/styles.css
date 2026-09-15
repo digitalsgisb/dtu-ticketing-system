@@ -604,8 +604,11 @@ input[type=range] { padding:0; box-shadow:none; border:0; }
   .page-header { align-items:flex-start; flex-direction:column; }
   .project-advanced-filters { grid-template-columns:1fr; }
   .project-toolbar { gap: 11px; margin-bottom: 12px; padding: 14px; }
-  .project-toolbar-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
-  .project-toolbar-heading p { display: none; }
+  .projects-page > .page-header { margin-bottom: 12px; }
+  .projects-page > .page-header .eyebrow, .projects-page > .page-header p { display: none; }
+  .projects-page > .page-header h1 { font-size: 25px; }
+  .project-toolbar-heading { display: block; }
+  .project-toolbar-heading > div:first-child { display: none; }
   .project-toolbar-actions { width: 100%; align-items: stretch; }
   .project-scope-switch { flex: 1; }
   .project-scope-switch a { flex: 1; min-height: 38px; }

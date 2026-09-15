@@ -92,7 +92,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   };
 
   return (
-    <>
+    <div className="projects-page">
       <PageHeader
         eyebrow={myProjectsOnly ? "Owned portfolio" : "Portfolio"}
         title={title}
@@ -152,7 +152,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
         </article>;
       })}</div> : <Empty title={myProjectsOnly ? "No owned projects match this view" : "No matching projects"} />}
       {showCreate && <ProjectCreateModal users={users} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
-    </>
+    </div>
   );
 }
 

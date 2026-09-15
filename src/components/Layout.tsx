@@ -128,12 +128,12 @@ export function Layout() {
           <span className="sidebar-section-label">{roleNames[user?.role ?? "member"]} workspace</span>
           <nav>
             <div className={`nav-group ${projectsOpen ? "is-open" : ""}`}>
-              <button type="button" className={`nav-group-trigger ${projectSectionActive ? "active" : ""}`} onClick={() => setProjectsOpen(open => !open)} aria-expanded={projectsOpen}>
+              <button type="button" className={`nav-group-trigger ${projectSectionActive ? "active" : ""}`} onClick={() => { setProjectsOpen(true); setMobileOpen(false); navigate("/projects"); }} aria-expanded={projectsOpen}>
                 <ProjectIcon /><span>{t("projects")}</span><i />
               </button>
               <div className="nav-subnav" aria-hidden={!projectsOpen}>
-                <NavLink to="/my-projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
                 <NavLink to="/projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("allProjects")}</NavLink>
+                <NavLink to="/my-projects" tabIndex={projectsOpen ? undefined : -1} onClick={() => setMobileOpen(false)}>{t("myProjects")}</NavLink>
               </div>
             </div>
             {items.map(([to, label, icon]) => (

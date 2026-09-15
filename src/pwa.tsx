@@ -20,8 +20,18 @@ export function PwaProvider({ children }: { children: ReactNode }) {
   const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches);
 
   useEffect(() => {
+    let refreshForNewVersion: (() => void) | undefined;
     if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      let refreshing = false;
+      refreshForNewVersion = () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      };
+      navigator.serviceWorker.addEventListener("controllerchange", refreshForNewVersion);
+      void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" })
+        .then(registration => registration.update())
+        .catch(() => undefined);
     }
 
     const onInstallPrompt = (event: Event) => {
@@ -40,6 +50,7 @@ export function PwaProvider({ children }: { children: ReactNode }) {
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     return () => {
+      if (refreshForNewVersion) navigator.serviceWorker.removeEventListener("controllerchange", refreshForNewVersion);
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
       window.removeEventListener("online", onOnline);

@@ -17,7 +17,7 @@
   ],
   "shortcuts": [
     { "name": "My work", "short_name": "My work", "url": "/tickets", "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }] },
-    { "name": "My projects", "short_name": "Projects", "url": "/my-projects", "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }] },
+    { "name": "All projects", "short_name": "Projects", "url": "/projects", "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }] },
     { "name": "Notifications", "short_name": "Alerts", "url": "/notifications", "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }] }
   ]
 }
