@@ -339,6 +339,27 @@ describe("DTU Control Centre API", () => {
     expect(image.headers["content-type"]).toContain("image/jpeg");
   });
 
+  it("uses photo bytes rather than an incorrect iPhone browser MIME label", async () => {
+    const created = await request(app).post("/api/staff/projects")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "iPhone Photo Project", departmentName: "DTU", priority: "medium" });
+    expect(created.status).toBe(201);
+
+    const pngBytesLabelledAsWebp = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const updated = await request(app).patch(`/api/staff/projects/${created.body.id}/progress`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("status", "in_progress")
+      .field("progress", "30")
+      .field("currentUpdate", "Added a field photo captured from an iPhone.")
+      .attach("images", pngBytesLabelledAsWebp, { filename: "iphone-photo.webp", contentType: "image/webp" });
+    expect(updated.status).toBe(200);
+
+    const detail = await request(app).get(`/api/staff/projects/${created.body.id}`).set("Cookie", cookie);
+    const image = await request(app).get(`/api/staff/projects/progress-images/${detail.body.updates[0].images[0].id}`).set("Cookie", cookie);
+    expect(image.status).toBe(200);
+    expect(image.headers["content-type"]).toContain("image/png");
+  });
+
   it("blocks members from publishing progress updates on projects they do not own", async () => {
     const project = db.prepare("SELECT id FROM projects WHERE owner_id IS NULL ORDER BY id LIMIT 1").get() as { id: number };
     const response = await request(app).patch(`/api/staff/projects/${project.id}/progress`)

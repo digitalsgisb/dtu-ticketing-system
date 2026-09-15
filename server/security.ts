@@ -107,6 +107,10 @@ const signatures: Record<string, (b: Buffer) => boolean> = {
   "application/pdf": b => b.subarray(0, 5).toString() === "%PDF-"
 };
 
+export function detectedImageMimeType(buffer: Buffer) {
+  return (["image/jpeg", "image/png", "image/webp"] as const).find(mimeType => signatures[mimeType](buffer)) ?? null;
+}
+
 export function validUpload(file: Express.Multer.File) {
   return Boolean(signatures[file.mimetype]?.(file.buffer));
 }

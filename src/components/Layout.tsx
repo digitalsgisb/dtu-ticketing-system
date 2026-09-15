@@ -176,7 +176,7 @@ export function Layout() {
       </main>
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         <NavLink to="/" end><GridIcon /><span>Home</span></NavLink>
-        <NavLink to="/my-projects"><ProjectIcon /><span>Projects</span></NavLink>
+        <NavLink to="/projects"><ProjectIcon /><span>Projects</span></NavLink>
         <NavLink to="/tickets"><TicketIcon /><span>Work</span></NavLink>
         <button className={mobileOpen ? "active" : ""} onClick={() => setMobileOpen(true)}><span className="more-icon" aria-hidden="true">•••</span><span>More</span></button>
       </nav>

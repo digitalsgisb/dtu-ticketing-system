@@ -287,7 +287,7 @@ function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: 
         <div><span className="eyebrow">Evidence</span><h3>Add photos <small>Optional · up to 4</small></h3></div>
         <div className="quick-photo-actions">
           <label className="button button-primary">📷 Take photo<input type="file" accept="image/*" capture="environment" onChange={e => { void chooseFiles(e.target.files); e.target.value = ""; }} /></label>
-          <label className="button button-secondary">＋ Choose photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { void chooseFiles(e.target.files); e.target.value = ""; }} /></label>
+          <label className="button button-secondary">＋ Choose photos<input type="file" accept="image/*,.heic,.heif" multiple onChange={e => { void chooseFiles(e.target.files); e.target.value = ""; }} /></label>
         </div>
         <small>Large photos are compressed before upload.</small>
       </section>

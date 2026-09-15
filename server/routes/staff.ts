@@ -8,7 +8,7 @@ import argon2 from "argon2";
 import { z } from "zod";
 import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
-import { randomToken, requireRole, storageAvailable, tokenHash, validUpload } from "../security.js";
+import { detectedImageMimeType, randomToken, requireRole, storageAvailable, tokenHash, validUpload } from "../security.js";
 import { audit, cleanText, notify, sendMail, sendMailSafely, sendSubmissionUpdateEmail, sendTrackingEmail, verifyMailTransport } from "../services.js";
 import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js";
 import type { AuthenticatedRequest } from "../types.js";
@@ -29,6 +29,15 @@ const mutableProjectStatuses = ["planned", "in_progress", "on_hold", "complete_m
 const completeLikeProjectStatuses = new Set<string>(["complete_monitoring", "completed"]);
 const staffPassword = z.string().min(12).max(200).regex(/[A-Z]/).regex(/[a-z]/).regex(/[0-9]/);
 const maxProjectLinks = 4;
+
+function normalizeImageUploads(files: Express.Multer.File[]) {
+  for (const file of files) {
+    const detectedMimeType = detectedImageMimeType(file.buffer);
+    if (!detectedMimeType) return false;
+    file.mimetype = detectedMimeType;
+  }
+  return true;
+}
 
 const projectLinkSchema = z.object({
   title: z.string().trim().max(80).optional().default(""),
@@ -248,7 +257,7 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Check this showcase card" });
     const file = req.file;
-    if (file && (!["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file))) {
+    if (file && !normalizeImageUploads([file])) {
       return res.status(400).json({ error: "Cover photos must be valid JPG, PNG, or WebP images" });
     }
     if (file && !(await storageAvailable(file.size))) return res.status(507).json({ error: "Storage capacity is too low for this cover photo" });
@@ -375,7 +384,7 @@ staffRouter.post("/showcase/projects/:id/gallery/upload", requireRole("admin", "
     if (!files.length) return res.status(400).json({ error: "Choose at least one gallery image" });
     const count = (db.prepare("SELECT COUNT(*) AS count FROM showcase_project_gallery WHERE project_id = ?").get(req.params.id) as { count: number }).count;
     if (count + files.length > 12) return res.status(400).json({ error: "A portfolio can contain up to 12 gallery images" });
-    if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file))) {
+    if (!normalizeImageUploads(files)) {
       return res.status(400).json({ error: "Gallery images must be valid JPG, PNG, or WebP files" });
     }
     if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) {
@@ -662,7 +671,7 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Add a progress update between 3 and 1000 characters" });
     const files = (req.files as Express.Multer.File[]) ?? [];
-    if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file))) {
+    if (!normalizeImageUploads(files)) {
       return res.status(400).json({ error: "Progress photos must be valid JPG, PNG, or WebP images" });
     }
     if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) {
@@ -830,7 +839,7 @@ staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"),
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Check the progress update details" });
     const files = (req.files as Express.Multer.File[]) ?? [];
-    if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) || !validUpload(file))) {
+    if (!normalizeImageUploads(files)) {
       return res.status(400).json({ error: "Progress photos must be valid JPG, PNG, or WebP images" });
     }
     if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) {

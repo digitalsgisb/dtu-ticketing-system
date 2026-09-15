@@ -25,18 +25,18 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState(saved.search || "");
   const [filter, setFilter] = useState(saved.filter || "all");
-  const [scope, setScope] = useState(myProjectsOnly ? "mine" : (saved.scope || "all"));
   const [progressFilter, setProgressFilter] = useState(saved.progressFilter || "all");
   const [deadlineFilter, setDeadlineFilter] = useState(saved.deadlineFilter || "all");
   const [sort, setSort] = useState(saved.sort || "updated_desc");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const load = () => api<any[]>("/api/staff/projects").then(setProjects);
 
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, []);
   useLiveRefresh(load);
   useEffect(() => {
-    sessionStorage.setItem(`dtu-project-preferences-${myProjectsOnly ? "mine" : "all"}`, JSON.stringify({ search, filter, scope, progressFilter, deadlineFilter, sort }));
-  }, [myProjectsOnly, search, filter, scope, progressFilter, deadlineFilter, sort]);
+    sessionStorage.setItem(`dtu-project-preferences-${myProjectsOnly ? "mine" : "all"}`, JSON.stringify({ search, filter, progressFilter, deadlineFilter, sort }));
+  }, [myProjectsOnly, search, filter, progressFilter, deadlineFilter, sort]);
   useEffect(() => {
     if (!projects) return;
     const scroll = Number(sessionStorage.getItem(projectScrollKey));
@@ -45,12 +45,11 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
     requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, scroll) }));
   }, [projects]);
 
-  const effectiveScope = myProjectsOnly ? "mine" : scope;
-  const hasActiveFilters = Boolean(search.trim()) || filter !== "all" || (!myProjectsOnly && scope !== "all") || progressFilter !== "all" || deadlineFilter !== "all" || sort !== "updated_desc";
+  const filterCount = Number(filter !== "all") + Number(progressFilter !== "all") + Number(deadlineFilter !== "all") + Number(sort !== "updated_desc");
+  const hasActiveFilters = Boolean(search.trim()) || filterCount > 0;
   const resetFilters = () => {
     setSearch("");
     setFilter("all");
-    if (!myProjectsOnly) setScope("all");
     setProgressFilter("all");
     setDeadlineFilter("all");
     setSort("updated_desc");
@@ -61,7 +60,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       const progress = projectProgress(project);
       const dueDays = daysUntil(project.due_date);
       const matchesStatus = filter === "all" || project.status === filter;
-      const matchesScope = effectiveScope === "all" || isOwnedBy(project, user);
+      const matchesScope = !myProjectsOnly || isOwnedBy(project, user);
       const matchesProgress = progressFilter === "all"
         || (progressFilter === "early" && progress < 35)
         || (progressFilter === "mid" && progress >= 35 && progress < 75)
@@ -75,7 +74,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       const haystack = `${project.name} ${project.project_no} ${project.department_name} ${project.owner_name ?? ""} ${project.current_update ?? ""} ${project.next_action ?? ""}`.toLowerCase();
       return matchesStatus && matchesScope && matchesProgress && matchesDeadline && haystack.includes(query);
     }).sort((left, right) => compareProjects(left, right, sort));
-  }, [projects, search, filter, effectiveScope, user, progressFilter, deadlineFilter, sort]);
+  }, [projects, search, filter, myProjectsOnly, user, progressFilter, deadlineFilter, sort]);
 
   if (!projects) return <Loading />;
 
@@ -103,28 +102,36 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       <div className="project-toolbar">
         <div className="project-toolbar-heading">
           <div><span className="eyebrow">Find projects</span><h2>Choose what you want to see</h2><p>Search first, then narrow the results only if needed.</p></div>
-          {hasActiveFilters && <button type="button" className="project-filter-reset" onClick={resetFilters}>Clear all filters</button>}
-        </div>
-        <div className="search-box project-search-box"><SearchIcon /><input aria-label="Search projects" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by project name, ID, owner, department, or update…" /></div>
-        <div className="project-filter-section">
-          <div className="project-filter-label"><strong>Project status</strong><small>Select a delivery stage</small></div>
-          <div className="project-filter-tabs" role="group" aria-label="Filter projects by status">
-            {projectStatusFilters.map(([value, label]) => <button type="button" aria-pressed={filter === value} key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value === "all" ? "All statuses" : label}</button>)}
+          <div className="project-toolbar-actions">
+            <nav className="project-scope-switch" aria-label="Choose project ownership">
+              <Link to="/projects" aria-current={!myProjectsOnly ? "page" : undefined} className={!myProjectsOnly ? "active" : ""}>All projects</Link>
+              <Link to="/my-projects" aria-current={myProjectsOnly ? "page" : undefined} className={myProjectsOnly ? "active" : ""}>My projects</Link>
+            </nav>
+            {hasActiveFilters && <button type="button" className="project-filter-reset" onClick={resetFilters}>Clear filters</button>}
           </div>
         </div>
-        <div className="project-advanced-filters">
-          {!myProjectsOnly && <label>Ownership<select value={scope} onChange={event => setScope(event.target.value)}>
-            <option value="all">Anyone's projects</option><option value="mine">Owned by me</option>
-          </select></label>}
-          <label>Completion<select value={progressFilter} onChange={event => setProgressFilter(event.target.value)}>
-            <option value="all">Any completion level</option><option value="early">Getting started (0–34%)</option><option value="mid">In delivery (35–74%)</option><option value="late">Nearly done (75–99%)</option><option value="done">Complete (100%)</option>
-          </select></label>
-          <label>Due date<select value={deadlineFilter} onChange={event => setDeadlineFilter(event.target.value)}>
-            <option value="all">Any due date</option><option value="overdue">Already overdue</option><option value="next14">Due within 14 days</option><option value="next30">Due within 30 days</option><option value="none">No due date set</option>
-          </select></label>
-          <label>Order results by<select value={sort} onChange={event => setSort(event.target.value)}>
-            <option value="updated_desc">Most recently updated</option><option value="project_no_asc">Project ID: low to high</option><option value="project_no_desc">Project ID: high to low</option><option value="created_desc">Newest projects first</option><option value="deadline_asc">Due date: soonest first</option><option value="progress_desc">Completion: highest first</option><option value="progress_asc">Completion: lowest first</option><option value="priority">Highest priority first</option>
-          </select></label>
+        <div className="search-box project-search-box"><SearchIcon /><input aria-label="Search projects" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by project name, ID, owner, department, or update…" /></div>
+        <button type="button" className="project-mobile-filter-trigger" aria-expanded={mobileFiltersOpen} aria-controls="project-filter-controls" onClick={() => setMobileFiltersOpen(open => !open)}>
+          <span>Filters{filterCount > 0 ? ` · ${filterCount} selected` : ""}</span><i aria-hidden="true">{mobileFiltersOpen ? "−" : "+"}</i>
+        </button>
+        <div id="project-filter-controls" className={`project-filter-controls ${mobileFiltersOpen ? "is-open" : ""}`}>
+          <div className="project-filter-section">
+            <div className="project-filter-label"><strong>Project status</strong><small>Select a delivery stage</small></div>
+            <div className="project-filter-tabs" role="group" aria-label="Filter projects by status">
+              {projectStatusFilters.map(([value, label]) => <button type="button" aria-pressed={filter === value} key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value === "all" ? "All statuses" : label}</button>)}
+            </div>
+          </div>
+          <div className="project-advanced-filters">
+            <label>Completion<select value={progressFilter} onChange={event => setProgressFilter(event.target.value)}>
+              <option value="all">Any completion level</option><option value="early">Getting started (0–34%)</option><option value="mid">In delivery (35–74%)</option><option value="late">Nearly done (75–99%)</option><option value="done">Complete (100%)</option>
+            </select></label>
+            <label>Due date<select value={deadlineFilter} onChange={event => setDeadlineFilter(event.target.value)}>
+              <option value="all">Any due date</option><option value="overdue">Already overdue</option><option value="next14">Due within 14 days</option><option value="next30">Due within 30 days</option><option value="none">No due date set</option>
+            </select></label>
+            <label>Order results by<select value={sort} onChange={event => setSort(event.target.value)}>
+              <option value="updated_desc">Most recently updated</option><option value="project_no_asc">Project ID: low to high</option><option value="project_no_desc">Project ID: high to low</option><option value="created_desc">Newest projects first</option><option value="deadline_asc">Due date: soonest first</option><option value="progress_desc">Completion: highest first</option><option value="progress_asc">Completion: lowest first</option><option value="priority">Highest priority first</option>
+            </select></label>
+          </div>
         </div>
         <div className="project-result-summary" aria-live="polite"><strong>Showing {filtered.length}</strong> of {projects.length} projects{hasActiveFilters ? " with the selected filters" : ""}</div>
       </div>
