@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { app } from "../server/app.js";
 import { db, resetDatabaseForTests, seedDatabase } from "../server/db.js";
-import { submissionUpdateEmailContent, trackingEmailContent } from "../server/services.js";
+import { projectHandoverEmailContent, submissionUpdateEmailContent, trackingEmailContent } from "../server/services.js";
 import fs from "node:fs";
 import path from "node:path";
 import { paths } from "../server/config.js";
@@ -470,6 +470,70 @@ describe("DTU Control Centre API", () => {
     expect(db.prepare("SELECT id FROM audit_events WHERE action = 'project_request_deleted' AND entity_id = ?").get(deletableRequestId)).toBeTruthy();
   });
 
+  it("syncs approved request progress and records a completed project handover", async () => {
+    const submitted = await request(app).post("/api/public/requests")
+      .set("Host", "requests.dtu.local").set("x-forwarded-proto", "https")
+      .field("title", "Digital maintenance checklist")
+      .field("department", "Engineering")
+      .field("requesterName", "Maintenance Requester")
+      .field("email", "maintenance@example.com")
+      .field("currentProblem", "Paper checklists make maintenance follow-up difficult to verify.")
+      .field("desiredOutcome", "Provide a digital checklist with a clear completion record.")
+      .field("urgency", "medium");
+    expect(submitted.status).toBe(201);
+    const trackingToken = submitted.body.trackingUrl.split("/track/")[1];
+    const requestRow = db.prepare("SELECT id FROM project_requests WHERE request_no = ?").get(submitted.body.requestNo) as { id: number };
+    const approved = await request(app).patch(`/api/staff/requests/${requestRow.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ status: "approved", triageNotes: "Approved for delivery", ownerId: null, dueDate: null });
+    expect(approved.status).toBe(200);
+    const projectId = approved.body.projectId as number;
+
+    const tooEarly = await request(app).post(`/api/staff/requests/${requestRow.id}/handover`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("handoverUrl", "https://systems.example.com/checklist")
+      .field("message", "The completed checklist is ready for your team.")
+      .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "handover.jpg", contentType: "image/jpeg" });
+    expect(tooEarly.status).toBe(409);
+
+    const progress = await request(app).patch(`/api/staff/projects/${projectId}/progress`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("status", "complete_monitoring").field("progress", "100")
+      .field("currentUpdate", "Final user acceptance testing is complete.")
+      .field("nextAction", "Prepare the formal requester handover.");
+    expect(progress.status).toBe(200);
+
+    const withoutPicture = await request(app).post(`/api/staff/requests/${requestRow.id}/handover`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("handoverUrl", "https://systems.example.com/checklist")
+      .field("message", "The completed checklist is ready for your team.");
+    expect(withoutPicture.status).toBe(400);
+
+    const handedOver = await request(app).post(`/api/staff/requests/${requestRow.id}/handover`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("handoverUrl", "systems.example.com/checklist")
+      .field("message", "The completed checklist is ready for your team.")
+      .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "handover.jpg", contentType: "image/jpeg" });
+    expect(handedOver.status).toBe(201);
+    expect(handedOver.body).toMatchObject({ recipient: "maintenance@example.com", emailSent: false });
+
+    const project = db.prepare("SELECT status, progress FROM projects WHERE id = ?").get(projectId) as { status: string; progress: number };
+    expect(project).toEqual({ status: "completed", progress: 100 });
+    const handover = db.prepare("SELECT handover_url, email_sent FROM project_handovers WHERE project_id = ?").get(projectId) as { handover_url: string; email_sent: number };
+    expect(handover).toEqual({ handover_url: "https://systems.example.com/checklist", email_sent: 0 });
+
+    const requestDetail = await request(app).get(`/api/staff/requests/${requestRow.id}`).set("Cookie", cookie);
+    expect(requestDetail.body.project).toMatchObject({ id: projectId, progress: 100, status: "completed" });
+    expect(requestDetail.body.handovers[0]).toMatchObject({ handover_url: "https://systems.example.com/checklist", image_count: 1 });
+    const requestList = await request(app).get("/api/staff/requests").set("Cookie", cookie);
+    expect(requestList.body.find((item: { id: number }) => item.id === requestRow.id)).toMatchObject({ project_progress: 100, project_status: "completed", handover_count: 1 });
+    const requesterView = await request(app).get(`/api/public/track/${trackingToken}`);
+    expect(requesterView.body.item).toMatchObject({
+      project_no: expect.stringMatching(/^PRJ-/), project_status: "completed", project_progress: 100,
+      handover_url: "https://systems.example.com/checklist"
+    });
+  });
+
   it("builds a complete, safe branded tracking email", () => {
     const email = trackingEmailContent({
       requesterName: "Aisha <script>", referenceNo: "REQ-2026-001", title: "Mobile progress & approvals",
@@ -501,6 +565,22 @@ describe("DTU Control Centre API", () => {
     expect(email.text).toContain("Progress: 35%");
     expect(email.html).toContain("View latest update");
     expect(email.html).toContain("Planning &lt;confirmed&gt;");
+    expect(email.html).not.toContain("Aisha <script>");
+  });
+
+  it("builds a complete, safe project handover email", () => {
+    const email = projectHandoverEmailContent({
+      requesterName: "Aisha <script>",
+      referenceNo: "REQ-2026-001",
+      projectNo: "PRJ-2026-010",
+      projectName: "Digital approval workflow",
+      handoverUrl: "https://systems.example.com/approval",
+      message: "The production workflow is complete and ready for your department."
+    });
+    expect(email.subject).toBe("Project completed and ready for handover – PRJ-2026-010");
+    expect(email.text).toContain("If you need any further discussion, clarification, or support, please let the Digital Transformation Unit (DTU) know.");
+    expect(email.html).toContain("Open project handover");
+    expect(email.html).toContain("Aisha &lt;script&gt;");
     expect(email.html).not.toContain("Aisha <script>");
   });
 

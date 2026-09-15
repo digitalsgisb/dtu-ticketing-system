@@ -436,8 +436,15 @@ publicRouter.get("/track/:token", (req, res) => {
     return res.json({ kind: "issue", item, comments, attachments });
   }
   const item = db.prepare(`
-    SELECT id, request_no AS reference_no, title, status, urgency AS priority, created_at, updated_at
-    FROM project_requests WHERE id = ?
+    SELECT pr.id, pr.request_no AS reference_no, pr.title, pr.status, pr.urgency AS priority,
+      pr.created_at, pr.updated_at, p.project_no, p.name AS project_name, p.status AS project_status,
+      p.progress AS project_progress, p.current_update AS project_current_update,
+      p.next_action AS project_next_action, p.progress_updated_at AS project_progress_updated_at,
+      (SELECT ph.handover_url FROM project_handovers ph
+        WHERE ph.project_id = p.id ORDER BY ph.created_at DESC, ph.id DESC LIMIT 1) AS handover_url
+    FROM project_requests pr
+    LEFT JOIN projects p ON p.id = pr.created_project_id
+    WHERE pr.id = ?
   `).get(token.project_request_id);
   const comments = db.prepare(`
     SELECT id, author_name, body, created_at FROM comments

@@ -51,7 +51,13 @@ export function notifyRoles(roles: string[], type: string, title: string, body: 
   for (const user of users) notify(user.id, type, title, body, link);
 }
 
-export async function sendMail(to: string | null | undefined, subject: string, text: string, html?: string) {
+export type MailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+};
+
+export async function sendMail(to: string | null | undefined, subject: string, text: string, html?: string, attachments?: MailAttachment[]) {
   if (!to || !config.smtp.host) return { sent: false, reason: "SMTP is not configured" };
   await getMailTransporter().sendMail({
     from: config.smtp.from,
@@ -59,15 +65,16 @@ export async function sendMail(to: string | null | undefined, subject: string, t
     subject,
     text,
     html,
+    attachments,
     disableFileAccess: true,
     disableUrlAccess: true
   });
   return { sent: true };
 }
 
-export async function sendMailSafely(to: string | null | undefined, subject: string, text: string, html?: string) {
+export async function sendMailSafely(to: string | null | undefined, subject: string, text: string, html?: string, attachments?: MailAttachment[]) {
   try {
-    return await sendMail(to, subject, text, html);
+    return await sendMail(to, subject, text, html, attachments);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown SMTP error";
     console.error(`Email delivery failed for ${to ?? "missing recipient"}: ${message}`);
@@ -195,6 +202,67 @@ ${safe.url ? `<table role="presentation" cellspacing="0" cellpadding="0"><tr><td
 export function sendSubmissionUpdateEmail(to: string | null | undefined, input: SubmissionUpdateEmailInput) {
   const content = submissionUpdateEmailContent(input);
   return sendMailSafely(to, content.subject, content.text, content.html);
+}
+
+export type ProjectHandoverEmailInput = {
+  requesterName: string;
+  referenceNo: string;
+  projectNo: string;
+  projectName: string;
+  handoverUrl: string;
+  message: string;
+  attachmentCount?: number;
+};
+
+export function projectHandoverEmailContent(input: ProjectHandoverEmailInput) {
+  const subject = `Project completed and ready for handover – ${input.projectNo}`;
+  const attachmentSentence = input.attachmentCount === 1
+    ? "The supporting handover picture attached to this email forms part of the completion record."
+    : "The supporting handover pictures attached to this email form part of the completion record.";
+  const text = `Dear ${input.requesterName},
+
+Your DTU project is complete and ready for handover.
+
+${input.message}
+
+Request reference: ${input.referenceNo}
+Project: ${input.projectNo} – ${input.projectName}
+Status: Completed
+Project handover link: ${input.handoverUrl}
+
+${attachmentSentence}
+
+If you need any further discussion, clarification, or support, please let the Digital Transformation Unit (DTU) know.
+
+Best regards,
+Digital Transformation Unit
+Sugihara Grand Industries Sdn Bhd`;
+  const safe = {
+    name: escapeHtml(input.requesterName),
+    reference: escapeHtml(input.referenceNo),
+    projectNo: escapeHtml(input.projectNo),
+    projectName: escapeHtml(input.projectName),
+    message: emailParagraphs(input.message),
+    url: escapeHtml(input.handoverUrl)
+  };
+  const html = `<!doctype html>
+<html lang="en"><body style="margin:0;background:#f2f6f7;font-family:Arial,Helvetica,sans-serif;color:#18384b">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f2f6f7;padding:28px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #dce7ea;border-radius:16px;overflow:hidden">
+<tr><td style="padding:26px 30px;background:#0b2638;color:#ffffff"><div style="font-size:11px;letter-spacing:1.7px;color:#6fd0c8;font-weight:bold">SUGIHARA GRAND INDUSTRIES SDN BHD</div><div style="margin-top:7px;font-size:22px;font-weight:bold">Digital Transformation Unit</div></td></tr>
+<tr><td style="padding:32px 30px"><div style="display:inline-block;margin-bottom:18px;padding:7px 11px;border-radius:999px;background:#e8f7f5;color:#147f7b;font-size:11px;font-weight:bold;letter-spacing:.7px;text-transform:uppercase">Project completed</div><p style="margin:0 0 16px">Dear ${safe.name},</p><h1 style="margin:0 0 14px;font-size:25px;line-height:1.25;color:#0b2638">Your project is ready for handover.</h1>${safe.message}
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:22px 0 26px;background:#f3f8f8;border-left:4px solid #2ba49d;border-radius:8px"><tr><td style="padding:18px"><div style="font-size:11px;color:#718995;text-transform:uppercase;letter-spacing:1px">Request reference</div><div style="margin:4px 0 13px;font-size:16px;font-weight:bold;color:#0b2638">${safe.reference}</div><div style="font-size:11px;color:#718995;text-transform:uppercase;letter-spacing:1px">Completed project</div><div style="margin-top:4px;font-size:14px;color:#25485c"><strong>${safe.projectNo}</strong> – ${safe.projectName}</div></td></tr></table>
+<table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="border-radius:9px;background:#168b86"><a href="${safe.url}" style="display:inline-block;padding:14px 22px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold">Open project handover</a></td></tr></table><p style="margin:18px 0 0;font-size:12px;line-height:1.6;color:#718995;word-break:break-all">Handover link:<br><a href="${safe.url}" style="color:#147f7b">${safe.url}</a></p>
+<div style="margin:22px 0 0;padding:16px;border:1px solid #dce7ea;border-radius:9px;color:#526d7b;font-size:13px;line-height:1.65">${escapeHtml(attachmentSentence)}</div>
+<p style="margin:22px 0 0;line-height:1.7;color:#25485c"><strong>If you need any further discussion, clarification, or support, please let the Digital Transformation Unit (DTU) know.</strong></p>
+<p style="margin:24px 0;border-top:1px solid #e4ecee"></p><p style="margin:0;line-height:1.6;color:#526d7b">Best regards,<br><strong style="color:#0b2638">Digital Transformation Unit</strong><br>Sugihara Grand Industries Sdn Bhd</p></td></tr>
+</table></td></tr></table></body></html>`;
+  return { subject, text, html };
+}
+
+export function sendProjectHandoverEmail(to: string | null | undefined, input: ProjectHandoverEmailInput, attachments: MailAttachment[]) {
+  const content = projectHandoverEmailContent({ ...input, attachmentCount: attachments.length });
+  return sendMailSafely(to, content.subject, content.text, content.html, attachments);
 }
 
 export async function verifyMailTransport() {

@@ -196,7 +196,7 @@ function SystemLinks({ links }: { links: any[] }) {
   </section>;
 }
 
-function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {
+export function ProgressUpdate({ project, onClose, onSaved }: { project: any; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
   const draftKey = `dtu-progress-draft-${project.id}`;
   const [form, setForm] = useState(() => {

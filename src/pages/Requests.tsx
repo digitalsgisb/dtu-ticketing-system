@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
+import { compressProgressImage } from "../progressImages";
+import { ProgressUpdate } from "./ProjectDetail";
+
+const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 
 export function RequestsPage() {
   const { t } = useI18n();
@@ -27,7 +31,7 @@ export function RequestsPage() {
     <div className="toolbar"><select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}><option value="">All stages</option>{["submitted","triage","needs_information","approved","rejected"].map(s => <option value={s} key={s}>{s.replaceAll("_"," ")}</option>)}</select><div className="result-count">{filtered.length} requests</div></div>
     {filtered.length ? <div className="request-list">{filtered.map(item => <Link to={`/requests/${item.id}`} className="request-card" key={item.id}>
       <div><span className="mono">{item.request_no}</span><Badge value={item.status} /></div><h2>{item.title}</h2><p>{item.current_problem}</p>
-      <footer><span><small>{t("department")}</small>{item.department_name}</span><span><small>Requested by</small>{item.requester_name}</span><span><small>{t("submitted")}</small>{formatDate(item.created_at)}</span><Badge value={item.urgency} kind="priority" /></footer>
+      <footer><span><small>{t("department")}</small>{item.department_name}</span><span><small>Requested by</small>{item.requester_name}</span><span><small>{t("submitted")}</small>{formatDate(item.created_at)}</span>{item.created_project_id && <span className="request-linked-progress"><small>{item.project_no} progress</small><strong>{completeLikeProjectStatuses.has(item.project_status) ? 100 : item.project_progress}%</strong></span>}<Badge value={item.urgency} kind="priority" /></footer>
     </Link>)}</div> : <Empty title="No project requests in this stage" />}
     {qr && <EmployeeRequestQrModal qr={qr} onClose={() => setQr(null)} />}
   </>;
@@ -76,6 +80,9 @@ export function RequestDetailPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState("");
+  const [updatingProgress, setUpdatingProgress] = useState(false);
+  const [showHandover, setShowHandover] = useState(false);
+  const [handoverNotice, setHandoverNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const load = (syncForm = true) => api(`/api/staff/requests/${id}`).then((d: any) => {
     setData(d);
     if (syncForm) setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "" }));
@@ -85,6 +92,9 @@ export function RequestDetailPage() {
   useLiveRefresh(() => load(false));
   if (!data) return <Loading />;
   const item = data.item;
+  const project = data.project;
+  const displayedProgress = project ? (completeLikeProjectStatuses.has(project.status) ? 100 : Number(project.progress ?? 0)) : 0;
+  const handoverReady = Boolean(project && project.status !== "cancelled" && displayedProgress === 100);
   const update = async (status: string) => {
     setError("");
     setDecisionBusy(status);
@@ -156,6 +166,26 @@ export function RequestDetailPage() {
           <div className="detail-facts"><div><small>Expected users</small><strong>{item.expected_users || "—"}</strong></div><div><small>Target date</small><strong>{formatDate(item.target_date)}</strong></div><div><small>Contact</small><strong>{item.requester_email}</strong></div></div>
           {data.attachments?.length > 0 && <div className="request-attachment-block"><span className="eyebrow">Proposal attachments</span><div className="attachment-list">{data.attachments.map((attachment: any) => <a href={`/api/staff/attachments/${attachment.id}`} key={attachment.id}>📎 {attachment.original_name}</a>)}</div></div>}
         </section>
+        {project && <section className="panel request-project-delivery">
+          <div className="panel-heading"><div><span className="eyebrow">Approved project</span><h2>Delivery progress</h2></div><Badge value={project.status} /></div>
+          <div className={`request-project-summary${project.latest_image_id ? " has-image" : ""}`}>
+            {project.latest_image_id && <img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} />}
+            <div>
+              <div className="request-project-title"><span className="mono">{project.project_no}</span><strong>{project.name}</strong></div>
+              <div className="project-progress"><div><span>Progress shared with My Projects</span><strong>{displayedProgress}%</strong></div><div className="bar"><i style={{ width: `${displayedProgress}%` }} /></div></div>
+              {project.current_update ? <p>{project.current_update}</p> : <p className="project-update-empty">No progress update has been published yet.</p>}
+              {project.next_action && <small>Next: {project.next_action}</small>}
+            </div>
+          </div>
+          <div className="request-project-actions">
+            <Link className="button button-secondary" to={`/projects/${project.id}`}>Open in My Projects</Link>
+            <button className="button button-secondary" onClick={() => setUpdatingProgress(true)}>Update progress</button>
+            {handoverReady && <button className="button button-primary" onClick={() => setShowHandover(true)}>{data.handovers?.length ? "Send another handover" : "Project handover"}</button>}
+          </div>
+          {!handoverReady && <div className="notice">The Project handover button will appear when progress reaches 100%.</div>}
+          {handoverNotice && <div className={`notice ${handoverNotice.kind === "success" ? "notice-success" : "notice-error"}`} role="status">{handoverNotice.text}</div>}
+          {data.handovers?.length > 0 && <div className="handover-history"><span className="eyebrow">Handover history</span>{data.handovers.map((handover: any) => <article key={handover.id}><div><a href={handover.handover_url} target="_blank" rel="noreferrer">Open handover link ↗</a><small>{formatDate(handover.created_at, true)} · {handover.image_count} picture{handover.image_count === 1 ? "" : "s"}</small></div><Badge value={handover.email_sent ? "email_sent" : "email_failed"} /></article>)}</div>}
+        </section>}
         <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Discussion</span><h2>{t("comments")}</h2></div></div>
           {data.comments.length ? <div className="comment-list">{data.comments.map((c: any) => <article className="comment" key={c.id}><div className="avatar">{c.author_name[0]}</div><div><div><strong>{c.author_name}</strong><span>{formatDate(c.created_at, true)}</span></div><p>{c.body}</p></div></article>)}</div> : <Empty title="No updates yet" />}
           <div className="comment-form"><textarea rows={3} value={comment} onChange={e => setComment(e.target.value)} placeholder="Ask a question or record a triage note…" /><div><label className="checkbox"><input type="checkbox" checked={publicVisible} onChange={e => setPublicVisible(e.target.checked)} />{t("publicUpdate")}</label><button className="button button-primary" onClick={() => void addComment()}>{t("addComment")}</button></div></div>
@@ -193,5 +223,78 @@ export function RequestDetailPage() {
         <div className="form-actions"><button className="button button-secondary" disabled={deleting} onClick={() => setShowDelete(false)}>Cancel</button><button className="button button-danger" disabled={deleting} onClick={() => void deleteRequest()}>{deleting ? "Deleting…" : "Delete permanently"}</button></div>
       </div>
     </Modal>}
+    {updatingProgress && project && <ProgressUpdate project={project} onClose={() => setUpdatingProgress(false)} onSaved={() => { setUpdatingProgress(false); void load(); }} />}
+    {showHandover && project && <ProjectHandoverModal request={item} project={project} onClose={() => setShowHandover(false)} onSent={async result => {
+      setShowHandover(false);
+      setHandoverNotice(result.emailSent
+        ? { kind: "success", text: `Project handover emailed successfully to ${result.recipient}.` }
+        : { kind: "error", text: `Handover saved, but the email was not sent: ${result.emailReason || "mail delivery failed"}.` });
+      await load();
+    }} />}
   </>;
+}
+
+function ProjectHandoverModal({ request, project, onClose, onSent }: {
+  request: any;
+  project: any;
+  onClose: () => void;
+  onSent: (result: { recipient: string; emailSent: boolean; emailReason?: string }) => void | Promise<void>;
+}) {
+  const [handoverUrl, setHandoverUrl] = useState("");
+  const [message, setMessage] = useState(`We are pleased to confirm that ${project.name} has been completed and is ready for your use.`);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+  useEffect(() => () => previews.forEach(URL.revokeObjectURL), [previews]);
+  const chooseFiles = async (list: FileList | null) => {
+    setError("");
+    const selected = Array.from(list ?? []).slice(0, Math.max(0, 4 - files.length));
+    if (!selected.length) return;
+    try {
+      const compressed = await Promise.all(selected.map(compressProgressImage));
+      setFiles(current => [...current, ...compressed].slice(0, 4));
+      setPreviews(current => [...current, ...compressed.map(file => URL.createObjectURL(file))].slice(0, 4));
+    } catch (err) { setError((err as Error).message); }
+  };
+  const removeFile = (index: number) => {
+    URL.revokeObjectURL(previews[index]);
+    setFiles(current => current.filter((_, itemIndex) => itemIndex !== index));
+    setPreviews(current => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!files.length) { setError("Add at least one handover picture."); return; }
+    setError("");
+    setSending(true);
+    const body = new FormData();
+    body.set("handoverUrl", handoverUrl);
+    body.set("message", message);
+    files.forEach(file => body.append("images", file));
+    try {
+      const result = await api<{ recipient: string; emailSent: boolean; emailReason?: string }>(`/api/staff/requests/${request.id}/handover`, { method: "POST", body });
+      await onSent(result);
+    } catch (err) {
+      setError((err as Error).message);
+      setSending(false);
+    }
+  };
+  return <Modal title="Project handover" onClose={onClose} wide>
+    <form className="form-stack handover-form" onSubmit={send}>
+      <ErrorNotice message={error} />
+      <div className="handover-recipient"><span className="eyebrow">Email recipient</span><strong>{request.requester_name}</strong><small>{request.requester_email}</small></div>
+      <div className="notice notice-success">This will mark {project.project_no} as completed and email the requester a full handover with the link and attached pictures.</div>
+      <label>Project handover link<input required type="url" inputMode="url" maxLength={1000} value={handoverUrl} onChange={event => setHandoverUrl(event.target.value)} placeholder="https://your-completed-project-link.com" /></label>
+      <label>Handover message<textarea required minLength={3} maxLength={2000} rows={5} value={message} onChange={event => setMessage(event.target.value)} /><small>The email automatically includes the project reference, completed status, handover link, DTU contact note, and company sign-off.</small></label>
+      <section className="quick-photo-control">
+        <div><span><span className="eyebrow">Completion evidence</span><h3>Handover pictures <small>Required · up to 4</small></h3></span><b>{files.length}/4</b></div>
+        <div className="quick-photo-actions">
+          <label className="button button-primary">📷 Take picture<input type="file" accept="image/*" capture="environment" onChange={event => { void chooseFiles(event.target.files); event.target.value = ""; }} /></label>
+          <label className="button button-secondary">＋ Choose pictures<input type="file" accept="image/*,.heic,.heif" multiple onChange={event => { void chooseFiles(event.target.files); event.target.value = ""; }} /></label>
+        </div>
+      </section>
+      {previews.length > 0 && <div className="briefing-upload-previews progress-photo-previews">{previews.map((preview, index) => <figure key={preview}><img src={preview} alt={`Selected handover ${index + 1}`} /><button type="button" aria-label={`Remove picture ${index + 1}`} onClick={() => removeFile(index)}>×</button></figure>)}</div>}
+      <div className="form-actions"><button type="button" className="button button-secondary" disabled={sending} onClick={onClose}>Cancel</button><button className="button button-primary" disabled={sending || !handoverUrl.trim() || message.trim().length < 3 || files.length === 0}>{sending ? "Sending handover…" : "Complete & email handover"}</button></div>
+    </form>
+  </Modal>;
 }

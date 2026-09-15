@@ -173,6 +173,21 @@ CREATE TABLE IF NOT EXISTS project_update_images (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS project_handovers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  project_request_id INTEGER REFERENCES project_requests(id) ON DELETE SET NULL,
+  project_update_id INTEGER REFERENCES project_updates(id) ON DELETE SET NULL,
+  handover_url TEXT NOT NULL,
+  message TEXT NOT NULL,
+  handed_over_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  handed_over_by_name TEXT NOT NULL,
+  recipient_email TEXT NOT NULL,
+  email_sent INTEGER NOT NULL DEFAULT 0,
+  email_error TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS project_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -281,6 +296,7 @@ CREATE INDEX IF NOT EXISTS idx_work_project ON work_items(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_project_updates_project ON project_updates(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_project_update_images_update ON project_update_images(project_update_id);
+CREATE INDEX IF NOT EXISTS idx_project_handovers_project ON project_handovers(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_project_links_project ON project_links(project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_showcase_projects_order ON showcase_projects(visible, sort_order);
 CREATE INDEX IF NOT EXISTS idx_showcase_gallery_project ON showcase_project_gallery(project_id, sort_order);
@@ -431,7 +447,7 @@ export async function seedDatabase() {
 export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== "test") return;
   for (const table of [
-    "showcase_project_gallery", "showcase_projects", "showcase_settings", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
+    "showcase_project_gallery", "showcase_projects", "showcase_settings", "project_handovers", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
     "work_items", "projects", "project_requests", "sessions", "login_attempts",
     "import_batches", "users", "departments", "counters"
   ]) {

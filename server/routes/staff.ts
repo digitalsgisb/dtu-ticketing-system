@@ -9,7 +9,7 @@ import { z } from "zod";
 import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
 import { detectedImageMimeType, randomToken, requireRole, storageAvailable, tokenHash, validUpload } from "../security.js";
-import { audit, cleanText, notify, sendMail, sendMailSafely, sendSubmissionUpdateEmail, sendTrackingEmail, verifyMailTransport } from "../services.js";
+import { audit, cleanText, notify, sendMail, sendMailSafely, sendProjectHandoverEmail, sendSubmissionUpdateEmail, sendTrackingEmail, verifyMailTransport } from "../services.js";
 import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { malaysiaDate } from "../time.js";
@@ -1088,7 +1088,15 @@ staffRouter.get("/attachments/:id", (req, res) => {
 });
 
 staffRouter.get("/requests", requireRole("admin", "lead"), (_req, res) => {
-  res.json(db.prepare("SELECT * FROM project_requests ORDER BY updated_at DESC").all());
+  res.json(db.prepare(`
+    SELECT pr.*, p.project_no, p.name AS project_name, p.status AS project_status,
+      p.progress AS project_progress, p.current_update AS project_current_update,
+      p.progress_updated_at AS project_progress_updated_at,
+      (SELECT COUNT(*) FROM project_handovers ph WHERE ph.project_id = p.id) AS handover_count
+    FROM project_requests pr
+    LEFT JOIN projects p ON p.id = pr.created_project_id
+    ORDER BY pr.updated_at DESC
+  `).all());
 });
 
 staffRouter.get("/requests/intake-qr", requireRole("admin", "lead"), async (req, res) => {
@@ -1103,11 +1111,119 @@ staffRouter.get("/requests/intake-qr", requireRole("admin", "lead"), async (req,
 });
 
 staffRouter.get("/requests/:id", requireRole("admin", "lead"), (req, res) => {
-  const item = db.prepare("SELECT * FROM project_requests WHERE id = ?").get(req.params.id);
+  const item = db.prepare("SELECT * FROM project_requests WHERE id = ?").get(req.params.id) as { created_project_id?: number | null } | undefined;
   if (!item) return res.status(404).json({ error: "Request not found" });
   const comments = db.prepare("SELECT * FROM comments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
   const attachments = db.prepare("SELECT id, original_name, mime_type, size, created_at FROM attachments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
-  res.json({ item, comments, attachments });
+  const project = item.created_project_id ? db.prepare(`
+    SELECT p.*, u.name AS owner_name, updater.name AS progress_updated_by_name,
+      (SELECT pui.id FROM project_update_images pui
+        JOIN project_updates pu ON pu.id = pui.project_update_id
+        WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id
+    FROM projects p
+    LEFT JOIN users u ON u.id = p.owner_id
+    LEFT JOIN users updater ON updater.id = p.progress_updated_by
+    WHERE p.id = ?
+  `).get(item.created_project_id) : null;
+  const handovers = item.created_project_id ? db.prepare(`
+    SELECT ph.*, COUNT(pui.id) AS image_count
+    FROM project_handovers ph
+    LEFT JOIN project_update_images pui ON pui.project_update_id = ph.project_update_id
+    WHERE ph.project_id = ?
+    GROUP BY ph.id
+    ORDER BY ph.created_at DESC, ph.id DESC
+  `).all(item.created_project_id) : [];
+  res.json({ item, project, handovers, comments, attachments });
+});
+
+staffRouter.post("/requests/:id/handover", requireRole("admin", "lead"), progressUpload.array("images", 4), async (req, res, next) => {
+  const storedNames: string[] = [];
+  let persisted = false;
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const parsed = z.object({
+      handoverUrl: z.string().trim().min(1).max(1000),
+      message: z.string().trim().min(3).max(2000)
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Add the handover link and a complete message for the requester" });
+    let handoverUrl = "";
+    try { handoverUrl = normalizeProjectUrl(parsed.data.handoverUrl); }
+    catch { return res.status(400).json({ error: "Enter a valid http or https handover link" }); }
+    const linked = db.prepare(`
+      SELECT pr.id AS request_id, pr.request_no, pr.title, pr.requester_name, pr.requester_email,
+        p.id AS project_id, p.project_no, p.name AS project_name, p.status, p.progress
+      FROM project_requests pr
+      JOIN projects p ON p.id = pr.created_project_id
+      WHERE pr.id = ?
+    `).get(req.params.id) as {
+      request_id: number; request_no: string; title: string; requester_name: string; requester_email: string;
+      project_id: number; project_no: string; project_name: string; status: string; progress: number;
+    } | undefined;
+    if (!linked) return res.status(404).json({ error: "This request does not have an approved project to hand over" });
+    if (linked.status === "cancelled" || (!completeLikeProjectStatuses.has(linked.status) && linked.progress < 100)) {
+      return res.status(409).json({ error: "Set the project progress to 100% before sending the handover" });
+    }
+    const files = (req.files as Express.Multer.File[]) ?? [];
+    if (files.length === 0) return res.status(400).json({ error: "Add at least one handover picture" });
+    if (!normalizeImageUploads(files)) return res.status(400).json({ error: "Handover pictures must be valid JPG, PNG, or WebP images" });
+    if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) {
+      return res.status(507).json({ error: "Storage capacity is too low for these handover pictures" });
+    }
+    for (const file of files) {
+      const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
+      const storedName = `${crypto.randomUUID()}${ext}`;
+      await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
+      storedNames.push(storedName);
+    }
+    const message = cleanText(parsed.data.message, 2000);
+    const completionNote = `Project handover sent to ${linked.requester_name}. ${message}`;
+    const nextAction = "For further discussion, clarification, or support, please contact the Digital Transformation Unit (DTU).";
+    const ids = db.transaction(() => {
+      db.prepare(`
+        UPDATE projects SET status = 'completed', progress = 100, current_update = ?, next_action = ?,
+          progress_updated_at = CURRENT_TIMESTAMP, progress_updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(completionNote, nextAction, authReq.user.id, linked.project_id);
+      db.prepare("UPDATE project_requests SET updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(linked.request_id);
+      const update = db.prepare(`
+        INSERT INTO project_updates(project_id, author_user_id, author_name, body, next_action, status, progress)
+        VALUES (?, ?, ?, ?, ?, 'completed', 100)
+      `).run(linked.project_id, authReq.user.id, authReq.user.name, completionNote, nextAction);
+      const updateId = Number(update.lastInsertRowid);
+      files.forEach((file, index) => db.prepare(`
+        INSERT INTO project_update_images(project_update_id, original_name, stored_name, mime_type, size)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(updateId, cleanText(file.originalname, 255), storedNames[index], file.mimetype, file.size));
+      const handover = db.prepare(`
+        INSERT INTO project_handovers(project_id, project_request_id, project_update_id, handover_url, message,
+          handed_over_by, handed_over_by_name, recipient_email)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(linked.project_id, linked.request_id, updateId, handoverUrl, message, authReq.user.id, authReq.user.name, linked.requester_email);
+      return { updateId, handoverId: Number(handover.lastInsertRowid) };
+    })();
+    persisted = true;
+    const delivery = await sendProjectHandoverEmail(linked.requester_email, {
+      requesterName: linked.requester_name,
+      referenceNo: linked.request_no,
+      projectNo: linked.project_no,
+      projectName: linked.project_name,
+      handoverUrl,
+      message
+    }, files.map(file => ({ filename: cleanText(file.originalname, 255), content: file.buffer, contentType: file.mimetype })));
+    db.prepare("UPDATE project_handovers SET email_sent = ?, email_error = ? WHERE id = ?")
+      .run(delivery.sent ? 1 : 0, delivery.sent ? null : cleanText(delivery.reason, 1000), ids.handoverId);
+    audit(authReq.user, "project_handed_over", "project", linked.project_id, {
+      requestId: linked.request_id, handoverId: ids.handoverId, handoverUrl, recipient: linked.requester_email,
+      images: files.length, emailSent: delivery.sent
+    }, req.ip);
+    res.status(201).json({
+      ok: true, handoverId: ids.handoverId, recipient: linked.requester_email,
+      emailSent: delivery.sent, emailReason: delivery.sent ? undefined : delivery.reason
+    });
+  } catch (error) {
+    if (!persisted) await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
+    next(error);
+  }
 });
 
 staffRouter.delete("/requests/:id", requireRole("admin", "lead"), async (req, res, next) => {
