@@ -4,6 +4,7 @@ import { AlertIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icon
 import { Badge, Loading, StatCard } from "../components/UI";
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
+import { useLiveRefresh } from "../live";
 
 type WallboardView = "overview" | "projects" | "tickets";
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
@@ -31,13 +32,12 @@ export function WallboardPage() {
     previousTicketIds.current = nextIds;
     setData(next);
   };
+  useLiveRefresh(load, "/api/wallboard/live");
 
   useEffect(() => {
     void load();
-    const refreshTimer = setInterval(() => void load(), 30_000);
     const clockTimer = setInterval(() => setNow(new Date()), 1_000);
     return () => {
-      clearInterval(refreshTimer);
       clearInterval(clockTimer);
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
     };

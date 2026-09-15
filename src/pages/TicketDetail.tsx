@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { Badge, Empty, ErrorNotice, Loading, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
+import { useLiveRefresh } from "../live";
 
 export function TicketDetailPage() {
   const { id } = useParams();
@@ -12,6 +13,7 @@ export function TicketDetailPage() {
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/tickets/${id}`).then(setData).catch(e => setError(e.message));
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, [id]);
+  useLiveRefresh(load);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const item = data.item;

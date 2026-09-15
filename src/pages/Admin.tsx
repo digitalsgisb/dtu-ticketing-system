@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, json } from "../api";
 import { useAuth } from "../auth";
 import { Badge, ErrorNotice, Loading, Modal, PageHeader, PasswordInput } from "../components/UI";
+import { useLiveRefresh } from "../live";
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export function AdminPage() {
     void api("/api/staff/system/storage").then(setStorage);
   };
   useEffect(load, []);
+  useLiveRefresh(load);
   if (!users) return <Loading />;
   return <>
     <PageHeader eyebrow="System management" title="Administration" description="Manage access, organization data, imports, and deployment health." />

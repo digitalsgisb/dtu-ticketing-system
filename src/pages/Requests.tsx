@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
+import { useLiveRefresh } from "../live";
 
 export function RequestsPage() {
   const { t } = useI18n();
@@ -10,7 +11,9 @@ export function RequestsPage() {
   const [status, setStatus] = useState("");
   const [qr, setQr] = useState<any>(null);
   const [qrError, setQrError] = useState("");
-  useEffect(() => { void api<any[]>("/api/staff/requests").then(setItems); }, []);
+  const load = () => api<any[]>("/api/staff/requests").then(setItems);
+  useEffect(() => { void load(); }, []);
+  useLiveRefresh(load);
   const showQr = async () => {
     setQrError("");
     try { setQr(await api("/api/staff/requests/intake-qr")); }
@@ -57,6 +60,7 @@ function EmployeeRequestQrModal({ qr, onClose }: { qr: any; onClose: () => void 
 
 export function RequestDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { t } = useI18n();
   const [data, setData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -69,12 +73,15 @@ export function RequestDetailPage() {
   const [trackingBusy, setTrackingBusy] = useState<"open" | "email" | "">("");
   const [trackingNotice, setTrackingNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [trackingCopied, setTrackingCopied] = useState(false);
-  const load = () => api(`/api/staff/requests/${id}`).then((d: any) => {
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const load = (syncForm = true) => api(`/api/staff/requests/${id}`).then((d: any) => {
     setData(d);
-    setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "" }));
+    if (syncForm) setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "" }));
     setPublicBaseUrl(current => current || d.item.public_origin || window.location.origin);
   });
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, [id]);
+  useLiveRefresh(() => load(false));
   if (!data) return <Loading />;
   const item = data.item;
   const update = async (status: string) => {
@@ -119,8 +126,20 @@ export function RequestDetailPage() {
       window.setTimeout(() => setTrackingCopied(false), 1800);
     } catch { setTrackingNotice({ kind: "error", text: "Copy failed. Select and copy the link manually." }); }
   };
+  const deleteRequest = async () => {
+    setDeleting(true);
+    setError("");
+    try {
+      await api(`/api/staff/requests/${id}`, { method: "DELETE" });
+      navigate("/requests", { replace: true });
+    } catch (e) {
+      setError((e as Error).message);
+      setDeleting(false);
+      setShowDelete(false);
+    }
+  };
   return <>
-    <PageHeader eyebrow={item.request_no} title={item.title} description={`Requested by ${item.requester_name} · ${item.department_name}`} actions={<><Badge value={item.urgency} kind="priority" /><Badge value={item.status} /></>} />
+    <PageHeader eyebrow={item.request_no} title={item.title} description={`Requested by ${item.requester_name} · ${item.department_name}`} actions={<><Badge value={item.urgency} kind="priority" /><Badge value={item.status} /><button className="button button-danger" onClick={() => setShowDelete(true)}>Delete request</button></>} />
     <ErrorNotice message={error} />
     <div className="detail-layout">
       <div className="detail-main">
@@ -155,5 +174,12 @@ export function RequestDetailPage() {
         {item.created_project_id && <Link className="notice notice-success" to={`/projects/${item.created_project_id}`}>Project created — open it →</Link>}
       </aside>
     </div>
+    {showDelete && <Modal title="Delete project request?" onClose={() => !deleting && setShowDelete(false)}>
+      <div className="form-stack">
+        <p>This permanently deletes <strong>{item.request_no} · {item.title}</strong>, its discussion, attachments, and private tracking links.</p>
+        {item.created_project_id && <div className="notice">The approved project will be kept. Only its link back to this request will be removed.</div>}
+        <div className="form-actions"><button className="button button-secondary" disabled={deleting} onClick={() => setShowDelete(false)}>Cancel</button><button className="button button-danger" disabled={deleting} onClick={() => void deleteRequest()}>{deleting ? "Deleting…" : "Delete permanently"}</button></div>
+      </div>
+    </Modal>}
   </>;
 }

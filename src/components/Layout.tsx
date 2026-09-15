@@ -8,6 +8,7 @@ import { api, json } from "../api";
 import { ErrorNotice, Modal, PasswordInput } from "./UI";
 import { CompanyLogo } from "./CompanyLogo";
 import { showDeviceNotification, usePwa } from "../pwa";
+import { useLiveRefresh } from "../live";
 
 type NavItem = readonly [to: string, label: string, icon: ReactNode];
 type NotificationSummary = {
@@ -69,6 +70,7 @@ export function Layout() {
       window.removeEventListener("notifications-changed", loadUnread);
     };
   }, [user]);
+  useLiveRefresh(() => window.dispatchEvent(new Event("notifications-changed")));
 
   useEffect(() => {
     setMobileOpen(false);

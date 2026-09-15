@@ -4,6 +4,7 @@ import { api, humanize, json } from "../api";
 import { CompanyLogo } from "../components/CompanyLogo";
 import { ErrorNotice, Loading, PageHeader } from "../components/UI";
 import { compressProgressImage } from "../progressImages";
+import { useLiveRefresh } from "../live";
 
 type ShowcaseProject = {
   id: number;
@@ -77,6 +78,7 @@ export function ShowcasePage() {
     setError("");
   }).catch(e => setError(e.message));
   useEffect(() => { void load(); }, []);
+  useLiveRefresh(load);
 
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
@@ -385,6 +387,7 @@ function ShowcaseGalleryManager({ projectId }: { projectId: number }) {
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/showcase/projects/${projectId}/gallery`).then(setData).catch(e => setError(e.message));
   useEffect(() => { void load(); }, [projectId]);
+  useLiveRefresh(load);
 
   const upload = async () => {
     if (!files.length) return;
@@ -448,15 +451,14 @@ export function PublicShowcasePage() {
   const rail = useRef<HTMLDivElement>(null);
   const activeRef = useRef(0);
   const lastInteraction = useRef(Date.now());
+  const load = () => api(`/api/public/showcase/${token}`).then(next => {
+    setData(next);
+    setError("");
+  }).catch(e => setError(e.message));
   useEffect(() => {
-    const load = () => void api(`/api/public/showcase/${token}`).then(next => {
-      setData(next);
-      setError("");
-    }).catch(e => setError(e.message));
-    load();
-    const interval = window.setInterval(load, 30_000);
-    return () => window.clearInterval(interval);
+    void load();
   }, [token]);
+  useLiveRefresh(load, "/api/public/live");
 
   const move = (index: number) => {
     const element = rail.current;
@@ -604,6 +606,7 @@ function PortfolioCaseModal({ token, projectId, onClose }: { token: string; proj
   const [activeProjectId, setActiveProjectId] = useState(projectId);
   const [data, setData] = useState<PortfolioCaseData | null>(null);
   const [error, setError] = useState("");
+  const load = () => api(`/api/public/showcase/${token}/projects/${activeProjectId}`).then(next => { setData(next); setError(""); }).catch(e => setError(e.message));
 
   useEffect(() => { setActiveProjectId(projectId); }, [projectId]);
   useEffect(() => {
@@ -612,6 +615,7 @@ function PortfolioCaseModal({ token, projectId, onClose }: { token: string; proj
     void api(`/api/public/showcase/${token}/projects/${activeProjectId}`).then(next => { if (current) setData(next); }).catch(e => { if (current) setError(e.message); });
     return () => { current = false; };
   }, [token, activeProjectId]);
+  useLiveRefresh(load, "/api/public/live");
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -636,11 +640,13 @@ export function PublicShowcaseDetailPage() {
   const { token = "", projectId = "" } = useParams();
   const [data, setData] = useState<PortfolioCaseData | null>(null);
   const [error, setError] = useState("");
+  const load = () => api(`/api/public/showcase/${token}/projects/${projectId}`).then(next => { setData(next); setError(""); }).catch(e => setError(e.message));
   useEffect(() => {
     setData(null); setError("");
     window.scrollTo({ top: 0, behavior: "auto" });
-    void api(`/api/public/showcase/${token}/projects/${projectId}`).then(setData).catch(e => setError(e.message));
+    void load();
   }, [token, projectId]);
+  useLiveRefresh(load, "/api/public/live");
 
   if (error) return <div className="guest-showcase guest-showcase-closed"><CompanyLogo /><div><span>Portfolio case study</span><h1>Unable to open this project.</h1><p>{error}</p><Link className="guest-showcase-explore" to={`/showcase/${token}`}>Back to portfolio</Link></div></div>;
   if (!data) return <div className="guest-showcase"><Loading /></div>;

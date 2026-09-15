@@ -4,6 +4,7 @@ import { api, formatDate, json } from "../api";
 import { ArrowIcon, CheckIcon, ClockIcon, PlusIcon, ProjectIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader, StatCard } from "../components/UI";
 import { compressProgressImage } from "../progressImages";
+import { useLiveRefresh } from "../live";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusOptions = [
@@ -52,11 +53,13 @@ export function ProgressBriefingPage() {
   const [sort, setSort] = useState(saved.sort || "updated_desc");
   const [search, setSearch] = useState(saved.search || "");
   const [error, setError] = useState("");
+  const load = () => api("/api/staff/briefing").then(next => { setData(next); setError(""); }).catch(err => setError(err.message));
   useEffect(() => {
     document.title = "Progress Briefing · DTU";
-    void api("/api/staff/briefing").then(setData).catch(err => setError(err.message));
+    void load();
     return () => { document.title = "DTU Control Centre"; };
   }, []);
+  useLiveRefresh(load);
   useEffect(() => {
     sessionStorage.setItem(briefingPreferenceKey, JSON.stringify({ filter, progressFilter, deadlineFilter, freshnessFilter, sort, search }));
   }, [filter, progressFilter, deadlineFilter, freshnessFilter, sort, search]);
@@ -170,6 +173,7 @@ export function BriefingProjectPage() {
   const [selectedImage, setSelectedImage] = useState<any>(null);
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/briefing/projects/${id}`).then(next => { setData(next); setError(""); }).catch(err => setError(err.message));
+  useLiveRefresh(load);
   useEffect(() => {
     let cancelled = false;
     const changingProject = data !== null;

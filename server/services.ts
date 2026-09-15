@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { db } from "./db.js";
 import { config } from "./config.js";
+import { publishLiveUpdate } from "./liveUpdates.js";
 
 let mailTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
@@ -36,6 +37,7 @@ export function notify(userId: number, type: string, title: string, body: string
   db.prepare(`
     INSERT INTO notifications(user_id, type, title, body, link) VALUES (?, ?, ?, ?, ?)
   `).run(userId, type, title, body, link ?? null);
+  publishLiveUpdate();
   const recipient = db.prepare("SELECT email FROM users WHERE id = ? AND active = 1").get(userId) as { email: string | null } | undefined;
   if (recipient?.email) {
     const url = staffLink(link);

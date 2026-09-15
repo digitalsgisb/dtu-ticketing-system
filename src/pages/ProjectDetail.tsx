@@ -6,6 +6,7 @@ import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../compon
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 import { compressProgressImage } from "../progressImages";
+import { useLiveRefresh } from "../live";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusOptions = [
@@ -67,6 +68,7 @@ export function ProjectDetailPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [error, setError] = useState("");
   const load = () => api(`/api/staff/projects/${id}`).then(next => { setData(next); setError(""); }).catch(e => setError(e.message));
+  useLiveRefresh(load);
   useEffect(() => {
     let cancelled = false;
     const changingProject = data !== null;

@@ -3,6 +3,9 @@ import request from "supertest";
 import { app } from "../server/app.js";
 import { db, resetDatabaseForTests, seedDatabase } from "../server/db.js";
 import { trackingEmailContent } from "../server/services.js";
+import fs from "node:fs";
+import path from "node:path";
+import { paths } from "../server/config.js";
 
 let cookie = "";
 let csrf = "";
@@ -11,6 +14,8 @@ let adminUserId = 0;
 let managedCookie = "";
 let managedCsrf = "";
 let briefingProjectId = 0;
+let deletableRequestId = 0;
+let deletableAttachmentName = "";
 
 beforeAll(async () => {
   resetDatabaseForTests();
@@ -388,11 +393,13 @@ describe("DTU Control Centre API", () => {
     expect(response.body.emailSent).toBe(false);
 
     const stored = db.prepare("SELECT id, public_origin FROM project_requests WHERE request_no = ?").get(response.body.requestNo) as { id: number; public_origin: string };
+    deletableRequestId = stored.id;
     expect(stored.public_origin).toBe("https://requests.dtu.local");
     const staffView = await request(app).get(`/api/staff/requests/${stored.id}`).set("Cookie", cookie);
     expect(staffView.status).toBe(200);
     expect(staffView.body.attachments).toHaveLength(1);
     expect(staffView.body.attachments[0].original_name).toBe("proposal.pdf");
+    deletableAttachmentName = (db.prepare("SELECT stored_name FROM attachments WHERE id = ?").get(staffView.body.attachments[0].id) as { stored_name: string }).stored_name;
 
     const trackingToken = response.body.trackingUrl.split("/track/")[1];
     const trackingView = await request(app).get(`/api/public/track/${trackingToken}`);
@@ -417,6 +424,29 @@ describe("DTU Control Centre API", () => {
     expect((await request(app).post(`/api/staff/requests/${stored.id}/tracking-link`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)
       .send({ publicBaseUrl: "https://report.example.com" })).status).toBe(400);
+  });
+
+  it("deletes a project request while retaining its approved project", async () => {
+    const approved = await request(app).patch(`/api/staff/requests/${deletableRequestId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ status: "approved", triageNotes: "Approved for delivery", ownerId: null, dueDate: null });
+    expect(approved.status).toBe(200);
+    const projectId = approved.body.projectId as number;
+    expect(projectId).toBeGreaterThan(0);
+
+    const forbidden = await request(app).delete(`/api/staff/requests/${deletableRequestId}`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf);
+    expect(forbidden.status).toBe(403);
+
+    const removed = await request(app).delete(`/api/staff/requests/${deletableRequestId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf);
+    expect(removed.status).toBe(204);
+    expect((await request(app).get(`/api/staff/requests/${deletableRequestId}`).set("Cookie", cookie)).status).toBe(404);
+    expect((db.prepare("SELECT source_request_id FROM projects WHERE id = ?").get(projectId) as { source_request_id: number | null }).source_request_id).toBeNull();
+    expect((db.prepare("SELECT COUNT(*) AS count FROM public_tracking_tokens WHERE project_request_id = ?").get(deletableRequestId) as { count: number }).count).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) AS count FROM attachments WHERE project_request_id = ?").get(deletableRequestId) as { count: number }).count).toBe(0);
+    expect(fs.existsSync(path.join(paths.uploads, deletableAttachmentName))).toBe(false);
+    expect(db.prepare("SELECT id FROM audit_events WHERE action = 'project_request_deleted' AND entity_id = ?").get(deletableRequestId)).toBeTruthy();
   });
 
   it("builds a complete, safe branded tracking email", () => {

@@ -13,8 +13,10 @@ import { audit, cleanText, notify, sendMail, sendMailSafely, sendTrackingEmail, 
 import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { malaysiaDate } from "../time.js";
+import { addLiveClient } from "../liveUpdates.js";
 
 export const staffRouter = Router();
+staffRouter.get("/live", (_req, res) => addLiveClient(res));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 3 } });
 const progressUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 4 } });
 const showcaseUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
@@ -1006,6 +1008,42 @@ staffRouter.get("/requests/:id", requireRole("admin", "lead"), (req, res) => {
   const comments = db.prepare("SELECT * FROM comments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
   const attachments = db.prepare("SELECT id, original_name, mime_type, size, created_at FROM attachments WHERE project_request_id = ? ORDER BY created_at").all(req.params.id);
   res.json({ item, comments, attachments });
+});
+
+staffRouter.delete("/requests/:id", requireRole("admin", "lead"), async (req, res, next) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const requestId = Number(req.params.id);
+    if (!Number.isInteger(requestId) || requestId <= 0) return res.status(400).json({ error: "Invalid request" });
+    const item = db.prepare(`
+      SELECT id, request_no, title, created_project_id FROM project_requests WHERE id = ?
+    `).get(requestId) as { id: number; request_no: string; title: string; created_project_id: number | null } | undefined;
+    if (!item) return res.status(404).json({ error: "Request not found" });
+    const attachments = db.prepare(`
+      SELECT DISTINCT a.stored_name FROM attachments a
+      LEFT JOIN comments c ON c.id = a.comment_id
+      WHERE a.project_request_id = ? OR c.project_request_id = ?
+    `).all(requestId, requestId) as { stored_name: string }[];
+
+    db.transaction(() => {
+      db.prepare("UPDATE projects SET source_request_id = NULL WHERE source_request_id = ?").run(requestId);
+      db.prepare("DELETE FROM notifications WHERE link = ?").run(`/requests/${requestId}`);
+      db.prepare("DELETE FROM project_requests WHERE id = ?").run(requestId);
+      audit(authReq.user, "project_request_deleted", "project_request", requestId, {
+        requestNo: item.request_no,
+        title: item.title,
+        retainedProjectId: item.created_project_id
+      }, req.ip);
+    })();
+
+    await Promise.all(attachments.map(async attachment => {
+      try { await fs.promises.unlink(path.join(paths.uploads, attachment.stored_name)); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.error(`Could not remove request attachment ${attachment.stored_name}`, error);
+      }
+    }));
+    res.status(204).end();
+  } catch (error) { next(error); }
 });
 
 staffRouter.post("/requests/:id/tracking-link", requireRole("admin", "lead"), async (req, res) => {

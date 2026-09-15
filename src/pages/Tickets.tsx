@@ -4,6 +4,7 @@ import { api, formatDate, json } from "../api";
 import { PlusIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
+import { useLiveRefresh } from "../live";
 
 export function TicketsPage() {
   const { t } = useI18n();
@@ -19,6 +20,7 @@ export function TicketsPage() {
     return api<any[]>(`/api/staff/tickets${projectId ? `?projectId=${projectId}` : ""}`).then(setTickets);
   };
   useEffect(() => { void load(); void api<any[]>("/api/staff/projects").then(setProjects); void api<any[]>("/api/staff/users").then(setUsers); }, [params]);
+  useLiveRefresh(load);
   const filtered = useMemo(() => (tickets ?? []).filter(item =>
     (!status || item.status === status) && `${item.ticket_no} ${item.title} ${item.project_name || ""}`.toLowerCase().includes(search.toLowerCase())
   ), [tickets, search, status]);

@@ -11,8 +11,10 @@ import { randomToken, storageAvailable, tokenHash, uploadExtension, validProposa
 import { audit, cleanText, notifyRoles, sendTrackingEmail } from "../services.js";
 import { publicBaseForRequest } from "../publicLinks.js";
 import { writeShowcasePortfolioPdf, type PortfolioPdfImage, type PortfolioPdfProject } from "../portfolioPdf.js";
+import { addLiveClient } from "../liveUpdates.js";
 
 export const publicRouter = Router();
+publicRouter.get("/live", (_req, res) => addLiveClient(res));
 
 const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

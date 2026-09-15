@@ -5,12 +5,15 @@ import { useAuth } from "../auth";
 import { AlertIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icons";
 import { Badge, Empty, Loading, StatCard } from "../components/UI";
 import { useI18n } from "../i18n";
+import { useLiveRefresh } from "../live";
 
 export function DashboardPage() {
   const { user } = useAuth();
   const { t } = useI18n();
   const [data, setData] = useState<any>(null);
-  useEffect(() => { void api("/api/staff/dashboard").then(setData); }, []);
+  const load = () => api("/api/staff/dashboard").then(setData);
+  useEffect(() => { void load(); }, []);
+  useLiveRefresh(load);
   if (!data) return <Loading />;
   const today = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   const firstName = user?.name.split(" ")[0] ?? "there";

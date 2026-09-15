@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { Empty, Loading, PageHeader } from "../components/UI";
 import { showDeviceNotification, usePwa } from "../pwa";
+import { useLiveRefresh } from "../live";
 
 type DeviceNotificationState = "unsupported" | "blocked" | "off" | "on";
 
@@ -12,6 +13,7 @@ export function NotificationsPage() {
   const [deviceState, setDeviceState] = useState<DeviceNotificationState>(() => getDeviceNotificationState());
   const load = () => api<any[]>("/api/staff/notifications").then(setItems);
   useEffect(() => { void load(); }, []);
+  useLiveRefresh(load);
   if (!items) return <Loading />;
   const unreadCount = items.filter(item => !item.read_at).length;
   const markRead = (id: number) => {

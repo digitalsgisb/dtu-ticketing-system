@@ -4,6 +4,7 @@ import { api, formatDate, humanize } from "../api";
 import { Badge, Empty, ErrorNotice, Loading } from "../components/UI";
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
+import { useLiveRefresh } from "../live";
 
 function PublicShell({ children }: { children: ReactNode }) {
   const { lang, setLang } = useI18n();
@@ -51,7 +52,9 @@ export function PublicIssuePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<any>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { void api(`/api/public/projects/${token}`).then((d: any) => setProject(d.project)).catch(e => setError(e.message)); }, [token]);
+  const load = () => api(`/api/public/projects/${token}`).then((d: any) => setProject(d.project)).catch(e => setError(e.message));
+  useEffect(() => { void load(); }, [token]);
+  useLiveRefresh(load, "/api/public/live");
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setBusy(true); setError("");
     try { setSuccess(await api(`/api/public/projects/${token}/issues`, { method: "POST", body: new FormData(e.currentTarget) })); }
@@ -134,6 +137,7 @@ export function TrackingPage() {
   const [reply, setReply] = useState("");
   const load = () => api(`/api/public/track/${token}`).then(setData).catch(e => setError(e.message));
   useEffect(() => { void load(); }, [token]);
+  useLiveRefresh(load, "/api/public/live");
   const send = async () => {
     try { await api(`/api/public/track/${token}/replies`, { method: "POST", body: JSON.stringify({ authorName: name, body: reply }) }); setReply(""); await load(); }
     catch (e) { setError((e as Error).message); }

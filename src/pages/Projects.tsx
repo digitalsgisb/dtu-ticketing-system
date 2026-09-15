@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { PlusIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
+import { useLiveRefresh } from "../live";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"], ["cancelled", "Cancelled"]] as const;
@@ -32,6 +33,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   const load = () => api<any[]>("/api/staff/projects").then(setProjects);
 
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, []);
+  useLiveRefresh(load);
   useEffect(() => {
     sessionStorage.setItem(`dtu-project-preferences-${myProjectsOnly ? "mine" : "all"}`, JSON.stringify({ search, filter, scope, progressFilter, deadlineFilter, sort }));
   }, [myProjectsOnly, search, filter, scope, progressFilter, deadlineFilter, sort]);

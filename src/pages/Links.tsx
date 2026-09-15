@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { ArrowIcon, LinkIcon, ProjectIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, PageHeader } from "../components/UI";
+import { useLiveRefresh } from "../live";
 
 type SystemLink = {
   id: number;
@@ -46,10 +47,12 @@ export function LinksPage() {
   const [search, setSearch] = useState("");
   const [projectId, setProjectId] = useState("all");
   const [sort, setSort] = useState("project_no_asc");
+  const load = () => api<LinksResponse>("/api/staff/project-links").then(next => { setData(next); setError(""); }).catch(err => setError((err as Error).message));
 
   useEffect(() => {
-    void api<LinksResponse>("/api/staff/project-links").then(setData).catch(err => setError((err as Error).message));
+    void load();
   }, []);
+  useLiveRefresh(load);
 
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
