@@ -9,7 +9,7 @@ import { z } from "zod";
 import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
 import { randomToken, requireRole, storageAvailable, tokenHash, validUpload } from "../security.js";
-import { audit, cleanText, notify, sendMail, sendMailSafely, sendTrackingEmail, verifyMailTransport } from "../services.js";
+import { audit, cleanText, notify, sendMail, sendMailSafely, sendSubmissionUpdateEmail, sendTrackingEmail, verifyMailTransport } from "../services.js";
 import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js";
 import type { AuthenticatedRequest } from "../types.js";
 import { malaysiaDate } from "../time.js";
@@ -39,6 +39,66 @@ type ProjectLinkInput = {
   title: string;
   url: string;
 };
+
+type RequestEmailRecipient = {
+  id: number;
+  request_no: string;
+  title: string;
+  requester_name: string;
+  requester_email: string;
+  public_origin: string | null;
+  status: string;
+};
+
+type ProjectEmailRecipient = RequestEmailRecipient & {
+  project_no: string;
+  project_name: string;
+  project_status: string;
+  project_progress: number;
+  project_due_date: string | null;
+};
+
+function freshTrackingUrl(request: RequestEmailRecipient) {
+  if (!config.smtp.host) return undefined;
+  const base = normalizePublicBaseUrl(request.public_origin || config.publicBaseUrl, !config.isProduction);
+  if (!base) return undefined;
+  const token = randomToken();
+  db.prepare("INSERT INTO public_tracking_tokens(token_hash, project_request_id) VALUES (?, ?)")
+    .run(tokenHash(token), request.id);
+  return `${base}/track/${token}`;
+}
+
+function projectEmailRecipient(projectId: number) {
+  return db.prepare(`
+    SELECT pr.id, pr.request_no, pr.title, pr.requester_name, pr.requester_email, pr.public_origin, pr.status,
+      p.project_no, p.name AS project_name, p.status AS project_status, p.progress AS project_progress,
+      p.due_date AS project_due_date
+    FROM projects p JOIN project_requests pr ON pr.id = p.source_request_id
+    WHERE p.id = ?
+  `).get(projectId) as ProjectEmailRecipient | undefined;
+}
+
+function emailProjectRequester(projectId: number, input: {
+  headline: string;
+  message: string;
+  status?: string;
+  progress?: number | null;
+  nextAction?: string | null;
+  note?: string | null;
+}) {
+  const recipient = projectEmailRecipient(projectId);
+  if (!recipient) return;
+  void sendSubmissionUpdateEmail(recipient.requester_email, {
+    requesterName: recipient.requester_name,
+    referenceNo: recipient.request_no,
+    title: recipient.title,
+    projectNo: recipient.project_no,
+    status: input.status ?? recipient.project_status,
+    progress: input.progress === undefined ? recipient.project_progress : input.progress,
+    trackingUrl: freshTrackingUrl(recipient),
+    ...input
+  });
+}
 
 function normalizeProjectUrl(value: string) {
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
@@ -645,6 +705,13 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
       nextAction: parsed.data.nextAction,
       images: files.length
     }, req.ip);
+    emailProjectRequester(existing.id, {
+      headline: "Your project has a new progress update",
+      message: body,
+      status,
+      progress,
+      nextAction
+    });
     res.json({ ok: true, id: updateId });
   } catch (error) {
     await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
@@ -799,6 +866,13 @@ staffRouter.post("/briefing/projects/:id/updates", requireRole("admin", "lead"),
       return id;
     })();
     audit(authReq.user, "briefing_update_created", "project", project.id, { updateId, status, progress, images: files.length }, req.ip);
+    emailProjectRequester(project.id, {
+      headline: "Your project has a new progress update",
+      message: body,
+      status,
+      progress,
+      nextAction
+    });
     res.status(201).json({ id: updateId });
   } catch (error) {
     await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
@@ -850,6 +924,23 @@ staffRouter.patch("/projects/:id", requireRole("admin", "lead"), (req, res) => {
     if (parsedLinks) replaceProjectLinks(Number(req.params.id), parsedLinks.links);
   })();
   audit(authReq.user, "project_updated", "project", Number(req.params.id), d, req.ip);
+  const visibleChanges = [
+    d.name !== undefined ? "project name" : "",
+    d.status !== undefined ? "status" : "",
+    d.priority !== undefined ? "priority" : "",
+    d.startDate !== undefined ? "start date" : "",
+    d.dueDate !== undefined ? "target date" : "",
+    d.progress !== undefined ? "progress" : "",
+    d.description !== undefined ? "project brief" : ""
+  ].filter(Boolean);
+  emailProjectRequester(Number(req.params.id), {
+    headline: "Your project details have been updated",
+    message: visibleChanges.length
+      ? `DTU updated the following information: ${visibleChanges.join(", ")}.`
+      : "DTU updated the project information and delivery setup.",
+    status,
+    progress
+  });
   res.json({ ok: true });
 });
 
@@ -1123,9 +1214,27 @@ staffRouter.patch("/requests/:id", requireRole("admin", "lead"), (req, res) => {
   });
   operation();
   if (parsed.data.status !== request.status) {
-    const notes = parsed.data.triageNotes ? `\n\nDTU note: ${cleanText(parsed.data.triageNotes)}` : "";
-    void sendMailSafely(String(request.requester_email), `${request.request_no} status updated`,
-      `Your project request is now ${parsed.data.status.replaceAll("_", " ")}.${notes}`);
+    const recipient = request as unknown as RequestEmailRecipient;
+    const project = projectId ? db.prepare("SELECT project_no FROM projects WHERE id = ?").get(projectId) as { project_no: string } | undefined : undefined;
+    const content = {
+      submitted: { headline: "Your project request has been received", message: "Your request is in the DTU intake queue.", nextAction: "DTU will review the request and share the next decision." },
+      triage: { headline: "Your project request is under review", message: "DTU has started reviewing the need, impact, and delivery options.", nextAction: "We will contact you if more information is required." },
+      needs_information: { headline: "DTU needs more information", message: "We need a little more information before making a decision on your project request.", nextAction: "Open your private tracking page and reply to DTU with the requested details." },
+      approved: { headline: "Your project request has been approved", message: "Good news — DTU approved your request and created a delivery project.", nextAction: "The DTU team will plan the work and continue sharing progress updates by email." },
+      rejected: { headline: "Your project request was not approved", message: "DTU has completed the review and will not move this request into delivery at this time.", nextAction: "Review the DTU note below for context. You can reply through the private tracking page if clarification is needed." }
+    }[parsed.data.status];
+    void sendSubmissionUpdateEmail(recipient.requester_email, {
+      requesterName: recipient.requester_name,
+      referenceNo: recipient.request_no,
+      title: recipient.title,
+      headline: content.headline,
+      message: content.message,
+      status: parsed.data.status,
+      projectNo: project?.project_no,
+      nextAction: content.nextAction,
+      note: cleanText(parsed.data.triageNotes) || null,
+      trackingUrl: freshTrackingUrl(recipient)
+    });
   }
   audit(authReq.user, parsed.data.status === "approved" ? "project_request_approved" : "project_request_updated",
     "project_request", Number(req.params.id), { ...parsed.data, projectId }, req.ip);
@@ -1136,12 +1245,21 @@ staffRouter.post("/requests/:id/comments", requireRole("admin", "lead"), (req, r
   const authReq = req as unknown as AuthenticatedRequest;
   const parsed = z.object({ body: z.string().trim().min(1).max(5000), publicVisible: z.boolean().default(false) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Comment is required" });
-  const item = db.prepare("SELECT * FROM project_requests WHERE id = ?").get(req.params.id) as { requester_email: string; request_no: string } | undefined;
+  const item = db.prepare("SELECT * FROM project_requests WHERE id = ?").get(req.params.id) as RequestEmailRecipient | undefined;
   if (!item) return res.status(404).json({ error: "Request not found" });
   const result = db.prepare(`
     INSERT INTO comments(project_request_id, author_user_id, author_name, body, public_visible) VALUES (?, ?, ?, ?, ?)
   `).run(req.params.id, authReq.user.id, authReq.user.name, cleanText(parsed.data.body), parsed.data.publicVisible ? 1 : 0);
-  if (parsed.data.publicVisible) void sendMailSafely(item.requester_email, `Update on ${item.request_no}`, parsed.data.body);
+  if (parsed.data.publicVisible) void sendSubmissionUpdateEmail(item.requester_email, {
+    requesterName: item.requester_name,
+    referenceNo: item.request_no,
+    title: item.title,
+    headline: "DTU added an update to your request",
+    message: cleanText(parsed.data.body),
+    status: item.status,
+    nextAction: "Open your private tracking page to review the update and reply if needed.",
+    trackingUrl: freshTrackingUrl(item)
+  });
   res.status(201).json({ id: Number(result.lastInsertRowid) });
 });
 

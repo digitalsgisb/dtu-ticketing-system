@@ -75,6 +75,7 @@ export function RequestDetailPage() {
   const [trackingCopied, setTrackingCopied] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState("");
   const load = (syncForm = true) => api(`/api/staff/requests/${id}`).then((d: any) => {
     setData(d);
     if (syncForm) setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "" }));
@@ -86,8 +87,16 @@ export function RequestDetailPage() {
   const item = data.item;
   const update = async (status: string) => {
     setError("");
-    try { await api(`/api/staff/requests/${id}`, json("PATCH", { ...form, status, ownerId: form.ownerId ? Number(form.ownerId) : null, dueDate: form.dueDate || null })); await load(); }
-    catch (e) { setError((e as Error).message); }
+    setDecisionBusy(status);
+    try {
+      const result = await api<{ ok: true; projectId: number | null }>(`/api/staff/requests/${id}`, json("PATCH", { ...form, status, ownerId: form.ownerId ? Number(form.ownerId) : null, dueDate: form.dueDate || null }));
+      if (status === "approved" && result.projectId) {
+        navigate(`/projects/${result.projectId}`);
+        return;
+      }
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setDecisionBusy(""); }
   };
   const addComment = async () => {
     if (!comment.trim()) return;
@@ -168,9 +177,12 @@ export function RequestDetailPage() {
         <label>Internal triage notes<textarea rows={5} value={form.triageNotes} onChange={e => setForm({ ...form, triageNotes: e.target.value })} /></label>
         <label>Project owner<select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
         <label>Proposed deadline<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
-        <button className="button button-primary button-block" onClick={() => void update("approved")}>{t("approve")}</button>
-        <button className="button button-secondary button-block" onClick={() => void update("needs_information")}>{t("needsInfo")}</button>
-        <button className="button button-danger-text button-block" onClick={() => void update("rejected")}>{t("reject")}</button>
+        {!['approved', 'rejected'].includes(item.status) && <>
+          <button className="button button-primary button-block" disabled={Boolean(decisionBusy)} onClick={() => void update("approved")}>{decisionBusy === "approved" ? "Approving…" : t("approve")}</button>
+          <button className="button button-secondary button-block" disabled={Boolean(decisionBusy)} onClick={() => void update("needs_information")}>{decisionBusy === "needs_information" ? "Saving…" : t("needsInfo")}</button>
+          <button className="button button-danger-text button-block" disabled={Boolean(decisionBusy)} onClick={() => void update("rejected")}>{decisionBusy === "rejected" ? "Rejecting…" : t("reject")}</button>
+        </>}
+        {item.status === "rejected" && <div className="notice">This request has been rejected. The decision actions are closed.</div>}
         {item.created_project_id && <Link className="notice notice-success" to={`/projects/${item.created_project_id}`}>Project created — open it →</Link>}
       </aside>
     </div>

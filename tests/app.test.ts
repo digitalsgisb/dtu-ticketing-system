@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { app } from "../server/app.js";
 import { db, resetDatabaseForTests, seedDatabase } from "../server/db.js";
-import { trackingEmailContent } from "../server/services.js";
+import { submissionUpdateEmailContent, trackingEmailContent } from "../server/services.js";
 import fs from "node:fs";
 import path from "node:path";
 import { paths } from "../server/config.js";
@@ -458,6 +458,28 @@ describe("DTU Control Centre API", () => {
     expect(email.text).toContain("Best regards,\nDigital Transformation Unit\nSugihara Grand Industries Sdn Bhd");
     expect(email.html).toContain("Track my submission");
     expect(email.html).toContain("Aisha &lt;script&gt;");
+    expect(email.html).not.toContain("Aisha <script>");
+  });
+
+  it("builds a complete branded requester update email", () => {
+    const email = submissionUpdateEmailContent({
+      requesterName: "Aisha <script>",
+      referenceNo: "REQ-2026-001",
+      title: "Digital approval workflow",
+      headline: "Your project request has been approved",
+      message: "DTU approved the request and created a delivery project.",
+      status: "in_progress",
+      projectNo: "PRJ-2026-010",
+      progress: 35,
+      note: "Planning <confirmed>",
+      nextAction: "The team will confirm the rollout date.",
+      trackingUrl: "https://portal.sugihara.com/track/private-token"
+    });
+    expect(email.subject).toBe("Your project request has been approved – REQ-2026-001");
+    expect(email.text).toContain("Project: PRJ-2026-010");
+    expect(email.text).toContain("Progress: 35%");
+    expect(email.html).toContain("View latest update");
+    expect(email.html).toContain("Planning &lt;confirmed&gt;");
     expect(email.html).not.toContain("Aisha <script>");
   });
 
