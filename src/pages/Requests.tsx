@@ -164,7 +164,16 @@ export function RequestDetailPage() {
       <div className="detail-main">
         <section className="panel request-brief"><div><span className="eyebrow">Current problem</span><p>{item.current_problem}</p></div><div><span className="eyebrow">Desired outcome</span><p>{item.desired_outcome}</p></div>
           <div className="detail-facts"><div><small>Expected users</small><strong>{item.expected_users || "—"}</strong></div><div><small>Target date</small><strong>{formatDate(item.target_date)}</strong></div><div><small>Contact</small><strong>{item.requester_email}</strong></div></div>
-          {data.attachments?.length > 0 && <div className="request-attachment-block"><span className="eyebrow">Proposal attachments</span><div className="attachment-list">{data.attachments.map((attachment: any) => <a href={`/api/staff/attachments/${attachment.id}`} key={attachment.id}>📎 {attachment.original_name}</a>)}</div></div>}
+          <div className="request-attachment-block">
+            <div className="request-attachment-heading">
+              <div><span className="eyebrow">Supporting documents</span><strong>Documents uploaded with this request</strong></div>
+              {data.attachments?.length > 0 && <span>{data.attachments.length} file{data.attachments.length === 1 ? "" : "s"}</span>}
+            </div>
+            {data.attachments?.length > 0 ? <div className="request-document-list">{data.attachments.map((attachment: any) => <a className="request-document" href={`/api/staff/attachments/${attachment.id}`} key={attachment.id}>
+              <span className="request-document-icon" aria-hidden="true">↓</span>
+              <span><strong>{attachment.original_name}</strong><small>{attachment.size ? `${Math.ceil(attachment.size / 1024)} KB` : "Supporting document"} · Click to download</small></span>
+            </a>)}</div> : <div className="request-document-empty"><span aria-hidden="true">—</span><div><strong>No document uploaded</strong><small>The requester did not attach any supporting files.</small></div></div>}
+          </div>
         </section>
         {project && <section className="panel request-project-delivery">
           <div className="panel-heading"><div><span className="eyebrow">Approved project</span><h2>Delivery progress</h2></div><Badge value={project.status} /></div>
