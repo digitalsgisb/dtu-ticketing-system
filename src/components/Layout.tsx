@@ -6,7 +6,6 @@ import { useI18n } from "../i18n";
 import { BellIcon, GridIcon, LinkIcon, PresentationIcon, ProjectIcon, RequestIcon, ScreenIcon, SettingsIcon, TicketIcon } from "./Icons";
 import { api, json } from "../api";
 import { ErrorNotice, Modal, PasswordInput } from "./UI";
-import { CompanyLogo } from "./CompanyLogo";
 import { showDeviceNotification, usePwa } from "../pwa";
 import { useLiveRefresh } from "../live";
 
@@ -118,9 +117,9 @@ export function Layout() {
       <aside className={`sidebar ${mobileOpen ? "is-open" : ""}`} aria-label="Main navigation">
         <div className="sidebar-glow" />
         <div className="sidebar-brand-row">
-          <div className="brand company-brand sidebar-brand">
-            <CompanyLogo />
-            <small>DTU Control Centre</small>
+          <div className="sidebar-brand">
+            <img className="sidebar-logo" src="/sugihara-mark.png" alt="Sugihara Grand Industries logo" />
+            <span className="sidebar-system-name">DTU Control Centre</span>
           </div>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation">×</button>
         </div>

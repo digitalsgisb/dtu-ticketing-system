@@ -3358,6 +3358,9 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 
 /* Installable app, device notifications, and phone navigation */
 .sidebar-brand-row { position: relative; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; }
+.sidebar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sidebar-logo { display: block; width: 54px; height: 54px; flex: 0 0 54px; object-fit: contain; }
+.sidebar-system-name { color: #f4f9fb; font-size: 16px; font-weight: 800; line-height: 1.2; }
 .sidebar-close, .mobile-section-title, .mobile-bottom-nav, .nav-scrim { display: none; }
 .nav-notification-count {
   min-width: 22px;
@@ -3432,7 +3435,8 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
     background: rgba(255,255,255,.05);
     font-size: 25px;
   }
-  .sidebar-brand .company-logo { width: 180px; }
+  .sidebar-logo { width: 48px; height: 48px; flex-basis: 48px; }
+  .sidebar-system-name { font-size: 14px; }
   .sidebar-workspace { margin-top: 26px; }
   .nav-scrim {
     position: fixed;
