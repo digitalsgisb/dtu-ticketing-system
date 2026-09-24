@@ -2,6 +2,16 @@
 
 A bilingual internal operations system for a Digital Transformation Unit. It combines project intake, portfolio tracking, tasks, support issues, QR reporting, reporter updates, a lab wallboard, CSV migration, and encrypted backups in one self-hosted application. The current production target is the Gigabyte AI Atom PC.
 
+## Update from GitHub
+
+From this repository folder, run:
+
+```bash
+git pull --ff-only origin main
+```
+
+For the AI PC, follow the [pull and deploy steps](#pull-and-deploy-the-update-on-the-ai-pc) after the latest changes have been pushed to GitHub.
+
 ## What is implemented
 
 - Project request workflow: Submitted → Triage → Needs Information → Approved/Rejected.

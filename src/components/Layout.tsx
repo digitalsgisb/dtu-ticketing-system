@@ -119,7 +119,10 @@ export function Layout() {
         <div className="sidebar-brand-row">
           <div className="sidebar-brand">
             <img className="sidebar-logo" src="/sugihara-mark.png" alt="Sugihara Grand Industries logo" />
-            <span className="sidebar-system-name">DTU Control Centre</span>
+            <div className="sidebar-brand-copy">
+              <strong className="sidebar-system-name">DTU Control Centre</strong>
+              <span className="sidebar-system-subtitle">Ticketing &amp; projects</span>
+            </div>
           </div>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation">×</button>
         </div>

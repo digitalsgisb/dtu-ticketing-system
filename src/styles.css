@@ -812,7 +812,7 @@ body {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  margin: 36px -8px 0 0;
+  margin: 30px -8px 0 0;
   padding-right: 8px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -3358,9 +3358,11 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 
 /* Installable app, device notifications, and phone navigation */
 .sidebar-brand-row { position: relative; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; }
-.sidebar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sidebar-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .sidebar-logo { display: block; width: 54px; height: 54px; flex: 0 0 54px; object-fit: contain; }
-.sidebar-system-name { color: #f4f9fb; font-size: 16px; font-weight: 800; line-height: 1.2; }
+.sidebar-brand-copy { display: grid; gap: 3px; min-width: 0; }
+.sidebar-system-name { color: #f4f9fb; font-size: 16px; font-weight: 800; line-height: 1.2; white-space: nowrap; }
+.sidebar-system-subtitle { color: #a7c4cf; font-size: 11px; line-height: 1.3; }
 .sidebar-close, .mobile-section-title, .mobile-bottom-nav, .nav-scrim { display: none; }
 .nav-notification-count {
   min-width: 22px;
@@ -3436,7 +3438,8 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
     font-size: 25px;
   }
   .sidebar-logo { width: 48px; height: 48px; flex-basis: 48px; }
-  .sidebar-system-name { font-size: 14px; }
+  .sidebar-system-name { font-size: 14px; white-space: normal; }
+  .sidebar-system-subtitle { font-size: 10px; }
   .sidebar-workspace { margin-top: 26px; }
   .nav-scrim {
     position: fixed;
