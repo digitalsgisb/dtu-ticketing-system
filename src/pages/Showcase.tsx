@@ -31,7 +31,7 @@ type ShowcaseProject = {
 };
 
 type ShowcaseAdminData = {
-  settings: { enabled: number; title: string; intro: string };
+  settings: { enabled: number; title: string; intro: string; show_pdf_export: number };
   projects: ShowcaseProject[];
   url: string;
   dataUrl: string;
@@ -103,6 +103,16 @@ export function ShowcasePage() {
     setError("");
     try {
       await api("/api/staff/showcase", json("PATCH", { enabled: !data.settings.enabled }));
+      await load();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const togglePdfExport = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/staff/showcase", json("PATCH", { showPdfExport: !data.settings.show_pdf_export }));
       await load();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
@@ -186,7 +196,7 @@ export function ShowcasePage() {
     <PageHeader
       eyebrow="Visitor experience"
       title="Guest showcase"
-      description="Choose what visitors can see, prepare the mobile portfolio, and control one reusable QR link."
+      description="Choose what visitors can see, prepare the mobile and PC views, and control one reusable QR link."
       actions={<button className={`button ${data.settings.enabled ? "button-danger" : "button-primary"}`} disabled={busy} onClick={() => void toggle()}>
         {data.settings.enabled ? "Close visitor access" : "Open visitor access"}
       </button>}
@@ -208,6 +218,7 @@ export function ShowcasePage() {
           <label>Short introduction<textarea name="intro" required minLength={3} maxLength={500} rows={4} defaultValue={data.settings.intro} /></label>
           <button className="button button-secondary" disabled={busy}>Save welcome text</button>
         </form>
+        <div className="showcase-pdf-setting"><div><strong>PDF export button</strong><small>{data.settings.show_pdf_export ? "Visible to showcase visitors" : "Hidden from showcase visitors"}</small></div><button type="button" className="button button-secondary" disabled={busy} onClick={() => void togglePdfExport()}>{data.settings.show_pdf_export ? "Hide button" : "Show button"}</button></div>
       </section>
       <section className="panel showcase-qr-panel">
         <div className="showcase-qr-copy"><span className="eyebrow">Reusable guest pass</span><h2>Scan to view</h2><p>This QR only opens the read-only portfolio. It never exposes the actual system links.</p></div>
@@ -444,10 +455,13 @@ function GalleryEditorItem({ item, busy, onRemoved, onChanged }: { item: Gallery
 
 export function PublicShowcasePage() {
   const { token } = useParams();
-  const [data, setData] = useState<{ title: string; intro: string; projects: GuestProject[] } | null>(null);
+  const [data, setData] = useState<{ title: string; intro: string; showPdfExport: boolean; projects: GuestProject[] } | null>(null);
   const [error, setError] = useState("");
   const [active, setActive] = useState(0);
+  const [view, setView] = useState<"mobile" | "pc">(() => window.matchMedia("(min-width: 850px)").matches ? "pc" : "mobile");
+  const [fullscreen, setFullscreen] = useState(false);
   const [openProjectId, setOpenProjectId] = useState<number | null>(null);
+  const showcaseRoot = useRef<HTMLElement>(null);
   const rail = useRef<HTMLDivElement>(null);
   const activeRef = useRef(0);
   const lastInteraction = useRef(Date.now());
@@ -459,6 +473,19 @@ export function PublicShowcasePage() {
     void load();
   }, [token]);
   useLiveRefresh(load, "/api/public/live");
+
+  useEffect(() => {
+    const sync = () => setFullscreen(document.fullscreenElement === showcaseRoot.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await showcaseRoot.current?.requestFullscreen();
+    } catch { setError("Fullscreen is unavailable in this browser."); }
+  };
 
   const move = (index: number) => {
     const element = rail.current;
@@ -486,7 +513,7 @@ export function PublicShowcasePage() {
     };
   }, []);
   useEffect(() => {
-    if (!data?.projects.length || openProjectId !== null) return;
+    if (!data?.projects.length || openProjectId !== null || view !== "mobile") return;
     lastInteraction.current = Date.now();
     const interval = window.setInterval(() => {
       if (document.hidden || Date.now() - lastInteraction.current < 10_000) return;
@@ -497,14 +524,31 @@ export function PublicShowcasePage() {
       lastInteraction.current = Date.now();
     }, 500);
     return () => window.clearInterval(interval);
-  }, [data?.projects.length, openProjectId]);
+  }, [data?.projects.length, openProjectId, view]);
+
+  useEffect(() => {
+    if (view !== "pc" || openProjectId !== null) return;
+    const navigate = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.key === "ArrowRight") setActive(index => Math.min(index + 1, Math.max(0, (data?.projects.length || 1) - 1)));
+      if (event.key === "ArrowLeft") setActive(index => Math.max(index - 1, 0));
+    };
+    window.addEventListener("keydown", navigate);
+    return () => window.removeEventListener("keydown", navigate);
+  }, [view, openProjectId, data?.projects.length]);
 
   if (error) return <div className="guest-showcase guest-showcase-closed"><CompanyLogo /><div><span>Guest showcase</span><h1>Thanks for visiting.</h1><p>{error}</p></div></div>;
   if (!data) return <div className="guest-showcase"><Loading /></div>;
   const totalSlides = data.projects.length + 1;
-  return <main className="guest-showcase">
-    <header className="guest-showcase-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><span>DTU · Digital solutions</span></header>
-    <section className="guest-showcase-intro"><span className="eyebrow">Made for the way we work</span><h1>{data.title}</h1><p>{data.intro}</p><div><strong>{String(data.projects.length).padStart(2, "0")}</strong><span>systems<br />in this showcase</span></div><a className="guest-showcase-export" href={`/api/public/showcase/${token}/portfolio.pdf`} download><span>Export PDF portfolio</span><b aria-hidden="true">↓</b></a></section>
+  const selectedProject = data.projects[Math.min(active, data.projects.length - 1)];
+  return <main className={`guest-showcase guest-showcase-${view}`} ref={showcaseRoot}>
+    <header className="guest-showcase-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><div className="guest-showcase-toolbar"><div className="guest-view-switch" role="group" aria-label="Showcase view"><button type="button" className={view === "mobile" ? "active" : ""} aria-pressed={view === "mobile"} onClick={() => { setView("mobile"); setActive(0); }}>Mobile view</button><button type="button" className={view === "pc" ? "active" : ""} aria-pressed={view === "pc"} onClick={() => { setView("pc"); setActive(0); }}>PC view</button></div><button className="guest-fullscreen-button" type="button" onClick={() => void toggleFullscreen()}>{fullscreen ? "Exit fullscreen" : "⛶ Fullscreen"}</button></div></header>
+    {view === "pc" ? <section className="guest-pc-presentation">
+      <div className="guest-pc-heading"><span className="eyebrow">DTU · Digital solutions</span><h1>{data.title}</h1><p>{data.intro}</p></div>
+      {selectedProject ? <div className="guest-pc-layout"><nav className="guest-pc-projects" aria-label="Presentation projects"><span className="guest-pc-kicker">Select a project <b>{String(data.projects.length).padStart(2, "0")}</b></span>{data.projects.map((project, index) => <button key={project.id} type="button" className={active === index ? "active" : ""} aria-current={active === index ? "true" : undefined} onClick={() => setActive(index)}><small>{String(index + 1).padStart(2, "0")}</small><span><strong>{project.name}</strong><em>{project.department}</em></span><b aria-hidden="true">↗</b></button>)}</nav><article className="guest-pc-stage" key={selectedProject.id}><div className="guest-pc-stage-art">{selectedProject.imageUrl ? <img src={selectedProject.imageUrl} alt={`Preview of ${selectedProject.name}`} /> : <div className="guest-pc-art-placeholder"><span>{String(active + 1).padStart(2, "0")}</span><strong>DTU</strong></div>}<span className="guest-pc-stage-count">{String(active + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span></div><div className="guest-pc-stage-copy"><span className="eyebrow">{selectedProject.department} · Featured project</span><h2>{selectedProject.name}</h2><p>{selectedProject.summary || "A digital solution made for the way our teams work."}</p><button type="button" onClick={() => setOpenProjectId(selectedProject.id)}>Explore this project <span aria-hidden="true">↗</span></button></div></article></div> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
+      {selectedProject && <div className="guest-pc-bottom"><span>Use ← → to browse projects</span><div><button type="button" disabled={active === 0} onClick={() => setActive(active - 1)} aria-label="Previous project">←</button><span>{String(active + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span><button type="button" disabled={active === data.projects.length - 1} onClick={() => setActive(active + 1)} aria-label="Next project">→</button></div></div>}
+      {data.showPdfExport && <a className="guest-showcase-export guest-pc-export" href={`/api/public/showcase/${token}/portfolio.pdf`} download><span>Export PDF portfolio</span><b aria-hidden="true">↓</b></a>}
+    </section> : <><section className="guest-showcase-intro"><span className="eyebrow">Made for the way we work</span><h1>{data.title}</h1><p>{data.intro}</p><div><strong>{String(data.projects.length).padStart(2, "0")}</strong><span>systems<br />in this showcase</span></div>{data.showPdfExport && <a className="guest-showcase-export" href={`/api/public/showcase/${token}/portfolio.pdf`} download><span>Export PDF portfolio</span><b aria-hidden="true">↓</b></a>}</section>
     {data.projects.length ? <>
       <div className="guest-showcase-rail" ref={rail} onScroll={event => {
         const element = event.currentTarget;
@@ -537,7 +581,7 @@ export function PublicShowcasePage() {
         <button aria-label="Next system" disabled={active === totalSlides - 1} onClick={() => move(active + 1)}>→</button>
       </nav>
       <p className="guest-showcase-hint">Swipe to explore · advances automatically when idle</p>
-    </> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
+    </> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}</>}
     <footer className="guest-showcase-footer"><CompanyLogo /></footer>
     {openProjectId && <PortfolioCaseModal token={token || ""} projectId={openProjectId} onClose={() => setOpenProjectId(null)} />}
   </main>;

@@ -165,6 +165,8 @@ describe("DTU Control Centre API", () => {
     const initial = await request(app).get("/api/staff/showcase").set("Cookie", cookie);
     expect(initial.status).toBe(200);
     expect(initial.body.settings.enabled).toBe(0);
+    expect(initial.body.settings.show_pdf_export).toBe(0);
+    expect(initial.body.url).toMatch(/^https:\/\/dtutracker\.sugidigital\.org\/showcase\//);
     expect(initial.body.dataUrl).toMatch(/^data:image\/png;base64,/);
     const originalUrl = initial.body.url;
     const token = originalUrl.split("/showcase/")[1];
@@ -217,6 +219,7 @@ describe("DTU Control Centre API", () => {
     const publicView = await request(app).get(`/api/public/showcase/${token}`);
     expect(publicView.status).toBe(200);
     expect(publicView.body.title).toBe("DTU Systems");
+    expect(publicView.body.showPdfExport).toBe(false);
     expect(publicView.body.projects).toHaveLength(1);
     expect(publicView.body.projects[0]).toMatchObject({
       id: briefingProjectId,
@@ -256,6 +259,17 @@ describe("DTU Control Centre API", () => {
     expect(portfolioPdf.headers["content-disposition"]).toContain("DTU-Digital-Innovation-Portfolio.pdf");
     expect(Buffer.isBuffer(portfolioPdf.body)).toBe(true);
     expect(portfolioPdf.body.subarray(0, 5).toString()).toBe("%PDF-");
+
+    const showPdf = await request(app).patch("/api/staff/showcase")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ showPdfExport: true });
+    expect(showPdf.status).toBe(200);
+    expect((await request(app).get(`/api/public/showcase/${token}`)).body.showPdfExport).toBe(true);
+    const hidePdf = await request(app).patch("/api/staff/showcase")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ showPdfExport: false });
+    expect(hidePdf.status).toBe(200);
+    expect((await request(app).get(`/api/public/showcase/${token}`)).body.showPdfExport).toBe(false);
 
     const closed = await request(app).patch("/api/staff/showcase")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

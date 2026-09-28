@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS showcase_settings (
   enabled INTEGER NOT NULL DEFAULT 0,
   title TEXT NOT NULL DEFAULT 'Systems built by DTU',
   intro TEXT NOT NULL DEFAULT 'A quick look at the digital tools created for our teams.',
+  show_pdf_export INTEGER NOT NULL DEFAULT 0,
   updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -401,6 +402,7 @@ ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
 ensureColumn("project_updates", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
+ensureColumn("showcase_settings", "show_pdf_export", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("showcase_projects", "problem_statement", "TEXT");
 ensureColumn("showcase_projects", "solution_description", "TEXT");
 ensureColumn("showcase_projects", "features_text", "TEXT");

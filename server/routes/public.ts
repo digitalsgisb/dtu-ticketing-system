@@ -37,8 +37,8 @@ const urgency = z.enum(["low", "medium", "high", "critical"]);
 
 function showcaseAccess(token: string) {
   return db.prepare(`
-    SELECT token, enabled, title, intro FROM showcase_settings WHERE id = 1 AND token = ?
-  `).get(token) as { token: string; enabled: number; title: string; intro: string } | undefined;
+    SELECT token, enabled, title, intro, show_pdf_export FROM showcase_settings WHERE id = 1 AND token = ?
+  `).get(token) as { token: string; enabled: number; title: string; intro: string; show_pdf_export: number } | undefined;
 }
 
 function portfolioList(value: string | null | undefined) {
@@ -109,7 +109,7 @@ publicRouter.get("/showcase/:token", (req, res) => {
     highlights: portfolioList(project.features_text).slice(0, 3)
   }));
   res.setHeader("Cache-Control", "no-store");
-  res.json({ title: settings.title, intro: settings.intro, projects });
+  res.json({ title: settings.title, intro: settings.intro, showPdfExport: Boolean(settings.show_pdf_export), projects });
 });
 
 publicRouter.get("/showcase/:token/portfolio.pdf", async (req, res, next) => {

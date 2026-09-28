@@ -146,6 +146,7 @@ Set:
 APP_BASE_URL=https://replace-with-your-staff-hostname.invalid
 PUBLIC_BASE_URL=https://replace-with-your-public-hostname.invalid
 PUBLIC_HOSTNAME=replace-with-your-public-hostname.invalid
+SHOWCASE_BASE_URL=https://dtutracker.sugidigital.org
 ```
 
 Requests received on the configured public hostname can use only:
@@ -153,6 +154,7 @@ Requests received on the configured public hostname can use only:
 - `/p/{project-token}`
 - `/request`
 - `/track/{private-token}`
+- `/showcase/{guest-token}` and its project pages
 - `/api/public/*`
 
 Staff authentication, APIs, downloads, and the wallboard return `404` on that hostname. Staff should use the Pi's private LAN hostname or address.

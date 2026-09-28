@@ -13,6 +13,8 @@ HTTPS is required for installation on phones, service workers outside `localhost
 
 Set `PUBLIC_BASE_URL` and `PUBLIC_HOSTNAME` to the real HTTPS hostname used by employees submitting and tracking requests. The server now falls back to the incoming public hostname when these values are still examples, but configuring them explicitly is recommended for emailed links.
 
+Set `SHOWCASE_BASE_URL=https://dtutracker.sugidigital.org` for the reusable guest showcase QR and copy link. The value defaults to this domain when omitted. Restart the server after changing it so the QR is regenerated on the next admin page load.
+
 Set the approved SMTP relay and sender in `/etc/dtu-control.env` to enable the branded requester confirmation email. On each request detail page, an admin or lead can enter/correct the public portal address, open a fresh secure tracker, copy it, or email it to the requester. The screen reports delivery failure explicitly when SMTP is unavailable.
 
 ## First installation

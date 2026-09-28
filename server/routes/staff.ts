@@ -157,7 +157,7 @@ function replaceProjectLinks(projectId: number, links: ProjectLinkInput[]) {
 
 function showcaseSettings() {
   return db.prepare("SELECT * FROM showcase_settings WHERE id = 1").get() as {
-    token: string; enabled: number; title: string; intro: string;
+    token: string; enabled: number; title: string; intro: string; show_pdf_export: number;
   };
 }
 
@@ -178,7 +178,7 @@ staffRouter.get("/showcase", requireRole("admin", "lead"), async (_req, res) => 
     WHERE p.status != 'cancelled'
     ORDER BY COALESCE(sp.sort_order, 9999), p.name
   `).all();
-  const url = `${config.publicBaseUrl.replace(/\/$/, "")}/showcase/${settings.token}`;
+  const url = `${config.showcaseBaseUrl.replace(/\/$/, "")}/showcase/${settings.token}`;
   const dataUrl = await QRCode.toDataURL(url, {
     width: 720,
     margin: 2,
@@ -193,17 +193,19 @@ staffRouter.patch("/showcase", requireRole("admin", "lead"), (req, res) => {
   const parsed = z.object({
     enabled: z.boolean().optional(),
     title: z.string().trim().min(3).max(120).optional(),
-    intro: z.string().trim().min(3).max(500).optional()
+    intro: z.string().trim().min(3).max(500).optional(),
+    showPdfExport: z.boolean().optional()
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Check the showcase details" });
   const current = showcaseSettings();
   db.prepare(`
-    UPDATE showcase_settings SET enabled = ?, title = ?, intro = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    UPDATE showcase_settings SET enabled = ?, title = ?, intro = ?, show_pdf_export = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = 1
   `).run(
     parsed.data.enabled === undefined ? current.enabled : parsed.data.enabled ? 1 : 0,
     parsed.data.title ?? current.title,
     parsed.data.intro ?? current.intro,
+    parsed.data.showPdfExport === undefined ? current.show_pdf_export : parsed.data.showPdfExport ? 1 : 0,
     authReq.user.id
   );
   audit(authReq.user, "showcase_updated", "showcase", 1, parsed.data, req.ip);
