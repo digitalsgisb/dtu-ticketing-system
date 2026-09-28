@@ -190,6 +190,12 @@ describe("DTU Control Centre API", () => {
       .field("title", "Smart Production")
       .field("summary", "A visitor-safe overview of the production display.")
       .field("category", "Operations")
+      .field("storyEyebrow", "Factory intelligence")
+      .field("storyTitle", "A smarter production picture")
+      .field("overviewLabel", "The platform")
+      .field("challengeLabel", "The bottleneck")
+      .field("solutionLabel", "Our approach")
+      .field("functionsLabel", "What teams gain")
       .field("overview", "A production visibility platform that brings operational information into one focused workspace.")
       .field("problem", "Teams previously relied on fragmented status updates and manual follow-up.")
       .field("solution", "The system presents current work, progress, and exceptions in a clear visual workflow.")
@@ -207,6 +213,15 @@ describe("DTU Control Centre API", () => {
       .attach("images", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), { filename: "workflow.png", contentType: "image/png" });
     expect(galleryUpload.status).toBe(201);
     expect(galleryUpload.body.ids).toHaveLength(2);
+    for (const slot of ["overview", "challenge", "solution"]) {
+      const upload = await request(app).post(`/api/staff/showcase/projects/${briefingProjectId}/story-images/${slot}`)
+        .set("Cookie", cookie).set("x-csrf-token", csrf)
+        .attach("image", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: `${slot}.jpg`, contentType: "image/jpeg" });
+      expect(upload.status).toBe(201);
+    }
+    const storyImages = await request(app).get(`/api/staff/showcase/projects/${briefingProjectId}/story-images`).set("Cookie", cookie);
+    expect(Object.keys(storyImages.body.images).sort()).toEqual(["challenge", "overview", "solution"]);
+    expect((await request(app).get(`/api/public/showcase/${token}/projects/${briefingProjectId}/story-images/overview`)).status).toBe(404);
     const caption = await request(app).patch(`/api/staff/showcase/gallery/${galleryUpload.body.ids[0]}`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)
       .send({ caption: "Production dashboard" });
@@ -214,12 +229,13 @@ describe("DTU Control Centre API", () => {
 
     const opened = await request(app).patch("/api/staff/showcase")
       .set("Cookie", cookie).set("x-csrf-token", csrf)
-      .send({ enabled: true, title: "DTU Systems", intro: "A safe visitor portfolio." });
+      .send({ enabled: true, title: "DTU Systems", intro: "A safe visitor portfolio.", pcEyebrow: "Factory innovation" });
     expect(opened.status).toBe(200);
 
     const publicView = await request(app).get(`/api/public/showcase/${token}`);
     expect(publicView.status).toBe(200);
     expect(publicView.body.title).toBe("DTU Systems");
+    expect(publicView.body.pcEyebrow).toBe("Factory innovation");
     expect(publicView.body.showPdfExport).toBe(false);
     expect(publicView.body.projects).toHaveLength(1);
     expect(publicView.body.projects[0]).toMatchObject({
@@ -243,6 +259,12 @@ describe("DTU Control Centre API", () => {
     expect(detail.status).toBe(200);
     expect(detail.body.project).toMatchObject({
       name: "Smart Production",
+      storyEyebrow: "Factory intelligence",
+      storyTitle: "A smarter production picture",
+      overviewLabel: "The platform",
+      challengeLabel: "The bottleneck",
+      solutionLabel: "Our approach",
+      functionsLabel: "What teams gain",
       problem: "Teams previously relied on fragmented status updates and manual follow-up.",
       features: ["Live production overview", "Progress tracking", "Exception highlighting"],
       technologies: ["React", "Express", "SQLite"]
@@ -250,6 +272,21 @@ describe("DTU Control Centre API", () => {
     expect(detail.body.project).not.toHaveProperty("url");
     expect(detail.body.project).not.toHaveProperty("links");
     expect(detail.body.gallery).toHaveLength(2);
+    expect(Object.keys(detail.body.storyImages).sort()).toEqual(["challenge", "overview", "solution"]);
+    const storyImage = await request(app).get(detail.body.storyImages.overview);
+    expect(storyImage.status).toBe(200);
+    expect(storyImage.headers["content-type"]).toContain("image/jpeg");
+    const replacedStoryImage = await request(app).post(`/api/staff/showcase/projects/${briefingProjectId}/story-images/overview`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .attach("image", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), { filename: "new-overview.png", contentType: "image/png" });
+    expect(replacedStoryImage.status).toBe(201);
+    const replacedDetail = await request(app).get(`/api/public/showcase/${token}/projects/${briefingProjectId}`);
+    expect(replacedDetail.body.storyImages.overview).not.toBe(detail.body.storyImages.overview);
+    expect((await request(app).get(replacedDetail.body.storyImages.overview)).headers["content-type"]).toContain("image/png");
+    const removedStoryImage = await request(app).delete(`/api/staff/showcase/projects/${briefingProjectId}/story-images/challenge`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf);
+    expect(removedStoryImage.status).toBe(200);
+    expect((await request(app).get(`/api/public/showcase/${token}/projects/${briefingProjectId}/story-images/challenge`)).status).toBe(404);
     expect(detail.body.gallery[0].caption).toBe("Production dashboard");
     const galleryImage = await request(app).get(detail.body.gallery[0].imageUrl);
     expect(galleryImage.status).toBe(200);

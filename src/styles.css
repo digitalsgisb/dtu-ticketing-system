@@ -2961,9 +2961,10 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .guest-pc-story-slide { height: 100%; display: flex; flex-direction: column; gap: clamp(8px, 1.4vw, 18px); padding: clamp(17px, 2.8vw, 42px); }
 .guest-pc-story-slide header h2 { margin: 6px 0 0; color: #f4ffff; font-size: clamp(24px, 2.7vw, 46px); line-height: 1; letter-spacing: -.04em; }
 .guest-pc-story-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(6px, 1vw, 12px); }
-.guest-pc-story-grid section { min-width: 0; overflow: hidden; padding: clamp(10px, 1.5vw, 20px); border: 1px solid rgba(95,209,202,.23); border-radius: 13px; background: rgba(3,34,46,.7); }
+.guest-pc-story-grid section { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: clamp(10px, 1.5vw, 20px); border: 1px solid rgba(95,209,202,.23); border-radius: 13px; background: rgba(3,34,46,.7); }
 .guest-pc-story-grid section span { color: #60d6ce; font: 800 10px ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
 .guest-pc-story-grid p { margin: 12px 0 0; color: #c0dddc; font-size: clamp(10px, 1vw, 14px); line-height: 1.5; }
+.guest-pc-story-grid section img { width: 100%; height: 43%; min-height: 0; display: block; margin-top: auto; padding-top: 9px; border-radius: 8px; object-fit: contain; }
 .guest-pc-story-functions { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
 .guest-pc-story-functions > strong { color: #6ccec8; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
 .guest-pc-story-functions > div { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -3125,6 +3126,18 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .showcase-case-fields label { min-width: 0; }
 .showcase-case-fields label > small { color: #8ca0a8; font-size: 8px; font-weight: 500; text-transform: none; letter-spacing: 0; }
 .showcase-case-fields textarea { min-height: 118px; resize: vertical; }
+.showcase-story-image-manager { margin-top: 24px; padding-top: 24px; border-top: 1px solid #d8e7e8; }
+.showcase-story-image-manager h4 { margin: 5px 0; color: #12384a; font-size: 18px; }
+.showcase-story-image-manager header p { margin: 0 0 14px; color: #708792; font-size: 11px; }
+.showcase-story-image-manager > div:last-child { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.showcase-story-image-manager article { min-width: 0; display: flex; flex-direction: column; gap: 9px; padding: 12px; border: 1px solid #d6e6e7; border-radius: 12px; background: white; }
+.showcase-story-image-manager article > img, .showcase-story-image-placeholder { width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; border-radius: 8px; object-fit: contain; background: #082c3b; }
+.showcase-story-image-placeholder { color: #9bc4c4; font-size: 11px; }
+.showcase-story-image-manager article strong { color: #315160; font-size: 12px; }
+.showcase-story-image-manager article small { overflow: hidden; color: #79909a; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.showcase-story-image-manager article .button { position: relative; width: 100%; justify-content: center; cursor: pointer; }
+.showcase-story-image-manager article .button:focus-within { outline: 3px solid #58bfb8; outline-offset: 2px; }
+.showcase-story-image-manager article input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .showcase-case-wide { grid-column: 1 / -1; }
 .showcase-gallery-manager { margin-top: 24px; padding-top: 24px; border-top: 1px solid #d8e7e8; }
 .showcase-gallery-loading { min-height: 120px; display: grid; place-items: center; }
@@ -3233,6 +3246,7 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .portfolio-lightbox footer { width: min(1200px, 96vw); display: flex; justify-content: space-between; color: #93afb7; font-size: 10px; }
 
 @media (max-width: 850px) {
+  .showcase-story-image-manager > div:last-child { grid-template-columns: 1fr; }
   .guest-pc-layout { grid-template-columns: 1fr; }
   .guest-pc-projects { max-height: 220px; }
   .guest-showcase-pc:fullscreen .guest-pc-projects { display: none; }

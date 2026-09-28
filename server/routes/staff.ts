@@ -20,6 +20,7 @@ staffRouter.get("/live", (_req, res) => addLiveClient(res));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 3 } });
 const progressUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 4 } });
 const showcaseUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
+const storyImageSlots = new Set(["overview", "challenge", "solution"]);
 const galleryUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 8 } });
 const statuses = ["new", "triaged", "assigned", "in_progress", "waiting", "resolved", "closed"] as const;
 const priorities = ["low", "medium", "high", "critical"] as const;
@@ -157,7 +158,7 @@ function replaceProjectLinks(projectId: number, links: ProjectLinkInput[]) {
 
 function showcaseSettings() {
   return db.prepare("SELECT * FROM showcase_settings WHERE id = 1").get() as {
-    token: string; enabled: number; title: string; intro: string; show_pdf_export: number;
+    token: string; enabled: number; title: string; intro: string; pc_eyebrow: string; show_pdf_export: number;
   };
 }
 
@@ -166,7 +167,8 @@ staffRouter.get("/showcase", requireRole("admin", "lead"), async (_req, res) => 
   const projects = db.prepare(`
     SELECT p.id, p.project_no, p.name, p.description, p.department_name, p.status,
       COALESCE(sp.visible, 0) AS visible, COALESCE(sp.sort_order, 0) AS sort_order,
-      sp.title_override, sp.summary_override, COALESCE(sp.category, '') AS category, sp.detail_overview, sp.problem_statement,
+      sp.title_override, sp.summary_override, COALESCE(sp.category, '') AS category, sp.detail_overview,
+      sp.story_eyebrow, sp.story_title, sp.overview_label, sp.challenge_label, sp.solution_label, sp.functions_label, sp.problem_statement,
       sp.solution_description, sp.features_text, sp.impact_statement, sp.contribution,
       sp.technologies_text, COALESCE(sp.image_mode, 'latest') AS image_mode,
       CASE WHEN sp.custom_image_stored_name IS NOT NULL THEN 1 ELSE 0 END AS has_custom_image,
@@ -194,17 +196,19 @@ staffRouter.patch("/showcase", requireRole("admin", "lead"), (req, res) => {
     enabled: z.boolean().optional(),
     title: z.string().trim().min(3).max(120).optional(),
     intro: z.string().trim().min(3).max(500).optional(),
+    pcEyebrow: z.string().trim().max(80).optional(),
     showPdfExport: z.boolean().optional()
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Check the showcase details" });
   const current = showcaseSettings();
   db.prepare(`
-    UPDATE showcase_settings SET enabled = ?, title = ?, intro = ?, show_pdf_export = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    UPDATE showcase_settings SET enabled = ?, title = ?, intro = ?, pc_eyebrow = ?, show_pdf_export = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = 1
   `).run(
     parsed.data.enabled === undefined ? current.enabled : parsed.data.enabled ? 1 : 0,
     parsed.data.title ?? current.title,
     parsed.data.intro ?? current.intro,
+    parsed.data.pcEyebrow ?? current.pc_eyebrow,
     parsed.data.showPdfExport === undefined ? current.show_pdf_export : parsed.data.showPdfExport ? 1 : 0,
     authReq.user.id
   );
@@ -250,6 +254,12 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
       category: z.string().trim().max(80).optional().default(""),
       summary: z.string().trim().max(800).optional().default(""),
       overview: z.string().trim().max(4000).optional().default(""),
+      storyEyebrow: z.string().trim().max(100).optional().default(""),
+      storyTitle: z.string().trim().max(120).optional().default(""),
+      overviewLabel: z.string().trim().max(80).optional().default(""),
+      challengeLabel: z.string().trim().max(80).optional().default(""),
+      solutionLabel: z.string().trim().max(80).optional().default(""),
+      functionsLabel: z.string().trim().max(80).optional().default(""),
       problem: z.string().trim().max(3000).optional().default(""),
       solution: z.string().trim().max(4000).optional().default(""),
       features: z.string().trim().max(4000).optional().default(""),
@@ -279,9 +289,10 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
       INSERT INTO showcase_projects(
         project_id, visible, sort_order, title_override, summary_override, category, image_mode,
         custom_image_name, custom_image_stored_name, custom_image_mime_type, custom_image_size,
-        detail_overview, problem_statement, solution_description, features_text,
+        detail_overview, story_eyebrow, story_title, overview_label, challenge_label, solution_label, functions_label,
+        problem_statement, solution_description, features_text,
         impact_statement, contribution, technologies_text
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(project_id) DO UPDATE SET
         visible = excluded.visible,
         sort_order = excluded.sort_order,
@@ -294,6 +305,12 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
         custom_image_mime_type = COALESCE(excluded.custom_image_mime_type, showcase_projects.custom_image_mime_type),
         custom_image_size = COALESCE(excluded.custom_image_size, showcase_projects.custom_image_size),
         detail_overview = excluded.detail_overview,
+        story_eyebrow = excluded.story_eyebrow,
+        story_title = excluded.story_title,
+        overview_label = excluded.overview_label,
+        challenge_label = excluded.challenge_label,
+        solution_label = excluded.solution_label,
+        functions_label = excluded.functions_label,
         problem_statement = excluded.problem_statement,
         solution_description = excluded.solution_description,
         features_text = excluded.features_text,
@@ -306,7 +323,11 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
       cleanText(parsed.data.title, 120) || null, cleanText(parsed.data.summary, 800) || null,
       cleanText(parsed.data.category, 80), file ? "custom" : parsed.data.imageMode,
       file ? cleanText(file.originalname, 255) : null, storedName || null, file?.mimetype ?? null, file?.size ?? null,
-      cleanText(parsed.data.overview, 4000) || null, cleanText(parsed.data.problem, 3000) || null,
+      cleanText(parsed.data.overview, 4000) || null,
+      cleanText(parsed.data.storyEyebrow, 100) || null, cleanText(parsed.data.storyTitle, 120) || null,
+      cleanText(parsed.data.overviewLabel, 80) || null, cleanText(parsed.data.challengeLabel, 80) || null,
+      cleanText(parsed.data.solutionLabel, 80) || null, cleanText(parsed.data.functionsLabel, 80) || null,
+      cleanText(parsed.data.problem, 3000) || null,
       cleanText(parsed.data.solution, 4000) || null, cleanText(parsed.data.features, 4000) || null,
       cleanText(parsed.data.impact, 3000) || null, cleanText(parsed.data.contribution, 2000) || null,
       cleanText(parsed.data.technologies, 1200) || null
@@ -322,6 +343,71 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
     if (storedName) await fs.promises.rm(path.join(paths.uploads, storedName), { force: true });
     next(error);
   }
+});
+
+staffRouter.get("/showcase/projects/:id/story-images", requireRole("admin", "lead"), (req, res) => {
+  const images = db.prepare("SELECT slot, original_name, stored_name FROM showcase_story_images WHERE project_id = ?")
+    .all(req.params.id) as { slot: string; original_name: string; stored_name: string }[];
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ images: Object.fromEntries(images.map(image => [image.slot, {
+    name: image.original_name,
+    url: `/api/staff/showcase/projects/${req.params.id}/story-images/${image.slot}/image?v=${encodeURIComponent(image.stored_name)}`
+  }])) });
+});
+
+staffRouter.post("/showcase/projects/:id/story-images/:slot", requireRole("admin", "lead"), showcaseUpload.single("image"), async (req, res, next) => {
+  let storedName = "";
+  try {
+    if (!storyImageSlots.has(String(req.params.slot))) return res.status(400).json({ error: "Choose a valid case study card" });
+    const project = db.prepare("SELECT id FROM projects WHERE id = ? AND status != 'cancelled'").get(req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const file = req.file;
+    if (!file || !normalizeImageUploads([file])) return res.status(400).json({ error: "Choose a valid JPG, PNG, or WebP image" });
+    if (!(await storageAvailable(file.size))) return res.status(507).json({ error: "Storage capacity is too low for this image" });
+    const existing = db.prepare("SELECT stored_name FROM showcase_story_images WHERE project_id = ? AND slot = ?")
+      .get(req.params.id, req.params.slot) as { stored_name: string } | undefined;
+    const ext = file.mimetype === "image/jpeg" ? ".jpg" : file.mimetype === "image/png" ? ".png" : ".webp";
+    storedName = `${crypto.randomUUID()}${ext}`;
+    await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
+    db.prepare("INSERT OR IGNORE INTO showcase_projects(project_id) VALUES (?)").run(req.params.id);
+    db.prepare(`
+      INSERT INTO showcase_story_images(project_id, slot, original_name, stored_name, mime_type)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, slot) DO UPDATE SET
+        original_name = excluded.original_name, stored_name = excluded.stored_name,
+        mime_type = excluded.mime_type, updated_at = CURRENT_TIMESTAMP
+    `).run(req.params.id, req.params.slot, cleanText(file.originalname, 255), storedName, file.mimetype);
+    storedName = "";
+    if (existing) await fs.promises.rm(path.join(paths.uploads, existing.stored_name), { force: true }).catch(() => {});
+    audit((req as AuthenticatedRequest).user, "showcase_story_image_updated", "project", Number(req.params.id), { slot: req.params.slot }, req.ip);
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    if (storedName) await fs.promises.rm(path.join(paths.uploads, storedName), { force: true });
+    next(error);
+  }
+});
+
+staffRouter.delete("/showcase/projects/:id/story-images/:slot", requireRole("admin", "lead"), async (req, res, next) => {
+  try {
+    if (!storyImageSlots.has(String(req.params.slot))) return res.status(400).json({ error: "Choose a valid case study card" });
+    const existing = db.prepare("SELECT stored_name FROM showcase_story_images WHERE project_id = ? AND slot = ?")
+      .get(req.params.id, req.params.slot) as { stored_name: string } | undefined;
+    if (!existing) return res.status(404).json({ error: "Card image not found" });
+    db.prepare("DELETE FROM showcase_story_images WHERE project_id = ? AND slot = ?").run(req.params.id, req.params.slot);
+    await fs.promises.rm(path.join(paths.uploads, existing.stored_name), { force: true }).catch(() => {});
+    audit((req as AuthenticatedRequest).user, "showcase_story_image_removed", "project", Number(req.params.id), { slot: req.params.slot }, req.ip);
+    res.json({ ok: true });
+  } catch (error) { next(error); }
+});
+
+staffRouter.get("/showcase/projects/:id/story-images/:slot/image", requireRole("admin", "lead"), (req, res) => {
+  if (!storyImageSlots.has(String(req.params.slot))) return res.status(404).end();
+  const image = db.prepare("SELECT stored_name, mime_type FROM showcase_story_images WHERE project_id = ? AND slot = ?")
+    .get(req.params.id, req.params.slot) as { stored_name: string; mime_type: string } | undefined;
+  if (!image) return res.status(404).end();
+  res.setHeader("Content-Type", image.mime_type);
+  res.setHeader("Cache-Control", "no-store");
+  res.sendFile(path.resolve(paths.uploads, image.stored_name));
 });
 
 staffRouter.get("/showcase/projects/:id/gallery", requireRole("admin", "lead"), (req, res) => {

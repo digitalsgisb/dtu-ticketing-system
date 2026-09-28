@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS showcase_settings (
   enabled INTEGER NOT NULL DEFAULT 0,
   title TEXT NOT NULL DEFAULT 'Systems built by DTU',
   intro TEXT NOT NULL DEFAULT 'A quick look at the digital tools created for our teams.',
+  pc_eyebrow TEXT NOT NULL DEFAULT 'DTU · Digital solutions',
   show_pdf_export INTEGER NOT NULL DEFAULT 0,
   updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -223,6 +224,12 @@ CREATE TABLE IF NOT EXISTS showcase_projects (
   custom_image_mime_type TEXT,
   custom_image_size INTEGER,
   detail_overview TEXT,
+  story_eyebrow TEXT,
+  story_title TEXT,
+  overview_label TEXT,
+  challenge_label TEXT,
+  solution_label TEXT,
+  functions_label TEXT,
   problem_statement TEXT,
   solution_description TEXT,
   features_text TEXT,
@@ -246,6 +253,16 @@ CREATE TABLE IF NOT EXISTS showcase_project_gallery (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK(source_image_id IS NOT NULL OR custom_image_stored_name IS NOT NULL),
   UNIQUE(project_id, source_image_id)
+);
+
+CREATE TABLE IF NOT EXISTS showcase_story_images (
+  project_id INTEGER NOT NULL REFERENCES showcase_projects(project_id) ON DELETE CASCADE,
+  slot TEXT NOT NULL CHECK(slot IN ('overview', 'challenge', 'solution')),
+  original_name TEXT NOT NULL,
+  stored_name TEXT NOT NULL UNIQUE,
+  mime_type TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(project_id, slot)
 );
 
 CREATE TABLE IF NOT EXISTS public_tracking_tokens (
@@ -405,6 +422,13 @@ ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
 ensureColumn("showcase_projects", "category", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("showcase_settings", "show_pdf_export", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("showcase_settings", "pc_eyebrow", "TEXT NOT NULL DEFAULT 'DTU · Digital solutions'");
+ensureColumn("showcase_projects", "story_eyebrow", "TEXT");
+ensureColumn("showcase_projects", "story_title", "TEXT");
+ensureColumn("showcase_projects", "overview_label", "TEXT");
+ensureColumn("showcase_projects", "challenge_label", "TEXT");
+ensureColumn("showcase_projects", "solution_label", "TEXT");
+ensureColumn("showcase_projects", "functions_label", "TEXT");
 ensureColumn("showcase_projects", "problem_statement", "TEXT");
 ensureColumn("showcase_projects", "solution_description", "TEXT");
 ensureColumn("showcase_projects", "features_text", "TEXT");
@@ -451,7 +475,7 @@ export async function seedDatabase() {
 export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== "test") return;
   for (const table of [
-    "showcase_project_gallery", "showcase_projects", "showcase_settings", "project_handovers", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
+    "showcase_story_images", "showcase_project_gallery", "showcase_projects", "showcase_settings", "project_handovers", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
     "work_items", "projects", "project_requests", "sessions", "login_attempts",
     "import_batches", "users", "departments", "counters"
   ]) {

@@ -19,6 +19,12 @@ type ShowcaseProject = {
   summary_override: string | null;
   category: string;
   detail_overview: string | null;
+  story_eyebrow: string | null;
+  story_title: string | null;
+  overview_label: string | null;
+  challenge_label: string | null;
+  solution_label: string | null;
+  functions_label: string | null;
   problem_statement: string | null;
   solution_description: string | null;
   features_text: string | null;
@@ -32,7 +38,7 @@ type ShowcaseProject = {
 };
 
 type ShowcaseAdminData = {
-  settings: { enabled: number; title: string; intro: string; show_pdf_export: number };
+  settings: { enabled: number; title: string; intro: string; pc_eyebrow: string; show_pdf_export: number };
   projects: ShowcaseProject[];
   url: string;
   dataUrl: string;
@@ -93,7 +99,8 @@ export function ShowcasePage() {
     try {
       await api("/api/staff/showcase", json("PATCH", {
         title: form.get("title"),
-        intro: form.get("intro")
+        intro: form.get("intro"),
+        pcEyebrow: form.get("pcEyebrow")
       }));
       await load();
     } catch (e) { setError((e as Error).message); }
@@ -216,8 +223,9 @@ export function ShowcasePage() {
       <section className="panel showcase-settings-panel">
         <div className="panel-heading"><div><span className="eyebrow">Portfolio details</span><h2>Visitor welcome</h2></div></div>
         <form className="form-stack" onSubmit={saveSettings}>
+          <label>PC presentation eyebrow<input name="pcEyebrow" maxLength={80} defaultValue={data.settings.pc_eyebrow} placeholder="DTU · Digital solutions" /></label>
           <label>Portfolio title<input name="title" required minLength={3} maxLength={120} defaultValue={data.settings.title} /></label>
-          <label>Short introduction<textarea name="intro" required minLength={3} maxLength={500} rows={4} defaultValue={data.settings.intro} /></label>
+          <label>Portfolio subtitle / introduction<textarea name="intro" required minLength={3} maxLength={500} rows={4} defaultValue={data.settings.intro} /></label>
           <button className="button button-secondary" disabled={busy}>Save welcome text</button>
         </form>
         <div className="showcase-pdf-setting"><div><strong>PDF export button</strong><small>{data.settings.show_pdf_export ? "Visible to showcase visitors" : "Hidden from showcase visitors"}</small></div><button type="button" className="button button-secondary" disabled={busy} onClick={() => void togglePdfExport()}>{data.settings.show_pdf_export ? "Hide button" : "Show button"}</button></div>
@@ -289,6 +297,12 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
   const [summary, setSummary] = useState(project.summary_override ?? "");
   const [category, setCategory] = useState(project.category ?? "");
   const [overview, setOverview] = useState(project.detail_overview ?? "");
+  const [storyEyebrow, setStoryEyebrow] = useState(project.story_eyebrow ?? "");
+  const [storyTitle, setStoryTitle] = useState(project.story_title ?? "");
+  const [overviewLabel, setOverviewLabel] = useState(project.overview_label ?? "");
+  const [challengeLabel, setChallengeLabel] = useState(project.challenge_label ?? "");
+  const [solutionLabel, setSolutionLabel] = useState(project.solution_label ?? "");
+  const [functionsLabel, setFunctionsLabel] = useState(project.functions_label ?? "");
   const [problem, setProblem] = useState(project.problem_statement ?? "");
   const [solution, setSolution] = useState(project.solution_description ?? "");
   const [features, setFeatures] = useState(project.features_text ?? "");
@@ -312,6 +326,12 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
     setSummary(project.summary_override ?? "");
     setCategory(project.category ?? "");
     setOverview(project.detail_overview ?? "");
+    setStoryEyebrow(project.story_eyebrow ?? "");
+    setStoryTitle(project.story_title ?? "");
+    setOverviewLabel(project.overview_label ?? "");
+    setChallengeLabel(project.challenge_label ?? "");
+    setSolutionLabel(project.solution_label ?? "");
+    setFunctionsLabel(project.functions_label ?? "");
     setProblem(project.problem_statement ?? "");
     setSolution(project.solution_description ?? "");
     setFeatures(project.features_text ?? "");
@@ -333,6 +353,12 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
       body.set("summary", summary);
       body.set("category", category);
       body.set("overview", overview);
+      body.set("storyEyebrow", storyEyebrow);
+      body.set("storyTitle", storyTitle);
+      body.set("overviewLabel", overviewLabel);
+      body.set("challengeLabel", challengeLabel);
+      body.set("solutionLabel", solutionLabel);
+      body.set("functionsLabel", functionsLabel);
       body.set("problem", problem);
       body.set("solution", solution);
       body.set("features", features);
@@ -381,6 +407,12 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
     {caseOpen && <section className="showcase-case-editor">
       <header><div><span className="eyebrow">Professional case study</span><h3>Tell the story behind the system</h3><p>These fields appear only in the approved public portfolio. Actual system links remain private.</p></div><button className="button button-primary" disabled={busy} onClick={() => void save()}>Save case study</button></header>
       <div className="showcase-case-fields">
+        <label>Case study small heading<input maxLength={100} value={storyEyebrow} placeholder={`${title || project.name} · Case study`} onChange={event => setStoryEyebrow(event.target.value)} /></label>
+        <label>Case study main heading<input maxLength={120} value={storyTitle} placeholder="From challenge to solution" onChange={event => setStoryTitle(event.target.value)} /></label>
+        <label>First card heading<input maxLength={80} value={overviewLabel} placeholder="Overview" onChange={event => setOverviewLabel(event.target.value)} /></label>
+        <label>Second card heading<input maxLength={80} value={challengeLabel} placeholder="Challenge" onChange={event => setChallengeLabel(event.target.value)} /></label>
+        <label>Third card heading<input maxLength={80} value={solutionLabel} placeholder="Solution" onChange={event => setSolutionLabel(event.target.value)} /></label>
+        <label>Functions row heading<input maxLength={80} value={functionsLabel} placeholder="Key functions" onChange={event => setFunctionsLabel(event.target.value)} /></label>
         <label>Overview<textarea rows={4} maxLength={4000} value={overview} placeholder="What is this system and who is it for?" onChange={event => setOverview(event.target.value)} /></label>
         <label>The challenge<textarea rows={4} maxLength={3000} value={problem} placeholder="What problem or manual process needed to be improved?" onChange={event => setProblem(event.target.value)} /></label>
         <label>The solution<textarea rows={4} maxLength={4000} value={solution} placeholder="How does the system solve that problem?" onChange={event => setSolution(event.target.value)} /></label>
@@ -389,6 +421,7 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
         <label>Your contribution <small>useful for interview sharing</small><textarea rows={4} maxLength={2000} value={contribution} placeholder="Your role in discovery, design, development, deployment, or support." onChange={event => setContribution(event.target.value)} /></label>
         <label className="showcase-case-wide">Technologies <small>separate with commas</small><input maxLength={1200} value={technologies} placeholder="React, Node.js, SQLite, Raspberry Pi" onChange={event => setTechnologies(event.target.value)} /></label>
       </div>
+      <StoryImageManager projectId={project.id} />
       <ShowcaseGalleryManager projectId={project.id} />
     </section>}
   </article>;
@@ -396,6 +429,44 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
 
 type GalleryItem = { id: number; caption: string; original_name: string; imageUrl: string; source_image_id: number | null };
 type ProgressGalleryImage = { id: number; original_name: string; created_at: string; gallery_id: number | null; imageUrl: string };
+type StorySlot = "overview" | "challenge" | "solution";
+type StoryImage = { name: string; url: string };
+
+function StoryImageManager({ projectId }: { projectId: number }) {
+  const [images, setImages] = useState<Partial<Record<StorySlot, StoryImage>>>({});
+  const [busySlot, setBusySlot] = useState<StorySlot | null>(null);
+  const [error, setError] = useState("");
+  const load = () => api<{ images: Partial<Record<StorySlot, StoryImage>> }>(`/api/staff/showcase/projects/${projectId}/story-images`)
+    .then(next => { setImages(next.images); setError(""); }).catch(cause => setError((cause as Error).message));
+  useEffect(() => { void load(); }, [projectId]);
+
+  const upload = async (slot: StorySlot, file: File) => {
+    setBusySlot(slot); setError("");
+    try {
+      const body = new FormData();
+      body.set("image", await compressProgressImage(file));
+      await api(`/api/staff/showcase/projects/${projectId}/story-images/${slot}`, { method: "POST", body });
+      await load();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusySlot(null); }
+  };
+
+  const remove = async (slot: StorySlot) => {
+    setBusySlot(slot); setError("");
+    try {
+      await api(`/api/staff/showcase/projects/${projectId}/story-images/${slot}`, { method: "DELETE" });
+      await load();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusySlot(null); }
+  };
+
+  const slots: { key: StorySlot; label: string }[] = [
+    { key: "overview", label: "First card image" },
+    { key: "challenge", label: "Second card image" },
+    { key: "solution", label: "Third card image" }
+  ];
+  return <section className="showcase-story-image-manager"><header><span className="eyebrow">Case study slide images</span><h4>Give each card its own picture</h4><p>Optional JPG, PNG, or WebP. Images upload when selected, and appear beneath the card text.</p></header><ErrorNotice message={error} /><div>{slots.map(slot => <article key={slot.key}>{images[slot.key] ? <img src={images[slot.key]?.url} alt={`${slot.label} preview`} /> : <div className="showcase-story-image-placeholder">No image</div>}<strong>{slot.label}</strong>{images[slot.key] && <small>{images[slot.key]?.name}</small>}<label className="button button-secondary">{busySlot === slot.key ? "Working…" : images[slot.key] ? "Replace image" : "Upload image"}<input type="file" accept=".jpg,.jpeg,.png,.webp" disabled={busySlot !== null} onChange={event => { const file = event.target.files?.[0]; if (file) void upload(slot.key, file); event.target.value = ""; }} /></label>{images[slot.key] && <button className="button button-secondary" type="button" disabled={busySlot !== null} onClick={() => void remove(slot.key)}>Remove image</button>}</article>)}</div></section>;
+}
 
 function ShowcaseGalleryManager({ projectId }: { projectId: number }) {
   const [data, setData] = useState<{ gallery: GalleryItem[]; progressImages: ProgressGalleryImage[]; maximum: number } | null>(null);
@@ -461,7 +532,7 @@ function GalleryEditorItem({ item, busy, onRemoved, onChanged }: { item: Gallery
 
 export function PublicShowcasePage() {
   const { token } = useParams();
-  const [data, setData] = useState<{ title: string; intro: string; showPdfExport: boolean; projects: GuestProject[] } | null>(null);
+  const [data, setData] = useState<{ title: string; intro: string; pcEyebrow: string; showPdfExport: boolean; projects: GuestProject[] } | null>(null);
   const [error, setError] = useState("");
   const [active, setActive] = useState(0);
   const [view, setView] = useState<"mobile" | "pc">(() => window.matchMedia("(min-width: 850px)").matches ? "pc" : "mobile");
@@ -550,7 +621,7 @@ export function PublicShowcasePage() {
   return <main className={`guest-showcase guest-showcase-${view}`} ref={showcaseRoot}>
     <header className="guest-showcase-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><div className="guest-showcase-toolbar"><div className="guest-view-switch" role="group" aria-label="Showcase view"><button type="button" className={view === "mobile" ? "active" : ""} aria-pressed={view === "mobile"} onClick={() => { setView("mobile"); setActive(0); }}>Mobile view</button><button type="button" className={view === "pc" ? "active" : ""} aria-pressed={view === "pc"} onClick={() => { setView("pc"); setActive(0); }}>PC view</button></div><button className="guest-fullscreen-button" type="button" onClick={() => void toggleFullscreen()}>{fullscreen ? "Exit fullscreen" : "⛶ Fullscreen"}</button></div></header>
     {view === "pc" ? <section className="guest-pc-presentation">
-      <div className="guest-pc-heading"><span className="eyebrow">DTU · Digital solutions</span><h1>{data.title}</h1><p>{data.intro}</p></div>
+      <div className="guest-pc-heading"><span className="eyebrow">{data.pcEyebrow}</span><h1>{data.title}</h1><p>{data.intro}</p></div>
       {selectedProject ? <div className="guest-pc-layout"><nav className="guest-pc-projects" aria-label="Presentation projects"><span className="guest-pc-kicker">Select a project <b>{String(data.projects.length).padStart(2, "0")}</b></span>{data.projects.map((project, index) => <div className="guest-pc-project-entry" key={project.id}>{(index === 0 || (data.projects[index - 1].category || "Projects") !== (project.category || "Projects")) && <div className="guest-pc-category-heading"><span>{String(index + 1).padStart(2, "0")} · Category</span><strong>{project.category || "Projects"}</strong></div>}<button type="button" className={active === index ? "active" : ""} aria-current={active === index ? "true" : undefined} onClick={() => setActive(index)}><small>{String(index + 1).padStart(2, "0")}</small><span><strong>{project.name}</strong><em>{project.department}</em></span><b aria-hidden="true">↗</b></button></div>)}</nav><DesktopCaseSlides key={selectedProject.id} token={token || ""} project={selectedProject} projectPosition={active + 1} projectCount={data.projects.length} /></div> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
       {selectedProject && <div className="guest-pc-bottom"><span>← → case study slides · ↑ ↓ projects</span><div><button type="button" disabled={active === 0} onClick={() => setActive(active - 1)} aria-label="Previous project">←</button><span>Project {String(active + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span><button type="button" disabled={active === data.projects.length - 1} onClick={() => setActive(active + 1)} aria-label="Next project">→</button></div></div>}
       {data.showPdfExport && <a className="guest-showcase-export guest-pc-export" href={`/api/public/showcase/${token}/portfolio.pdf`} download><span>Export PDF portfolio</span><b aria-hidden="true">↓</b></a>}
@@ -597,10 +668,13 @@ type PortfolioCaseData = {
   portfolioTitle: string;
   project: {
     id: number; name: string; summary: string; department: string; overview: string;
+    storyEyebrow: string; storyTitle: string; overviewLabel: string; challengeLabel: string;
+    solutionLabel: string; functionsLabel: string;
     problem: string; solution: string; features: string[]; impact: string;
     contribution: string; technologies: string[]; coverImageUrl: string | null;
   };
   gallery: { id: number; caption: string; imageUrl: string }[];
+  storyImages: Partial<Record<StorySlot, string>>;
   previous: { id: number; name: string } | null;
   next: { id: number; name: string } | null;
 };
@@ -660,7 +734,7 @@ function DesktopCaseSlides({ token, project, projectPosition, projectCount }: { 
     <nav className="guest-pc-slide-tabs" aria-label="Case study slides">{slides.map((item, index) => <button key={item.id} type="button" className={index === slideIndex ? "active" : ""} aria-current={index === slideIndex ? "step" : undefined} onClick={() => setSlideIndex(index)}><span>{String(index + 1).padStart(2, "0")}</span>{item.label}</button>)}</nav>
     <article className={`guest-pc-stage guest-pc-stage-${slide.kind}`} key={slide.id} aria-live="polite">
       {slide.kind === "cover" && <><div className="guest-pc-stage-art">{project.imageUrl ? <img src={project.imageUrl} alt={`Preview of ${project.name}`} /> : <div className="guest-pc-art-placeholder"><span>{String(projectPosition).padStart(2, "0")}</span><strong>DTU</strong></div>}<span className="guest-pc-stage-count">PROJECT {String(projectPosition).padStart(2, "0")} / {String(projectCount).padStart(2, "0")}</span></div><div className="guest-pc-stage-copy"><span className="eyebrow">{project.category || "Projects"} · {project.department}</span><h2>{project.name}</h2><p>{presentationExcerpt(caseStudy?.overview || project.summary, 260) || "A digital solution made for the way our teams work."}</p>{slides.length > 1 && <button type="button" onClick={() => setSlideIndex(1)}>View case study <span aria-hidden="true">→</span></button>}</div></>}
-      {slide.kind === "story" && caseStudy && <div className="guest-pc-story-slide"><header><span className="eyebrow">{project.name} · Case study</span><h2>From challenge to solution</h2></header><div className="guest-pc-story-grid"><section><span>01 / Overview</span><p>{presentationExcerpt(caseStudy.overview || caseStudy.summary, 195)}</p></section><section><span>02 / Challenge</span><p>{presentationExcerpt(caseStudy.problem || "The work called for a clearer, more connected process.", 195)}</p></section><section><span>03 / Solution</span><p>{presentationExcerpt(caseStudy.solution || caseStudy.summary, 195)}</p></section></div>{caseStudy.features.length > 0 && <div className="guest-pc-story-functions"><strong>Key functions</strong><div>{caseStudy.features.slice(0, 3).map((feature, index) => <span key={`${feature}-${index}`}>{feature}</span>)}</div></div>}</div>}
+      {slide.kind === "story" && caseStudy && <div className="guest-pc-story-slide"><header><span className="eyebrow">{caseStudy.storyEyebrow || `${project.name} · Case study`}</span><h2>{caseStudy.storyTitle || "From challenge to solution"}</h2></header><div className="guest-pc-story-grid"><section><span>01 / {caseStudy.overviewLabel || "Overview"}</span><p>{presentationExcerpt(caseStudy.overview || caseStudy.summary, detail?.storyImages.overview ? 110 : 195)}</p>{detail?.storyImages.overview && <img src={detail.storyImages.overview} alt={`${caseStudy.overviewLabel || "Overview"} illustration`} />}</section><section><span>02 / {caseStudy.challengeLabel || "Challenge"}</span><p>{presentationExcerpt(caseStudy.problem || "The work called for a clearer, more connected process.", detail?.storyImages.challenge ? 110 : 195)}</p>{detail?.storyImages.challenge && <img src={detail.storyImages.challenge} alt={`${caseStudy.challengeLabel || "Challenge"} illustration`} />}</section><section><span>03 / {caseStudy.solutionLabel || "Solution"}</span><p>{presentationExcerpt(caseStudy.solution || caseStudy.summary, detail?.storyImages.solution ? 110 : 195)}</p>{detail?.storyImages.solution && <img src={detail.storyImages.solution} alt={`${caseStudy.solutionLabel || "Solution"} illustration`} />}</section></div>{caseStudy.features.length > 0 && <div className="guest-pc-story-functions"><strong>{caseStudy.functionsLabel || "Key functions"}</strong><div>{caseStudy.features.slice(0, 3).map((feature, index) => <span key={`${feature}-${index}`}>{feature}</span>)}</div></div>}</div>}
       {slide.kind === "result" && caseStudy && <><div className="guest-pc-stage-art guest-pc-result-art">{galleryImage ? <img src={galleryImage.imageUrl} alt={galleryImage.caption || `Image of ${project.name}`} /> : project.imageUrl ? <img src={project.imageUrl} alt={`Preview of ${project.name}`} /> : <div className="guest-pc-art-placeholder"><span>03</span><strong>DTU</strong></div>}{detail && detail.gallery.length > 1 && <div className="guest-pc-image-controls"><button type="button" disabled={imageIndex === 0} onClick={() => setImageIndex(index => index - 1)} aria-label="Previous gallery image">←</button><span>{imageIndex + 1} / {detail.gallery.length}</span><button type="button" disabled={imageIndex === detail.gallery.length - 1} onClick={() => setImageIndex(index => index + 1)} aria-label="Next gallery image">→</button></div>}</div><div className="guest-pc-stage-copy"><span className="eyebrow">Visuals & outcome</span><h2>{caseStudy.impact ? "The value it brings" : "See the project"}</h2>{galleryImage?.caption && <small className="guest-pc-image-caption">{galleryImage.caption}</small>}{caseStudy.impact && <p>{presentationExcerpt(caseStudy.impact, 150)}</p>}{caseStudy.contribution && <div className="guest-pc-contribution"><strong>Our contribution</strong><p>{presentationExcerpt(caseStudy.contribution, 80)}</p></div>}{caseStudy.technologies.length > 0 && <div className="guest-pc-technologies">{caseStudy.technologies.slice(0, 4).map(item => <span key={item}>{item}</span>)}</div>}</div></>}
     </article>
     {detailError && <p className="guest-pc-detail-error">Case study details are unavailable: {detailError}</p>}
@@ -695,14 +769,14 @@ function PortfolioCaseContent({ data, token, inModal = false, onNavigate }: { da
       <div><span className="eyebrow">{project.department} · Case study</span><h1>{project.name}</h1><p>{project.summary}</p><div className="portfolio-case-stats"><span><strong>{String(project.features.length).padStart(2, "0")}</strong> key functions</span><span><strong>{String(images.length).padStart(2, "0")}</strong> project images</span></div></div>
       {project.coverImageUrl && <button className="portfolio-case-cover" type="button" onClick={() => { setSelectedImage(0); setLightbox(true); }}><img src={project.coverImageUrl} alt={`Overview of ${project.name}`} /><span>View full image</span></button>}
     </section>
-    <nav className="portfolio-case-nav" aria-label="Case study sections"><a href={`#${sectionPrefix}-overview`}>Overview</a>{project.features.length > 0 && <a href={`#${sectionPrefix}-capabilities`}>What it does</a>}{images.length > 0 && <a href={`#${sectionPrefix}-gallery`}>Gallery</a>}{project.impact && <a href={`#${sectionPrefix}-impact`}>Impact</a>}</nav>
+    <nav className="portfolio-case-nav" aria-label="Case study sections"><a href={`#${sectionPrefix}-overview`}>{project.overviewLabel || "Overview"}</a>{project.features.length > 0 && <a href={`#${sectionPrefix}-capabilities`}>{project.functionsLabel || "What it does"}</a>}{images.length > 0 && <a href={`#${sectionPrefix}-gallery`}>Gallery</a>}{project.impact && <a href={`#${sectionPrefix}-impact`}>Impact</a>}</nav>
     <div className="portfolio-case-body">
       <section id={`${sectionPrefix}-overview`} className="portfolio-story-grid">
-        <article className="portfolio-story-overview"><span>01 · Overview</span><h2>Built around the work, not around the software.</h2><p>{project.overview || project.summary}</p></article>
-        {project.problem && <article><span>The challenge</span><h3>What needed to change</h3><p>{project.problem}</p></article>}
-        <article><span>The solution</span><h3>How the system responds</h3><p>{project.solution || project.summary}</p></article>
+        <article className="portfolio-story-overview"><span>01 · {project.overviewLabel || "Overview"}</span><h2>{project.storyTitle || "Built around the work"}</h2><p>{project.overview || project.summary}</p></article>
+        {project.problem && <article><span>02 · {project.challengeLabel || "Challenge"}</span><h3>{project.challengeLabel || "What needed to change"}</h3><p>{project.problem}</p></article>}
+        <article><span>03 · {project.solutionLabel || "Solution"}</span><h3>{project.solutionLabel || "How the system responds"}</h3><p>{project.solution || project.summary}</p></article>
       </section>
-      {project.features.length > 0 && <section id={`${sectionPrefix}-capabilities`} className="portfolio-capabilities"><header><span className="eyebrow">02 · What it does</span><h2>Core system functions</h2><p>A practical look at the functions designed for day-to-day users.</p></header><div>{project.features.map((feature, index) => <article key={`${feature}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h3>{feature}</h3><i /></article>)}</div></section>}
+      {project.features.length > 0 && <section id={`${sectionPrefix}-capabilities`} className="portfolio-capabilities"><header><span className="eyebrow">02 · {project.functionsLabel || "What it does"}</span><h2>{project.functionsLabel || "Core system functions"}</h2><p>A practical look at the functions designed for day-to-day users.</p></header><div>{project.features.map((feature, index) => <article key={`${feature}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h3>{feature}</h3><i /></article>)}</div></section>}
       {images.length > 0 && currentImage && <section id={`${sectionPrefix}-gallery`} className="portfolio-gallery"><header><span className="eyebrow">03 · Product gallery</span><h2>See the system in action</h2><p>Explore approved screens, workflows, and delivery progress.</p></header><div className="portfolio-gallery-stage"><button type="button" onClick={() => setLightbox(true)}><img src={currentImage.imageUrl} alt={currentImage.caption || project.name} /></button><footer><span>{currentImage.caption || project.name}</span><strong>{String(selectedImage + 1).padStart(2, "0")} / {String(images.length).padStart(2, "0")}</strong></footer></div>{images.length > 1 && <div className="portfolio-gallery-thumbs">{images.map((image, index) => <button key={`${image.id}-${index}`} className={selectedImage === index ? "active" : ""} type="button" onClick={() => setSelectedImage(index)}><img src={image.imageUrl} alt="" /><span>{String(index + 1).padStart(2, "0")}</span></button>)}</div>}</section>}
       {(project.impact || project.contribution) && <section id={`${sectionPrefix}-impact`} className="portfolio-impact">
         {project.impact && <article><span className="eyebrow">04 · Outcome</span><h2>Impact on the work</h2><p>{project.impact}</p></article>}

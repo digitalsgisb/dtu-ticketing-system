@@ -37,8 +37,8 @@ const urgency = z.enum(["low", "medium", "high", "critical"]);
 
 function showcaseAccess(token: string) {
   return db.prepare(`
-    SELECT token, enabled, title, intro, show_pdf_export FROM showcase_settings WHERE id = 1 AND token = ?
-  `).get(token) as { token: string; enabled: number; title: string; intro: string; show_pdf_export: number } | undefined;
+    SELECT token, enabled, title, intro, pc_eyebrow, show_pdf_export FROM showcase_settings WHERE id = 1 AND token = ?
+  `).get(token) as { token: string; enabled: number; title: string; intro: string; pc_eyebrow: string; show_pdf_export: number } | undefined;
 }
 
 function portfolioList(value: string | null | undefined) {
@@ -110,7 +110,7 @@ publicRouter.get("/showcase/:token", (req, res) => {
     highlights: portfolioList(project.features_text).slice(0, 3)
   }));
   res.setHeader("Cache-Control", "no-store");
-  res.json({ title: settings.title, intro: settings.intro, showPdfExport: Boolean(settings.show_pdf_export), projects });
+  res.json({ title: settings.title, intro: settings.intro, pcEyebrow: settings.pc_eyebrow, showPdfExport: Boolean(settings.show_pdf_export), projects });
 });
 
 publicRouter.get("/showcase/:token/portfolio.pdf", async (req, res, next) => {
@@ -194,7 +194,8 @@ publicRouter.get("/showcase/:token/projects/:projectId", (req, res) => {
   if (!settings.enabled) return res.status(410).json({ error: "This visitor showcase is currently closed" });
   const project = db.prepare(`
     SELECT p.id, p.name, p.description, p.department_name,
-      sp.title_override, sp.summary_override, sp.detail_overview, sp.problem_statement,
+      sp.title_override, sp.summary_override, sp.detail_overview, sp.story_eyebrow, sp.story_title,
+      sp.overview_label, sp.challenge_label, sp.solution_label, sp.functions_label, sp.problem_statement,
       sp.solution_description, sp.features_text, sp.impact_statement, sp.contribution,
       sp.technologies_text, sp.image_mode,
       CASE
@@ -215,6 +216,10 @@ publicRouter.get("/showcase/:token/projects/:projectId", (req, res) => {
     caption: item.caption,
     imageUrl: `/api/public/showcase/${req.params.token}/projects/${project.id}/gallery/${item.id}`
   }));
+  const storyImageRows = db.prepare("SELECT slot, stored_name FROM showcase_story_images WHERE project_id = ?")
+    .all(project.id) as { slot: string; stored_name: string }[];
+  const storyImages = Object.fromEntries(storyImageRows.map(image => [image.slot,
+    `/api/public/showcase/${req.params.token}/projects/${project.id}/story-images/${image.slot}?v=${encodeURIComponent(image.stored_name)}`]));
   const navigation = db.prepare(`
     SELECT p.id, COALESCE(sp.title_override, p.name) AS name
     FROM showcase_projects sp JOIN projects p ON p.id = sp.project_id
@@ -230,6 +235,12 @@ publicRouter.get("/showcase/:token/projects/:projectId", (req, res) => {
       summary: project.summary_override || project.description,
       department: project.department_name,
       overview: project.detail_overview || project.description,
+      storyEyebrow: project.story_eyebrow || "",
+      storyTitle: project.story_title || "",
+      overviewLabel: project.overview_label || "",
+      challengeLabel: project.challenge_label || "",
+      solutionLabel: project.solution_label || "",
+      functionsLabel: project.functions_label || "",
       problem: project.problem_statement || "",
       solution: project.solution_description || project.summary_override || project.description,
       features: portfolioList(project.features_text),
@@ -239,9 +250,26 @@ publicRouter.get("/showcase/:token/projects/:projectId", (req, res) => {
       coverImageUrl: project.has_image ? `/api/public/showcase/${req.params.token}/projects/${project.id}/image` : null
     },
     gallery,
+    storyImages,
     previous: index > 0 ? navigation[index - 1] : null,
     next: index >= 0 && index < navigation.length - 1 ? navigation[index + 1] : null
   });
+});
+
+publicRouter.get("/showcase/:token/projects/:projectId/story-images/:slot", (req, res) => {
+  const settings = showcaseAccess(req.params.token);
+  if (!settings?.enabled || !["overview", "challenge", "solution"].includes(req.params.slot)) return res.status(404).end();
+  const image = db.prepare(`
+    SELECT ssi.stored_name, ssi.mime_type FROM showcase_story_images ssi
+    JOIN showcase_projects sp ON sp.project_id = ssi.project_id AND sp.visible = 1
+    JOIN projects p ON p.id = sp.project_id AND p.status != 'cancelled'
+    WHERE ssi.project_id = ? AND ssi.slot = ?
+  `).get(req.params.projectId, req.params.slot) as { stored_name: string; mime_type: string } | undefined;
+  if (!image) return res.status(404).end();
+  res.setHeader("Content-Type", image.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.sendFile(path.resolve(paths.uploads, image.stored_name));
 });
 
 publicRouter.get("/showcase/:token/projects/:projectId/gallery/:galleryId", (req, res) => {
