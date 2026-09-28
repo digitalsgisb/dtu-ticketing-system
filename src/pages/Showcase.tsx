@@ -17,6 +17,7 @@ type ShowcaseProject = {
   sort_order: number;
   title_override: string | null;
   summary_override: string | null;
+  category: string;
   detail_overview: string | null;
   problem_statement: string | null;
   solution_description: string | null;
@@ -42,6 +43,7 @@ type GuestProject = {
   name: string;
   summary: string;
   department: string;
+  category: string;
   imageUrl: string | null;
   galleryCount: number;
   featureCount: number;
@@ -237,7 +239,7 @@ export function ShowcasePage() {
     </div>
 
     <section className="showcase-project-section">
-      <div className="showcase-project-heading"><div><span className="eyebrow">Approved content</span><h2>Portfolio cards</h2><p>Use the quick order controls on mobile, or drag a card handle on desktop. Changes save automatically.</p></div><span>{orderStatus === "saving" ? "Saving order…" : orderStatus === "saved" ? "Order saved" : `${orderedProjects.length} available projects`}</span></div>
+      <div className="showcase-project-heading"><div><span className="eyebrow">Approved content</span><h2>Portfolio cards</h2><p>Set a presentation category on each card, then place related projects together. Use the quick order controls or drag to arrange them.</p></div><span>{orderStatus === "saving" ? "Saving order…" : orderStatus === "saved" ? "Order saved" : `${orderedProjects.length} available projects`}</span></div>
       {includedProjects.length > 0 && <section className="showcase-quick-order">
         <header><div><span className="eyebrow">Quick card order</span><h3>Arrange the public portfolio</h3><p>Only included cards appear here. Use the arrows to position them without dragging.</p></div><strong>{includedProjects.length} cards</strong></header>
         <div>{includedProjects.map((project, index) => <article key={project.id}>
@@ -285,6 +287,7 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
   const [visible, setVisible] = useState(Boolean(project.visible));
   const [title, setTitle] = useState(project.title_override ?? "");
   const [summary, setSummary] = useState(project.summary_override ?? "");
+  const [category, setCategory] = useState(project.category ?? "");
   const [overview, setOverview] = useState(project.detail_overview ?? "");
   const [problem, setProblem] = useState(project.problem_statement ?? "");
   const [solution, setSolution] = useState(project.solution_description ?? "");
@@ -307,6 +310,7 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
     setVisible(Boolean(project.visible));
     setTitle(project.title_override ?? "");
     setSummary(project.summary_override ?? "");
+    setCategory(project.category ?? "");
     setOverview(project.detail_overview ?? "");
     setProblem(project.problem_statement ?? "");
     setSolution(project.solution_description ?? "");
@@ -327,6 +331,7 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
       body.set("sortOrder", String(position));
       body.set("title", title);
       body.set("summary", summary);
+      body.set("category", category);
       body.set("overview", overview);
       body.set("problem", problem);
       body.set("solution", solution);
@@ -359,6 +364,7 @@ function ShowcaseProjectEditor({ project, position, dragging, onSaved }: { proje
       <div className="showcase-editor-form">
         <label className="showcase-title-field">Visitor title <small>optional</small><input value={title} maxLength={120} placeholder={project.name} onChange={e => setTitle(e.target.value)} /></label>
         <label className="showcase-summary-field">Visitor summary <small>optional</small><textarea rows={3} maxLength={800} value={summary} placeholder={project.description || "Add a short, visitor-friendly description"} onChange={e => setSummary(e.target.value)} /></label>
+        <label className="showcase-title-field">Presentation category <small>projects with the same category appear under a shared heading</small><input value={category} maxLength={80} placeholder="e.g. Operations, Analytics, Customer experience" onChange={e => setCategory(e.target.value)} /></label>
         <label>Cover style<select value={imageMode} onChange={e => setImageMode(e.target.value as typeof imageMode)}>
           <option value="latest">Latest progress photo</option>
           <option value="custom">Custom cover photo</option>
@@ -530,8 +536,8 @@ export function PublicShowcasePage() {
     if (view !== "pc" || openProjectId !== null) return;
     const navigate = (event: KeyboardEvent) => {
       if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      if (event.key === "ArrowRight") setActive(index => Math.min(index + 1, Math.max(0, (data?.projects.length || 1) - 1)));
-      if (event.key === "ArrowLeft") setActive(index => Math.max(index - 1, 0));
+      if (event.key === "ArrowDown") setActive(index => Math.min(index + 1, Math.max(0, (data?.projects.length || 1) - 1)));
+      if (event.key === "ArrowUp") setActive(index => Math.max(index - 1, 0));
     };
     window.addEventListener("keydown", navigate);
     return () => window.removeEventListener("keydown", navigate);
@@ -545,8 +551,8 @@ export function PublicShowcasePage() {
     <header className="guest-showcase-header"><Link to={`/showcase/${token}`}><CompanyLogo /></Link><div className="guest-showcase-toolbar"><div className="guest-view-switch" role="group" aria-label="Showcase view"><button type="button" className={view === "mobile" ? "active" : ""} aria-pressed={view === "mobile"} onClick={() => { setView("mobile"); setActive(0); }}>Mobile view</button><button type="button" className={view === "pc" ? "active" : ""} aria-pressed={view === "pc"} onClick={() => { setView("pc"); setActive(0); }}>PC view</button></div><button className="guest-fullscreen-button" type="button" onClick={() => void toggleFullscreen()}>{fullscreen ? "Exit fullscreen" : "⛶ Fullscreen"}</button></div></header>
     {view === "pc" ? <section className="guest-pc-presentation">
       <div className="guest-pc-heading"><span className="eyebrow">DTU · Digital solutions</span><h1>{data.title}</h1><p>{data.intro}</p></div>
-      {selectedProject ? <div className="guest-pc-layout"><nav className="guest-pc-projects" aria-label="Presentation projects"><span className="guest-pc-kicker">Select a project <b>{String(data.projects.length).padStart(2, "0")}</b></span>{data.projects.map((project, index) => <button key={project.id} type="button" className={active === index ? "active" : ""} aria-current={active === index ? "true" : undefined} onClick={() => setActive(index)}><small>{String(index + 1).padStart(2, "0")}</small><span><strong>{project.name}</strong><em>{project.department}</em></span><b aria-hidden="true">↗</b></button>)}</nav><article className="guest-pc-stage" key={selectedProject.id}><div className="guest-pc-stage-art">{selectedProject.imageUrl ? <img src={selectedProject.imageUrl} alt={`Preview of ${selectedProject.name}`} /> : <div className="guest-pc-art-placeholder"><span>{String(active + 1).padStart(2, "0")}</span><strong>DTU</strong></div>}<span className="guest-pc-stage-count">{String(active + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span></div><div className="guest-pc-stage-copy"><span className="eyebrow">{selectedProject.department} · Featured project</span><h2>{selectedProject.name}</h2><p>{selectedProject.summary || "A digital solution made for the way our teams work."}</p><button type="button" onClick={() => setOpenProjectId(selectedProject.id)}>Explore this project <span aria-hidden="true">↗</span></button></div></article></div> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
-      {selectedProject && <div className="guest-pc-bottom"><span>Use ← → to browse projects</span><div><button type="button" disabled={active === 0} onClick={() => setActive(active - 1)} aria-label="Previous project">←</button><span>{String(active + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span><button type="button" disabled={active === data.projects.length - 1} onClick={() => setActive(active + 1)} aria-label="Next project">→</button></div></div>}
+      {selectedProject ? <div className="guest-pc-layout"><nav className="guest-pc-projects" aria-label="Presentation projects"><span className="guest-pc-kicker">Select a project <b>{String(data.projects.length).padStart(2, "0")}</b></span>{data.projects.map((project, index) => <div className="guest-pc-project-entry" key={project.id}>{(index === 0 || (data.projects[index - 1].category || "Projects") !== (project.category || "Projects")) && <div className="guest-pc-category-heading"><span>{String(index + 1).padStart(2, "0")} · Category</span><strong>{project.category || "Projects"}</strong></div>}<button type="button" className={active === index ? "active" : ""} aria-current={active === index ? "true" : undefined} onClick={() => setActive(index)}><small>{String(index + 1).padStart(2, "0")}</small><span><strong>{project.name}</strong><em>{project.department}</em></span><b aria-hidden="true">↗</b></button></div>)}</nav><DesktopCaseSlides key={selectedProject.id} token={token || ""} project={selectedProject} projectPosition={active + 1} projectCount={data.projects.length} /></div> : <section className="guest-showcase-empty"><span>Portfolio ready</span><h2>Projects will appear here shortly.</h2></section>}
+      {selectedProject && <div className="guest-pc-bottom"><span>← → case study slides · ↑ ↓ projects</span><div><button type="button" disabled={active === 0} onClick={() => setActive(active - 1)} aria-label="Previous project">←</button><span>Project {String(active + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span><button type="button" disabled={active === data.projects.length - 1} onClick={() => setActive(active + 1)} aria-label="Next project">→</button></div></div>}
       {data.showPdfExport && <a className="guest-showcase-export guest-pc-export" href={`/api/public/showcase/${token}/portfolio.pdf`} download><span>Export PDF portfolio</span><b aria-hidden="true">↓</b></a>}
     </section> : <><section className="guest-showcase-intro"><span className="eyebrow">Made for the way we work</span><h1>{data.title}</h1><p>{data.intro}</p><div><strong>{String(data.projects.length).padStart(2, "0")}</strong><span>systems<br />in this showcase</span></div>{data.showPdfExport && <a className="guest-showcase-export" href={`/api/public/showcase/${token}/portfolio.pdf`} download><span>Export PDF portfolio</span><b aria-hidden="true">↓</b></a>}</section>
     {data.projects.length ? <>
@@ -568,7 +574,7 @@ export function PublicShowcasePage() {
             <span className="guest-card-count">{String(index + 1).padStart(2, "0")} / {String(data.projects.length).padStart(2, "0")}</span>
             <span className="guest-card-open-mark" aria-hidden="true">↗</span>
           </div>
-          <div className="guest-showcase-copy"><span>{project.department}</span><h2>{project.name}</h2><p>{project.summary || "A focused digital solution created around the team's day-to-day work."}</p>{project.highlights?.length > 0 && <ul>{project.highlights.map(highlight => <li key={highlight}>{highlight}</li>)}</ul>}</div>
+          <div className="guest-showcase-copy"><span>{project.category || "Projects"} · {project.department}</span><h2>{project.name}</h2><p>{project.summary || "A focused digital solution created around the team's day-to-day work."}</p>{project.highlights?.length > 0 && <ul>{project.highlights.map(highlight => <li key={highlight}>{highlight}</li>)}</ul>}</div>
         </button>)}
         <article className="guest-showcase-card guest-showcase-more">
           <div className="guest-showcase-more-art" aria-hidden="true"><span>+</span><i /><i /><i /></div>
@@ -598,6 +604,77 @@ type PortfolioCaseData = {
   previous: { id: number; name: string } | null;
   next: { id: number; name: string } | null;
 };
+
+type PresentationSlide = {
+  id: string;
+  label: string;
+  eyebrow: string;
+  title: string;
+  kind: "cover" | "story" | "features" | "image" | "impact";
+  body?: string;
+  imageUrl?: string | null;
+  features?: string[];
+  contribution?: string;
+  technologies?: string[];
+};
+
+function DesktopCaseSlides({ token, project, projectPosition, projectCount }: { token: string; project: GuestProject; projectPosition: number; projectCount: number }) {
+  const [detail, setDetail] = useState<PortfolioCaseData | null>(null);
+  const [detailError, setDetailError] = useState("");
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  useEffect(() => {
+    let current = true;
+    void api<PortfolioCaseData>(`/api/public/showcase/${token}/projects/${project.id}`)
+      .then(next => { if (current) { setDetail(next); setDetailError(""); } })
+      .catch(error => { if (current) setDetailError((error as Error).message); });
+    return () => { current = false; };
+  }, [token, project.id]);
+
+  const slides: PresentationSlide[] = [{
+    id: "cover", label: "Introduction", eyebrow: `${project.category || "Projects"} · ${project.department}`,
+    title: project.name, kind: "cover", body: project.summary || "A digital solution made for the way our teams work.", imageUrl: project.imageUrl
+  }];
+  if (detail) {
+    const caseStudy = detail.project;
+    if (caseStudy.overview) slides.push({ id: "overview", label: "Overview", eyebrow: "The project", title: "At a glance", kind: "story", body: caseStudy.overview });
+    if (caseStudy.problem) slides.push({ id: "challenge", label: "Challenge", eyebrow: "The challenge", title: "What needed to change", kind: "story", body: caseStudy.problem });
+    if (caseStudy.solution) slides.push({ id: "solution", label: "Solution", eyebrow: "The solution", title: "How we responded", kind: "story", body: caseStudy.solution });
+    for (let index = 0; index < caseStudy.features.length; index += 4) slides.push({
+      id: `features-${index}`, label: caseStudy.features.length > 4 ? `Functions ${Math.floor(index / 4) + 1}` : "Functions",
+      eyebrow: "Core functions", title: "What the system does", kind: "features", features: caseStudy.features.slice(index, index + 4)
+    });
+    detail.gallery.forEach((image, index) => slides.push({ id: `image-${image.id}`, label: `Image ${index + 1}`, eyebrow: "Project gallery", title: image.caption || caseStudy.name, kind: "image", imageUrl: image.imageUrl }));
+    if (caseStudy.impact || caseStudy.contribution || caseStudy.technologies.length) slides.push({
+      id: "impact", label: "Outcome", eyebrow: "The outcome", title: "The value it brings", kind: "impact",
+      body: caseStudy.impact, contribution: caseStudy.contribution, technologies: caseStudy.technologies
+    });
+  }
+  const slide = slides[Math.min(slideIndex, slides.length - 1)];
+
+  useEffect(() => {
+    const navigate = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.key === "ArrowRight") setSlideIndex(index => Math.min(index + 1, slides.length - 1));
+      if (event.key === "ArrowLeft") setSlideIndex(index => Math.max(index - 1, 0));
+    };
+    window.addEventListener("keydown", navigate);
+    return () => window.removeEventListener("keydown", navigate);
+  }, [slides.length]);
+
+  return <div className="guest-pc-deck" aria-label={`${project.name} case study presentation`}>
+    <div className="guest-pc-deck-category"><span>Project category</span><strong>{project.category || "Projects"}</strong><i aria-hidden="true" /></div>
+    <nav className="guest-pc-slide-tabs" aria-label="Case study slides">{slides.map((item, index) => <button key={item.id} type="button" className={index === slideIndex ? "active" : ""} aria-current={index === slideIndex ? "step" : undefined} onClick={() => setSlideIndex(index)}><span>{String(index + 1).padStart(2, "0")}</span>{item.label}</button>)}</nav>
+    <article className={`guest-pc-stage guest-pc-stage-${slide.kind}`} key={slide.id} aria-live="polite">
+      {slide.kind === "features" ? <div className="guest-pc-feature-slide"><span className="eyebrow">{slide.eyebrow}</span><h2>{slide.title}</h2><div>{slide.features?.map((feature, index) => <section key={`${feature}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h3>{feature}</h3></section>)}</div></div> : <>
+        <div className="guest-pc-stage-art">{slide.imageUrl ? <img src={slide.imageUrl} alt={slide.kind === "image" ? slide.title : `Preview of ${project.name}`} /> : <div className="guest-pc-art-placeholder"><span>{String(slideIndex + 1).padStart(2, "0")}</span><strong>{slide.kind === "cover" ? "DTU" : slide.label}</strong></div>}<span className="guest-pc-stage-count">{slide.kind === "cover" ? `PROJECT ${String(projectPosition).padStart(2, "0")} / ${String(projectCount).padStart(2, "0")}` : `${String(slideIndex + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`}</span></div>
+        <div className="guest-pc-stage-copy"><span className="eyebrow">{slide.eyebrow}</span><h2>{slide.title}</h2>{slide.body && <p>{slide.body}</p>}{slide.contribution && <div className="guest-pc-contribution"><strong>Our contribution</strong><p>{slide.contribution}</p></div>}{Boolean(slide.technologies?.length) && <div className="guest-pc-technologies">{slide.technologies?.map(item => <span key={item}>{item}</span>)}</div>}{slide.kind === "cover" && slides.length > 1 && <button type="button" onClick={() => setSlideIndex(1)}>Start case study <span aria-hidden="true">→</span></button>}</div>
+      </>}
+    </article>
+    {detailError && <p className="guest-pc-detail-error">Case study details are unavailable: {detailError}</p>}
+    <div className="guest-pc-slide-controls"><span>Case study · {String(slideIndex + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}</span><div><button type="button" disabled={slideIndex === 0} onClick={() => setSlideIndex(index => index - 1)} aria-label="Previous case study slide">← Previous</button><button type="button" disabled={slideIndex === slides.length - 1} onClick={() => setSlideIndex(index => index + 1)} aria-label="Next case study slide">Next →</button></div></div>
+  </div>;
+}
 
 function PortfolioCaseContent({ data, token, inModal = false, onNavigate }: { data: PortfolioCaseData; token: string; inModal?: boolean; onNavigate?: (id: number) => void }) {
   const [selectedImage, setSelectedImage] = useState(0);

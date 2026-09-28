@@ -216,6 +216,7 @@ CREATE TABLE IF NOT EXISTS showcase_projects (
   sort_order INTEGER NOT NULL DEFAULT 0,
   title_override TEXT,
   summary_override TEXT,
+  category TEXT NOT NULL DEFAULT '',
   image_mode TEXT NOT NULL DEFAULT 'latest' CHECK(image_mode IN ('latest','custom','none')),
   custom_image_name TEXT,
   custom_image_stored_name TEXT UNIQUE,
@@ -402,6 +403,7 @@ ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
 ensureColumn("project_updates", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
+ensureColumn("showcase_projects", "category", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("showcase_settings", "show_pdf_export", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("showcase_projects", "problem_statement", "TEXT");
 ensureColumn("showcase_projects", "solution_description", "TEXT");

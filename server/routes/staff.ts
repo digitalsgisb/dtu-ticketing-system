@@ -166,7 +166,7 @@ staffRouter.get("/showcase", requireRole("admin", "lead"), async (_req, res) => 
   const projects = db.prepare(`
     SELECT p.id, p.project_no, p.name, p.description, p.department_name, p.status,
       COALESCE(sp.visible, 0) AS visible, COALESCE(sp.sort_order, 0) AS sort_order,
-      sp.title_override, sp.summary_override, sp.detail_overview, sp.problem_statement,
+      sp.title_override, sp.summary_override, COALESCE(sp.category, '') AS category, sp.detail_overview, sp.problem_statement,
       sp.solution_description, sp.features_text, sp.impact_statement, sp.contribution,
       sp.technologies_text, COALESCE(sp.image_mode, 'latest') AS image_mode,
       CASE WHEN sp.custom_image_stored_name IS NOT NULL THEN 1 ELSE 0 END AS has_custom_image,
@@ -247,6 +247,7 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
       visible: z.preprocess(value => value === true || value === "true", z.boolean()),
       sortOrder: z.coerce.number().int().min(0).max(999),
       title: z.string().trim().max(120).optional().default(""),
+      category: z.string().trim().max(80).optional().default(""),
       summary: z.string().trim().max(800).optional().default(""),
       overview: z.string().trim().max(4000).optional().default(""),
       problem: z.string().trim().max(3000).optional().default(""),
@@ -276,16 +277,17 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
     }
     db.prepare(`
       INSERT INTO showcase_projects(
-        project_id, visible, sort_order, title_override, summary_override, image_mode,
+        project_id, visible, sort_order, title_override, summary_override, category, image_mode,
         custom_image_name, custom_image_stored_name, custom_image_mime_type, custom_image_size,
         detail_overview, problem_statement, solution_description, features_text,
         impact_statement, contribution, technologies_text
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(project_id) DO UPDATE SET
         visible = excluded.visible,
         sort_order = excluded.sort_order,
         title_override = excluded.title_override,
         summary_override = excluded.summary_override,
+        category = excluded.category,
         image_mode = excluded.image_mode,
         custom_image_name = COALESCE(excluded.custom_image_name, showcase_projects.custom_image_name),
         custom_image_stored_name = COALESCE(excluded.custom_image_stored_name, showcase_projects.custom_image_stored_name),
@@ -301,7 +303,8 @@ staffRouter.patch("/showcase/projects/:id", requireRole("admin", "lead"), showca
         updated_at = CURRENT_TIMESTAMP
     `).run(
       req.params.id, parsed.data.visible ? 1 : 0, parsed.data.sortOrder,
-      cleanText(parsed.data.title, 120) || null, cleanText(parsed.data.summary, 800) || null, file ? "custom" : parsed.data.imageMode,
+      cleanText(parsed.data.title, 120) || null, cleanText(parsed.data.summary, 800) || null,
+      cleanText(parsed.data.category, 80), file ? "custom" : parsed.data.imageMode,
       file ? cleanText(file.originalname, 255) : null, storedName || null, file?.mimetype ?? null, file?.size ?? null,
       cleanText(parsed.data.overview, 4000) || null, cleanText(parsed.data.problem, 3000) || null,
       cleanText(parsed.data.solution, 4000) || null, cleanText(parsed.data.features, 4000) || null,

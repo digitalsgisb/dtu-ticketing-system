@@ -83,7 +83,7 @@ publicRouter.get("/showcase/:token", (req, res) => {
 
   const projects = db.prepare(`
     SELECT p.id, p.name, p.description, p.department_name,
-      sp.title_override, sp.summary_override, sp.image_mode, sp.features_text,
+      sp.title_override, sp.summary_override, sp.category, sp.image_mode, sp.features_text,
       (SELECT COUNT(*) FROM showcase_project_gallery spg WHERE spg.project_id = p.id) AS gallery_count,
       CASE
         WHEN sp.image_mode = 'custom' AND sp.custom_image_stored_name IS NOT NULL THEN 1
@@ -103,6 +103,7 @@ publicRouter.get("/showcase/:token", (req, res) => {
     name: project.title_override || project.name,
     summary: project.summary_override || project.description,
     department: project.department_name,
+    category: project.category || "Projects",
     imageUrl: project.has_image ? `/api/public/showcase/${req.params.token}/projects/${project.id}/image` : null,
     galleryCount: Number(project.gallery_count) + (project.has_image ? 1 : 0),
     featureCount: portfolioList(project.features_text).length,

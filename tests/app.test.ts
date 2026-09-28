@@ -189,6 +189,7 @@ describe("DTU Control Centre API", () => {
       .field("sortOrder", "1")
       .field("title", "Smart Production")
       .field("summary", "A visitor-safe overview of the production display.")
+      .field("category", "Operations")
       .field("overview", "A production visibility platform that brings operational information into one focused workspace.")
       .field("problem", "Teams previously relied on fragmented status updates and manual follow-up.")
       .field("solution", "The system presents current work, progress, and exceptions in a clear visual workflow.")
@@ -224,6 +225,7 @@ describe("DTU Control Centre API", () => {
     expect(publicView.body.projects[0]).toMatchObject({
       id: briefingProjectId,
       name: "Smart Production",
+      category: "Operations",
       summary: "A visitor-safe overview of the production display."
     });
     expect(publicView.body.projects[0]).not.toHaveProperty("url");
