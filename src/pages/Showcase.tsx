@@ -608,20 +608,20 @@ type PortfolioCaseData = {
 type PresentationSlide = {
   id: string;
   label: string;
-  eyebrow: string;
-  title: string;
-  kind: "cover" | "story" | "features" | "image" | "impact";
-  body?: string;
-  imageUrl?: string | null;
-  features?: string[];
-  contribution?: string;
-  technologies?: string[];
+  kind: "cover" | "story" | "result";
 };
+
+function presentationExcerpt(value: string | null | undefined, limit = 210) {
+  const text = (value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit).replace(/\s+\S*$/, "").trimEnd()}…`;
+}
 
 function DesktopCaseSlides({ token, project, projectPosition, projectCount }: { token: string; project: GuestProject; projectPosition: number; projectCount: number }) {
   const [detail, setDetail] = useState<PortfolioCaseData | null>(null);
   const [detailError, setDetailError] = useState("");
   const [slideIndex, setSlideIndex] = useState(0);
+  const [imageIndex, setImageIndex] = useState(0);
 
   useEffect(() => {
     let current = true;
@@ -631,26 +631,19 @@ function DesktopCaseSlides({ token, project, projectPosition, projectCount }: { 
     return () => { current = false; };
   }, [token, project.id]);
 
-  const slides: PresentationSlide[] = [{
-    id: "cover", label: "Introduction", eyebrow: `${project.category || "Projects"} · ${project.department}`,
-    title: project.name, kind: "cover", body: project.summary || "A digital solution made for the way our teams work.", imageUrl: project.imageUrl
-  }];
+  const slides: PresentationSlide[] = [{ id: "cover", label: "Introduction", kind: "cover" }];
   if (detail) {
     const caseStudy = detail.project;
-    if (caseStudy.overview) slides.push({ id: "overview", label: "Overview", eyebrow: "The project", title: "At a glance", kind: "story", body: caseStudy.overview });
-    if (caseStudy.problem) slides.push({ id: "challenge", label: "Challenge", eyebrow: "The challenge", title: "What needed to change", kind: "story", body: caseStudy.problem });
-    if (caseStudy.solution) slides.push({ id: "solution", label: "Solution", eyebrow: "The solution", title: "How we responded", kind: "story", body: caseStudy.solution });
-    for (let index = 0; index < caseStudy.features.length; index += 4) slides.push({
-      id: `features-${index}`, label: caseStudy.features.length > 4 ? `Functions ${Math.floor(index / 4) + 1}` : "Functions",
-      eyebrow: "Core functions", title: "What the system does", kind: "features", features: caseStudy.features.slice(index, index + 4)
-    });
-    detail.gallery.forEach((image, index) => slides.push({ id: `image-${image.id}`, label: `Image ${index + 1}`, eyebrow: "Project gallery", title: image.caption || caseStudy.name, kind: "image", imageUrl: image.imageUrl }));
-    if (caseStudy.impact || caseStudy.contribution || caseStudy.technologies.length) slides.push({
-      id: "impact", label: "Outcome", eyebrow: "The outcome", title: "The value it brings", kind: "impact",
-      body: caseStudy.impact, contribution: caseStudy.contribution, technologies: caseStudy.technologies
-    });
+    if (caseStudy.overview || caseStudy.problem || caseStudy.solution || caseStudy.features.length) {
+      slides.push({ id: "story", label: "The case study", kind: "story" });
+    }
+    if (detail.gallery.length || caseStudy.impact || caseStudy.contribution || caseStudy.technologies.length) {
+      slides.push({ id: "result", label: "Visuals & outcome", kind: "result" });
+    }
   }
   const slide = slides[Math.min(slideIndex, slides.length - 1)];
+  const caseStudy = detail?.project;
+  const galleryImage = detail?.gallery[imageIndex];
 
   useEffect(() => {
     const navigate = (event: KeyboardEvent) => {
@@ -666,13 +659,12 @@ function DesktopCaseSlides({ token, project, projectPosition, projectCount }: { 
     <div className="guest-pc-deck-category"><span>Project category</span><strong>{project.category || "Projects"}</strong><i aria-hidden="true" /></div>
     <nav className="guest-pc-slide-tabs" aria-label="Case study slides">{slides.map((item, index) => <button key={item.id} type="button" className={index === slideIndex ? "active" : ""} aria-current={index === slideIndex ? "step" : undefined} onClick={() => setSlideIndex(index)}><span>{String(index + 1).padStart(2, "0")}</span>{item.label}</button>)}</nav>
     <article className={`guest-pc-stage guest-pc-stage-${slide.kind}`} key={slide.id} aria-live="polite">
-      {slide.kind === "features" ? <div className="guest-pc-feature-slide"><span className="eyebrow">{slide.eyebrow}</span><h2>{slide.title}</h2><div>{slide.features?.map((feature, index) => <section key={`${feature}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h3>{feature}</h3></section>)}</div></div> : <>
-        <div className="guest-pc-stage-art">{slide.imageUrl ? <img src={slide.imageUrl} alt={slide.kind === "image" ? slide.title : `Preview of ${project.name}`} /> : <div className="guest-pc-art-placeholder"><span>{String(slideIndex + 1).padStart(2, "0")}</span><strong>{slide.kind === "cover" ? "DTU" : slide.label}</strong></div>}<span className="guest-pc-stage-count">{slide.kind === "cover" ? `PROJECT ${String(projectPosition).padStart(2, "0")} / ${String(projectCount).padStart(2, "0")}` : `${String(slideIndex + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`}</span></div>
-        <div className="guest-pc-stage-copy"><span className="eyebrow">{slide.eyebrow}</span><h2>{slide.title}</h2>{slide.body && <p>{slide.body}</p>}{slide.contribution && <div className="guest-pc-contribution"><strong>Our contribution</strong><p>{slide.contribution}</p></div>}{Boolean(slide.technologies?.length) && <div className="guest-pc-technologies">{slide.technologies?.map(item => <span key={item}>{item}</span>)}</div>}{slide.kind === "cover" && slides.length > 1 && <button type="button" onClick={() => setSlideIndex(1)}>Start case study <span aria-hidden="true">→</span></button>}</div>
-      </>}
+      {slide.kind === "cover" && <><div className="guest-pc-stage-art">{project.imageUrl ? <img src={project.imageUrl} alt={`Preview of ${project.name}`} /> : <div className="guest-pc-art-placeholder"><span>{String(projectPosition).padStart(2, "0")}</span><strong>DTU</strong></div>}<span className="guest-pc-stage-count">PROJECT {String(projectPosition).padStart(2, "0")} / {String(projectCount).padStart(2, "0")}</span></div><div className="guest-pc-stage-copy"><span className="eyebrow">{project.category || "Projects"} · {project.department}</span><h2>{project.name}</h2><p>{presentationExcerpt(caseStudy?.overview || project.summary, 260) || "A digital solution made for the way our teams work."}</p>{slides.length > 1 && <button type="button" onClick={() => setSlideIndex(1)}>View case study <span aria-hidden="true">→</span></button>}</div></>}
+      {slide.kind === "story" && caseStudy && <div className="guest-pc-story-slide"><header><span className="eyebrow">{project.name} · Case study</span><h2>From challenge to solution</h2></header><div className="guest-pc-story-grid"><section><span>01 / Overview</span><p>{presentationExcerpt(caseStudy.overview || caseStudy.summary, 195)}</p></section><section><span>02 / Challenge</span><p>{presentationExcerpt(caseStudy.problem || "The work called for a clearer, more connected process.", 195)}</p></section><section><span>03 / Solution</span><p>{presentationExcerpt(caseStudy.solution || caseStudy.summary, 195)}</p></section></div>{caseStudy.features.length > 0 && <div className="guest-pc-story-functions"><strong>Key functions</strong><div>{caseStudy.features.slice(0, 3).map((feature, index) => <span key={`${feature}-${index}`}>{feature}</span>)}</div></div>}</div>}
+      {slide.kind === "result" && caseStudy && <><div className="guest-pc-stage-art guest-pc-result-art">{galleryImage ? <img src={galleryImage.imageUrl} alt={galleryImage.caption || `Image of ${project.name}`} /> : project.imageUrl ? <img src={project.imageUrl} alt={`Preview of ${project.name}`} /> : <div className="guest-pc-art-placeholder"><span>03</span><strong>DTU</strong></div>}{detail && detail.gallery.length > 1 && <div className="guest-pc-image-controls"><button type="button" disabled={imageIndex === 0} onClick={() => setImageIndex(index => index - 1)} aria-label="Previous gallery image">←</button><span>{imageIndex + 1} / {detail.gallery.length}</span><button type="button" disabled={imageIndex === detail.gallery.length - 1} onClick={() => setImageIndex(index => index + 1)} aria-label="Next gallery image">→</button></div>}</div><div className="guest-pc-stage-copy"><span className="eyebrow">Visuals & outcome</span><h2>{caseStudy.impact ? "The value it brings" : "See the project"}</h2>{galleryImage?.caption && <small className="guest-pc-image-caption">{galleryImage.caption}</small>}{caseStudy.impact && <p>{presentationExcerpt(caseStudy.impact, 150)}</p>}{caseStudy.contribution && <div className="guest-pc-contribution"><strong>Our contribution</strong><p>{presentationExcerpt(caseStudy.contribution, 80)}</p></div>}{caseStudy.technologies.length > 0 && <div className="guest-pc-technologies">{caseStudy.technologies.slice(0, 4).map(item => <span key={item}>{item}</span>)}</div>}</div></>}
     </article>
     {detailError && <p className="guest-pc-detail-error">Case study details are unavailable: {detailError}</p>}
-    <div className="guest-pc-slide-controls"><span>Case study · {String(slideIndex + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}</span><div><button type="button" disabled={slideIndex === 0} onClick={() => setSlideIndex(index => index - 1)} aria-label="Previous case study slide">← Previous</button><button type="button" disabled={slideIndex === slides.length - 1} onClick={() => setSlideIndex(index => index + 1)} aria-label="Next case study slide">Next →</button></div></div>
+    <div className="guest-pc-slide-controls"><span>Case study · {String(slideIndex + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}</span><div>{detail && <Link to={`/showcase/${token}/projects/${project.id}`}>Full details ↗</Link>}<button type="button" disabled={slideIndex === 0} onClick={() => setSlideIndex(index => index - 1)} aria-label="Previous case study slide">← Previous</button><button type="button" disabled={slideIndex === slides.length - 1} onClick={() => setSlideIndex(index => index + 1)} aria-label="Next case study slide">Next →</button></div></div>
   </div>;
 }
 
