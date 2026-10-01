@@ -589,7 +589,10 @@ input[type=range] { padding:0; box-shadow:none; border:0; }
 .public-reply { display:grid; gap:10px; border-top:1px solid var(--line); padding-top:18px; }
 
 .wallboard { min-height:100vh; background:#071a29; color:#dceaf0; padding:28px 34px 18px; overflow:hidden; }
-.wallboard-header { display:grid; grid-template-columns:1fr auto auto; gap:25px; align-items:center; margin-bottom:22px; }
+.wallboard-header { display:grid; grid-template-columns:minmax(0,1fr) auto auto auto; gap:25px; align-items:center; margin-bottom:22px; }
+.wallboard-sound-toggle { border:1px solid #315466; border-radius:8px; padding:8px 10px; background:#102d3e; color:#a9c4cf; font-size:10px; font-weight:800; white-space:nowrap; }
+.wallboard-sound-toggle:hover, .wallboard-sound-toggle:focus-visible { border-color:#53b8b0; color:#fff; }
+.wallboard-sound-toggle.is-on { border-color:#3aa69c; color:#9de8db; }
 .wallboard-brand { gap:4px; }
 .wallboard-brand .company-logo { width:270px; }
 .wallboard-brand small { padding-left:73px; color:#6f91a3; font-size:7px; }
@@ -1566,7 +1569,7 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 }
 
 /* TV-distance wallboard refinement */
-.wallboard-header { grid-template-columns: 1fr auto auto; }
+.wallboard-header { grid-template-columns: minmax(0, 1fr) auto auto auto; }
 .wallboard-brand small { font-size: 8.5px; }
 .wallboard-clock { min-width: 190px; }
 .wallboard-clock strong { font-size: 24px; }
@@ -2474,10 +2477,6 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .work-filter-divider { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
 .ticket-quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .ticket-quick-actions .button { flex: 1; white-space: nowrap; }
-.wallboard-header { grid-template-columns: minmax(0, 1fr) auto auto auto; }
-.wallboard-sound-toggle { border: 1px solid #315466; border-radius: 8px; padding: 8px 10px; background: #102d3e; color: #a9c4cf; font-size: 10px; font-weight: 800; white-space: nowrap; }
-.wallboard-sound-toggle:hover, .wallboard-sound-toggle:focus-visible { border-color: #53b8b0; color: #fff; }
-.wallboard-sound-toggle.is-on { border-color: #3aa69c; color: #9de8db; }
 .wallboard-group-list { display: grid; gap: 20px; }
 .wallboard-group h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; color: #e4f4f5; font-size: 15px; letter-spacing: .02em; }
 .wallboard-group h3 span { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 50px; background: #173f4e; color: #7cddd1; font-size: 11px; }
