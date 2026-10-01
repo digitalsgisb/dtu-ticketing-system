@@ -207,6 +207,9 @@ function SystemPanel({ storage }: { storage: any }) {
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [testingPush, setTestingPush] = useState(false);
+  const [pushMessage, setPushMessage] = useState("");
+  const [pushError, setPushError] = useState("");
   if (!storage) return <Loading />;
   const percent = Math.round((storage.freeBytes / storage.totalBytes) * 100);
   const testEmail = async (event: FormEvent) => {
@@ -223,6 +226,19 @@ function SystemPanel({ storage }: { storage: any }) {
       setTesting(false);
     }
   };
+  const testPush = async () => {
+    setTestingPush(true);
+    setPushMessage("");
+    setPushError("");
+    try {
+      const result = await api<{ accepted: number; failed: number }>("/api/staff/system/push/test", json("POST"));
+      setPushMessage(`Push service accepted the test for ${result.accepted} device${result.accepted === 1 ? "" : "s"}.${result.failed ? ` ${result.failed} device${result.failed === 1 ? "" : "s"} failed.` : ""} Check your phone to confirm it appeared.`);
+    } catch (err) {
+      setPushError((err as Error).message);
+    } finally {
+      setTestingPush(false);
+    }
+  };
   return <div className="admin-grid">
     <section className="panel"><div className="panel-heading"><h2>Storage health</h2></div><div className="system-meter"><strong>{percent}% free</strong><div className="bar"><i style={{ width: `${percent}%` }} /></div><span>{(storage.freeBytes / 1024 ** 3).toFixed(1)} GB available of {(storage.totalBytes / 1024 ** 3).toFixed(1)} GB</span></div></section>
     <section className="panel"><div className="panel-heading"><h2>Integrations</h2></div>
@@ -232,6 +248,12 @@ function SystemPanel({ storage }: { storage: any }) {
         <button className="button button-secondary" disabled={testing}>{testing ? "Testing…" : "Send test"}</button>
         <ErrorNotice message={error} />{message && <div className="notice notice-success">{message}</div>}
       </form>}
+      <div className="integration-row"><div><strong>Phone push</strong><span>{storage.pushConfigured ? `${storage.pushSubscriptions} device${storage.pushSubscriptions === 1 ? "" : "s"} registered to your account` : "Add VAPID keys to the server environment"}</span></div><Badge value={storage.pushConfigured ? "configured" : "not_configured"} kind="type" /></div>
+      <div className="email-test-form">
+        <p>On your phone, sign in to this account and enable background alerts on the <a href="/notifications">Notifications page</a>. The test goes to every device registered to your account.</p>
+        <button type="button" className="button button-secondary" onClick={() => void testPush()} disabled={testingPush}>{testingPush ? "Testing…" : "Send test phone notification"}</button>
+        <ErrorNotice message={pushError} />{pushMessage && <div className="notice notice-success">{pushMessage}</div>}
+      </div>
       <div className="integration-row"><div><strong>Encrypted backups</strong><span>{storage.latestLocalBackup ? `Latest local: ${storage.latestLocalBackup}` : "No local encrypted backup found"}</span></div><Badge value={storage.backupConfigured ? "configured" : "not_configured"} kind="type" /></div>
       <div className="integration-row"><div><strong>Cloudflare R2</strong><span>{storage.r2Configured ? "Off-site backup credentials configured" : "Add R2 credentials to the server environment"}</span></div><Badge value={storage.r2Configured ? "configured" : "not_configured"} kind="type" /></div>
     </section>

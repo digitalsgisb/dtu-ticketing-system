@@ -15,7 +15,7 @@ import type { AuthenticatedRequest } from "../types.js";
 import { malaysiaDate } from "../time.js";
 import { addLiveClient } from "../liveUpdates.js";
 import { assigneesFor, replaceAssignees, validAssignees, withAssignees } from "../assignees.js";
-import { pushConfigured } from "../push.js";
+import { pushConfigured, pushSubscriptionCount, sendTestPush } from "../push.js";
 import { withTaskProgress } from "../projectTasks.js";
 
 export const staffRouter = Router();
@@ -1723,7 +1723,7 @@ staffRouter.get("/audit", requireRole("admin", "lead"), (_req, res) => {
   res.json(db.prepare("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT 250").all());
 });
 
-staffRouter.get("/system/storage", requireRole("admin"), async (_req, res) => {
+staffRouter.get("/system/storage", requireRole("admin"), async (req, res) => {
   const stats = await fs.promises.statfs(paths.uploads);
   const localBackups = (await fs.promises.readdir(paths.backups, { withFileTypes: true }))
     .filter(entry => entry.isFile() && entry.name.endsWith(".enc"))
@@ -1735,6 +1735,8 @@ staffRouter.get("/system/storage", requireRole("admin"), async (_req, res) => {
     freeBytes: Number(stats.bavail) * Number(stats.bsize),
     minimumFreeBytes: config.minFreeStorageMb * 1024 * 1024,
     smtpConfigured: Boolean(config.smtp.host),
+    pushConfigured,
+    pushSubscriptions: pushSubscriptionCount((req as AuthenticatedRequest).user.id),
     smtp: {
       host: config.smtp.host || null,
       port: config.smtp.port,
@@ -1745,6 +1747,23 @@ staffRouter.get("/system/storage", requireRole("admin"), async (_req, res) => {
     r2Configured: Boolean(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET),
     latestLocalBackup: localBackups[0] ?? null
   });
+});
+
+staffRouter.post("/system/push/test", requireRole("admin"), async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  if (!pushConfigured) return res.status(503).json({ error: "Phone push is not configured. Add VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT to the server environment." });
+  if (!pushSubscriptionCount(authReq.user.id)) return res.status(409).json({ error: "No device is registered for your account. On your phone, open Notifications and enable background alerts, then try again." });
+  const result = await sendTestPush(authReq.user.id);
+  audit(authReq.user, "push_test_sent", "system", null, { attempted: result.attempted, accepted: result.accepted, failed: result.failed }, req.ip);
+  if (!result.accepted) {
+    const reason = result.expired === result.attempted
+      ? "The registered device subscriptions have expired. Re-enable background alerts on your phone."
+      : result.failureCodes.some(code => code === 401 || code === 403)
+        ? "The push service rejected the server credentials. Check the VAPID settings."
+        : `The push service did not accept the test${result.failureCodes.length ? ` (HTTP ${result.failureCodes.join(", ")})` : ""}. Check the server logs and phone subscription.`;
+    return res.status(502).json({ error: reason, ...result });
+  }
+  res.json(result);
 });
 
 staffRouter.post("/system/email/test", requireRole("admin"), async (req, res) => {

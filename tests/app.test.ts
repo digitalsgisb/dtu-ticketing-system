@@ -43,6 +43,18 @@ describe("DTU Control Centre API", () => {
     expect(response.status).toBe(403);
   });
 
+  it("shows admin phone push readiness and explains why a test cannot send without VAPID", async () => {
+    const status = await request(app).get("/api/staff/system/storage").set("Cookie", cookie);
+    expect(status.status).toBe(200);
+    expect(status.body.pushConfigured).toBe(false);
+    expect(status.body.pushSubscriptions).toBe(0);
+
+    const test = await request(app).post("/api/staff/system/push/test")
+      .set("Cookie", cookie).set("x-csrf-token", csrf);
+    expect(test.status).toBe(503);
+    expect(test.body.error).toContain("VAPID_PUBLIC_KEY");
+  });
+
   it("lets a signed-in user update their own profile", async () => {
     const changed = await request(app).patch("/api/staff/profile")
       .set("Cookie", cookie).set("x-csrf-token", csrf)
