@@ -13,6 +13,7 @@ import { db } from "./db.js";
 import { malaysiaDate, malaysiaMonthStartUtc } from "./time.js";
 import { addLiveClient, publishLiveUpdate } from "./liveUpdates.js";
 import { withAssignees } from "./assignees.js";
+import { withTaskProgress } from "./projectTasks.js";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -71,7 +72,7 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
     overdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE due_date < ? AND status NOT IN ('resolved','closed')").get(today) as { n: number }).n,
     completedMonth: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE status IN ('resolved','closed') AND resolved_at >= datetime(?)").get(malaysiaMonthStartUtc()) as { n: number }).n
   };
-  const projects = db.prepare(`
+  const projects = withTaskProgress(db.prepare(`
     SELECT p.id, p.project_no, p.name, p.status, p.priority, p.progress, p.due_date,
       p.current_update, p.progress_updated_at, u.name AS owner_name,
       (SELECT pui.id FROM project_update_images pui
@@ -85,7 +86,7 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
       p.progress DESC,
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       CASE WHEN p.status = 'completed' THEN p.updated_at END DESC, p.due_date
-  `).all();
+  `).all() as Array<{ id: number }>);
   const tickets = withAssignees(db.prepare(`
     SELECT w.id, w.ticket_no, w.title, w.type, w.status, w.priority, w.due_date, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id

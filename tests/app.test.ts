@@ -120,10 +120,10 @@ describe("DTU Control Centre API", () => {
       .send({ type: "task", title: "Prepare shared report", assigneeIds: [adminUserId, managedUserId], status: "assigned" });
     expect(created.status).toBe(201);
     const detail = await request(app).get(`/api/staff/tickets/${created.body.id}`).set("Cookie", cookie);
-    expect(detail.body.item.assignees.map((user: { id: number }) => user.id).sort()).toEqual([adminUserId, managedUserId].sort());
+    expect(detail.body.item.assignees.map((user: { id: number }) => user.id).sort((left: number, right: number) => left - right)).toEqual([adminUserId, managedUserId].sort((left, right) => left - right));
     const assigned = db.prepare("SELECT user_id FROM notifications WHERE type = 'assignment' AND link = ? ORDER BY user_id")
       .all(`/tickets/${created.body.id}`) as Array<{ user_id: number }>;
-    expect(assigned.map(row => row.user_id)).toEqual([adminUserId, managedUserId].sort());
+    expect(assigned.map(row => row.user_id)).toEqual([adminUserId, managedUserId].sort((left, right) => left - right));
     const wallboard = await request(app).get("/api/wallboard");
     expect(wallboard.body.tickets.find((item: { id: number }) => item.id === created.body.id).assignee_name).toContain("Managed User");
   });
@@ -133,6 +133,53 @@ describe("DTU Control Centre API", () => {
     expect(html).toContain("Digital Transformation Unit");
     expect(html).toContain("Assignment &lt;ready&gt;");
     expect(html).not.toContain("Assignment <ready>");
+  });
+
+  it("keeps completion evidence on tasks and calculates separate project task progress", async () => {
+    const project = await request(app).post("/api/staff/projects")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "Completion evidence project", departmentName: "DTU" });
+    expect(project.status).toBe(201);
+    const createTask = (projectId: number | null, title: string) => request(app).post("/api/staff/tickets")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ type: "task", title, projectId });
+    const first = await createTask(project.body.id, "Deliver first document");
+    const second = await createTask(project.body.id, "Deliver second document");
+    const general = await createTask(null, "Complete general work");
+    expect([first.status, second.status, general.status]).toEqual([201, 201, 201]);
+
+    const completed = await request(app).post(`/api/staff/tickets/${first.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .field("note", "Final document and proof attached")
+      .attach("attachments", Buffer.from("%PDF-1.4\nCompletion proof"), { filename: "proof.pdf", contentType: "application/pdf" });
+    expect(completed.status).toBe(200);
+    const detail = await request(app).get(`/api/staff/tickets/${first.body.id}`).set("Cookie", cookie);
+    expect(detail.body.item.status).toBe("resolved");
+    expect(detail.body.comments.find((comment: { is_completion: number }) => comment.is_completion).body).toBe("Final document and proof attached");
+    expect(detail.body.attachments[0].original_name).toBe("proof.pdf");
+    const download = await request(app).get(`/api/staff/attachments/${detail.body.attachments[0].id}`).set("Cookie", cookie);
+    expect(download.status).toBe(200);
+    const projectDetail = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(projectDetail.body.project).toMatchObject({ progress: 0, task_total: 2, task_completed: 1, task_progress: 50 });
+    const reopened = await request(app).patch(`/api/staff/tickets/${first.body.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ status: "in_progress" });
+    expect(reopened.status).toBe(200);
+    const afterReopen = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(afterReopen.body.project.task_progress).toBe(0);
+    const finishedAgain = await request(app).post(`/api/staff/tickets/${first.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "Verified after reopening");
+    expect(finishedAgain.status).toBe(200);
+
+    const generalCompleted = await request(app).post(`/api/staff/tickets/${general.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "General task finished")
+      .attach("attachments", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "result.jpg", contentType: "image/jpeg" });
+    expect(generalCompleted.status).toBe(200);
+    const generalDetail = await request(app).get(`/api/staff/tickets/${general.body.id}`).set("Cookie", cookie);
+    const preview = await request(app).get(`/api/staff/attachments/${generalDetail.body.attachments[0].id}/preview`).set("Cookie", cookie);
+    expect(preview.status).toBe(200);
+    expect(preview.headers["content-type"]).toMatch(/^image\/jpeg/);
+    const afterGeneral = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(afterGeneral.body.project.task_progress).toBe(50);
   });
 
   it("resets a staff password and requires a change on next sign-in", async () => {

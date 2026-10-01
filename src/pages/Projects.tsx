@@ -6,6 +6,7 @@ import { PlusIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
+import { TaskProgress } from "../components/TaskProgress";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"], ["cancelled", "Cancelled"]] as const;
@@ -144,7 +145,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
           <div className="project-card-content">
             <div className="project-card-top"><span className="mono">{project.project_no}</span><Badge value={project.status} /></div>
             <div><h2>{project.name}</h2><p>{project.description || "No project description yet."}</p></div>
-            <div className="project-progress"><div><span>{t("progress")}</span><strong>{displayedProgress}%</strong></div><div className="bar"><i style={{ width: `${displayedProgress}%` }} /></div></div>
+            <div className="project-progress"><div><span>{t("progress")}</span><strong>{displayedProgress}%</strong></div><div className="bar"><i style={{ width: `${displayedProgress}%` }} /></div></div><TaskProgress project={project} compact />
             <div className="project-card-meta"><span><small>{t("department")}</small>{project.department_name}</span><span><small>{t("dueDate")}</small>{formatDate(project.due_date)}</span><span><small>Open work</small>{project.open_count || 0}</span></div>
           </div>
           </Link>

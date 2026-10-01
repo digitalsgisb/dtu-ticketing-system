@@ -5,6 +5,7 @@ import { Badge, Loading, StatCard } from "../components/UI";
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 import { useLiveRefresh } from "../live";
+import { TaskProgress } from "../components/TaskProgress";
 
 type WallboardView = "overview" | "projects" | "tickets";
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
@@ -325,6 +326,7 @@ function WallProject({ project, expanded = false, showcase = false }: { project:
       <h3>{project.name}</h3>
       {project.current_update && <p>{project.current_update}</p>}
       <div className="wall-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
+      <TaskProgress project={project} compact />
       <footer><span>{project.owner_name || "Unassigned"}</span><strong>{displayedProgress}%</strong><span>{formatDate(project.due_date)}</span></footer>
     </div>
   </article>;
@@ -333,6 +335,7 @@ function WallProject({ project, expanded = false, showcase = false }: { project:
     <h3>{project.name}</h3>
     {project.current_update && <p>{project.current_update}</p>}
     <div className="wall-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
+    <TaskProgress project={project} compact />
     <footer><span>{project.owner_name || "Unassigned"}</span><strong>{displayedProgress}%</strong><span>{formatDate(project.due_date)}</span></footer>
   </article>;
 }

@@ -6,6 +6,7 @@ import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../compon
 import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 import { compressProgressImage } from "../progressImages";
+import { TaskProgress } from "../components/TaskProgress";
 import { useLiveRefresh } from "../live";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
@@ -140,6 +141,7 @@ export function ProjectDetailPage() {
         <div><small>{t("owner")}</small><strong>{project.owner_name || "Unassigned"}</strong></div>
         <div><small>{t("dueDate")}</small><strong>{formatDate(project.due_date)}</strong></div>
         <div><small>{t("progress")}</small><strong>{displayedProgress}%</strong></div>
+        <div><small>Project tasks</small><TaskProgress project={project} compact /></div>
       </div>
       <div className="hero-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
     </section>

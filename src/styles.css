@@ -318,12 +318,9 @@ textarea { resize:vertical; line-height:1.5; }
 input:focus, select:focus, textarea:focus { border-color:#49a4a7; box-shadow:0 0 0 3px rgba(73,164,167,.1); }
 input[type=range] { padding:0; box-shadow:none; border:0; }
 .password-field { position:relative; width:100%; }
-.password-field input { padding-right:48px; }
-.password-toggle { position:absolute; right:6px; top:50%; translate:0 -50%; width:36px; height:36px; border:0; border-radius:9px; background:transparent; color:#6d8492; display:grid; place-items:center; cursor:pointer; }
+.password-field input { padding-right:65px; }
+.password-toggle { position:absolute; right:6px; top:50%; translate:0 -50%; min-width:52px; height:36px; border:0; border-radius:9px; background:transparent; color:#6d8492; display:grid; place-items:center; cursor:pointer; font-size:11px; font-weight:700; }
 .password-toggle:hover, .password-toggle:focus-visible { color:#147f7b; background:#edf7f6; outline:none; }
-.password-toggle i { position:relative; display:block; width:19px; height:12px; border:2px solid currentColor; border-radius:70% 20%; transform:rotate(45deg); }
-.password-toggle i::after { content:""; position:absolute; width:5px; height:5px; border:2px solid currentColor; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); background:white; }
-.password-toggle.is-visible i::after { background:currentColor; }
 .form-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:6px; }
 .notice { display:block; padding:11px 13px; border-radius:9px; font-size:12px; }
 .notice-error { color:#a84545; background:#fff0f0; border:1px solid #f6d1d1; }
@@ -413,6 +410,24 @@ input[type=range] { padding:0; box-shadow:none; border:0; }
 .assignee-picker-options { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 4px 0 8px; }
 .assignee-picker .checkbox { width: auto; }
 .assignee-picker small { color: var(--muted); }
+.task-progress { display:grid; gap:6px; font-size:11px; }
+.task-progress > div:first-child { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.task-progress strong { color:inherit; white-space:nowrap; }
+.task-progress-track { height:5px; border-radius:99px; background:rgba(115,162,170,.22); overflow:hidden; }
+.task-progress-track i { display:block; height:100%; border-radius:inherit; background:#27aaa1; }
+.task-progress-compact { display:block; font-size:10px; }
+.task-progress-empty { color:var(--muted); font-size:10px; }
+.completion-file-list { display:flex; flex-wrap:wrap; gap:7px; }
+.completion-file-list span { padding:6px 9px; border-radius:7px; background:#eef5f5; color:#315565; font-size:11px; }
+.completion-evidence-entry { padding:14px 0; border-top:1px solid var(--line); }
+.completion-evidence-entry > div:first-child { display:flex; justify-content:space-between; gap:12px; }
+.completion-evidence-entry p { white-space:pre-wrap; }
+.completion-evidence-files { display:flex; flex-wrap:wrap; gap:10px; }
+.completion-evidence-files a { display:grid; gap:6px; max-width:180px; color:#167f7a; font-size:11px; overflow-wrap:anywhere; }
+.completion-evidence-files img { width:120px; height:86px; object-fit:cover; border-radius:8px; }
+.temporary-password-notice p { margin:6px 0; }
+.temporary-password-notice > div { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.temporary-password-notice code { overflow-wrap:anywhere; }
 .badge-email_failed { color: #a34d43; background: #fcedea; }
 .handover-recipient { display: grid; gap: 4px; padding: 14px 16px; border-radius: 11px; background: #f3f8f9; }
 .handover-recipient strong { color: var(--navy); font-size: 14px; }

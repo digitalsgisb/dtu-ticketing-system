@@ -35,13 +35,16 @@ export function AdminPage() {
 
 function UsersPanel({ users, currentUserId, onChanged }: { users: any[]; currentUserId: number; onChanged: () => void }) {
   const [form, setForm] = useState({ username: "", name: "", email: "", role: "member", language: "en", password: "" });
+  const [createdPassword, setCreatedPassword] = useState("");
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<any | null>(null);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+    setCreatedPassword("");
     try {
       await api("/api/staff/users", json("POST", { ...form, email: form.email || null }));
+      setCreatedPassword(form.password);
       setForm({ username: "", name: "", email: "", role: "member", language: "en", password: "" });
       onChanged();
     } catch (err) {
@@ -67,6 +70,7 @@ function UsersPanel({ users, currentUserId, onChanged }: { users: any[]; current
         <div className="panel-heading"><div><span className="eyebrow">Provisioning</span><h2>Add staff account</h2></div></div>
         <form className="form-stack" onSubmit={submit}>
           <ErrorNotice message={error} />
+          {createdPassword && <TemporaryPasswordNotice password={createdPassword} />}
           <label>Full name<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
           <label>Username<input required value={form.username} onChange={event => setForm({ ...form, username: event.target.value })} /></label>
           <label>Email<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
@@ -89,6 +93,7 @@ function UserEditor({ user, isCurrentUser, onClose, onSaved }: { user: any; isCu
   const [error, setError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [message, setMessage] = useState("");
+  const [issuedPassword, setIssuedPassword] = useState("");
   const save = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
@@ -104,10 +109,12 @@ function UserEditor({ user, isCurrentUser, onClose, onSaved }: { user: any; isCu
     event.preventDefault();
     setPasswordError("");
     setMessage("");
+    setIssuedPassword("");
     try {
       await api(`/api/staff/users/${user.id}/reset-password`, json("POST", { password }));
+      setIssuedPassword(password);
       setPassword("");
-      setMessage("Temporary password saved. Existing sessions were signed out.");
+      setMessage("Existing sessions were signed out.");
     } catch (err) {
       setPasswordError((err as Error).message);
     }
@@ -130,10 +137,21 @@ function UserEditor({ user, isCurrentUser, onClose, onSaved }: { user: any; isCu
       <h3>Reset password</h3>
       <ErrorNotice message={passwordError} />
       {message && <div className="notice notice-success">{message}</div>}
+      {issuedPassword && <TemporaryPasswordNotice password={issuedPassword} />}
+      <p className="muted">Existing passwords cannot be viewed. Set a new temporary password if someone has forgotten theirs.</p>
       <label>New temporary password<PasswordInput required minLength={12} value={password} onChange={event => setPassword(event.target.value)} autoComplete="new-password" /><small>At least 12 characters with upper, lower, and numeric characters.</small></label>
       <button className="button button-secondary">Reset and sign out user</button>
     </form>
   </Modal>;
+}
+
+function TemporaryPasswordNotice({ password }: { password: string }) {
+  const [visible, setVisible] = useState(false);
+  return <div className="notice notice-success temporary-password-notice">
+    <strong>Temporary password saved</strong>
+    <p>Show and copy it now. It cannot be retrieved after you leave this page.</p>
+    <div><code>{visible ? password : "••••••••••••"}</code><button type="button" className="button button-secondary button-compact" onClick={() => setVisible(value => !value)}>{visible ? "Hide" : "Show"}</button></div>
+  </div>;
 }
 
 function DepartmentsPanel({ departments, onCreated }: { departments: any[]; onCreated: () => void }) {

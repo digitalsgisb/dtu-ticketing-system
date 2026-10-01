@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS comments (
   author_name TEXT NOT NULL,
   body TEXT NOT NULL,
   public_visible INTEGER NOT NULL DEFAULT 0,
+  is_completion INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK(work_item_id IS NOT NULL OR project_request_id IS NOT NULL)
 );
@@ -432,6 +433,7 @@ ensureColumn("projects", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
 ensureColumn("project_updates", "next_action", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("comments", "is_completion", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
 ensureColumn("showcase_projects", "category", "TEXT NOT NULL DEFAULT ''");

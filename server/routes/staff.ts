@@ -8,7 +8,7 @@ import argon2 from "argon2";
 import { z } from "zod";
 import { config, paths } from "../config.js";
 import { db, nextIdentifier } from "../db.js";
-import { detectedImageMimeType, randomToken, requireRole, storageAvailable, tokenHash, validUpload } from "../security.js";
+import { detectedImageMimeType, randomToken, requireRole, storageAvailable, tokenHash, uploadExtension, validProposalUpload, validUpload } from "../security.js";
 import { audit, cleanText, notify, sendMail, sendMailSafely, sendProjectHandoverEmail, sendSubmissionUpdateEmail, sendTrackingEmail, verifyMailTransport } from "../services.js";
 import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js";
 import type { AuthenticatedRequest } from "../types.js";
@@ -16,6 +16,7 @@ import { malaysiaDate } from "../time.js";
 import { addLiveClient } from "../liveUpdates.js";
 import { assigneesFor, replaceAssignees, validAssignees, withAssignees } from "../assignees.js";
 import { pushConfigured } from "../push.js";
+import { withTaskProgress } from "../projectTasks.js";
 
 export const staffRouter = Router();
 staffRouter.get("/live", (_req, res) => addLiveClient(res));
@@ -645,7 +646,7 @@ staffRouter.get("/dashboard", (req, res) => {
 });
 
 staffRouter.get("/projects", (_req, res) => {
-  res.json(db.prepare(`
+  res.json(withTaskProgress(db.prepare(`
     SELECT p.*, u.name AS owner_name,
       (SELECT pui.id FROM project_update_images pui
         JOIN project_updates pu ON pu.id = pui.project_update_id
@@ -654,7 +655,7 @@ staffRouter.get("/projects", (_req, res) => {
       SUM(CASE WHEN w.status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS open_count
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id LEFT JOIN work_items w ON w.project_id = p.id
     GROUP BY p.id ORDER BY p.updated_at DESC
-  `).all());
+  `).all() as Array<{ id: number }>));
 });
 
 staffRouter.get("/project-links", (_req, res) => {
@@ -763,7 +764,7 @@ staffRouter.get("/projects/:id", (req, res) => {
     ORDER BY updated_at DESC, id DESC
   `).all();
   res.json({
-    project,
+    project: withTaskProgress([project as { id: number }])[0],
     links: projectLinks(String(req.params.id)),
     workItems,
     updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
@@ -877,10 +878,11 @@ staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => 
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       p.updated_at DESC
   `).all() as any[]).map(project => ({ ...project, links: projectLinks(project.id) }));
+  const projectsWithTaskProgress = withTaskProgress(projects);
   const storage = await fs.promises.statfs(paths.uploads);
   const imageStats = db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes FROM project_update_images").get() as { count: number; bytes: number };
   res.json({
-    projects,
+    projects: projectsWithTaskProgress,
     stats: {
       total: projects.length,
       active: projects.filter((project: any) => activeProjectStatuses.includes(project.status)).length,
@@ -937,7 +939,7 @@ staffRouter.get("/briefing/projects/:id", requireRole("admin", "lead"), (req, re
       updated_at DESC
   `).all();
   res.json({
-    project,
+    project: withTaskProgress([project as { id: number }])[0],
     updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
     links: projectLinks(String(req.params.id)),
     workItems,
@@ -1143,7 +1145,7 @@ staffRouter.get("/tickets/:id", (req, res) => {
     SELECT c.*, u.name AS user_name FROM comments c LEFT JOIN users u ON u.id = c.author_user_id
     WHERE c.work_item_id = ? ORDER BY c.created_at
   `).all(req.params.id);
-  const attachments = db.prepare("SELECT id, original_name, mime_type, size, public_visible, created_at FROM attachments WHERE work_item_id = ?").all(req.params.id);
+  const attachments = db.prepare("SELECT id, comment_id, original_name, mime_type, size, public_visible, created_at FROM attachments WHERE work_item_id = ?").all(req.params.id);
   const auditEvents = db.prepare("SELECT * FROM audit_events WHERE entity_type = 'work_item' AND entity_id = ? ORDER BY created_at DESC").all(req.params.id);
   res.json({ item, comments, attachments, auditEvents });
 });
@@ -1186,6 +1188,42 @@ staffRouter.patch("/tickets/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async (req, res, next) => {
+  const storedNames: string[] = [];
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const item = db.prepare("SELECT id, ticket_no, title, status, project_id FROM work_items WHERE id = ?").get(req.params.id) as {
+      id: number; ticket_no: string; title: string; status: string; project_id: number | null;
+    } | undefined;
+    if (!item) return res.status(404).json({ error: "Work item not found" });
+    if (["resolved", "closed"].includes(item.status)) return res.status(409).json({ error: "This work item is already complete" });
+    const parsed = z.object({ note: z.string().trim().max(5000).default("") }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Completion note is too long" });
+    const files = (req.files as Express.Multer.File[]) ?? [];
+    if (files.some(file => !validProposalUpload(file))) return res.status(400).json({ error: "Attach valid pictures, PDF, Office documents, or text files" });
+    if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) return res.status(507).json({ error: "Storage capacity is too low" });
+    for (const file of files) {
+      const storedName = `${crypto.randomUUID()}${uploadExtension(file)}`;
+      await fs.promises.writeFile(path.join(paths.uploads, storedName), file.buffer, { flag: "wx" });
+      storedNames.push(storedName);
+    }
+    const commentId = db.transaction(() => {
+      db.prepare("UPDATE work_items SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(item.id);
+      const result = db.prepare(`INSERT INTO comments(work_item_id, author_user_id, author_name, body, is_completion)
+        VALUES (?, ?, ?, ?, 1)`).run(item.id, authReq.user.id, authReq.user.name, cleanText(parsed.data.note) || "Task completed");
+      const id = Number(result.lastInsertRowid);
+      files.forEach((file, index) => db.prepare(`INSERT INTO attachments(work_item_id, comment_id, original_name, stored_name, mime_type, size)
+        VALUES (?, ?, ?, ?, ?, ?)`).run(item.id, id, cleanText(file.originalname, 255), storedNames[index], file.mimetype, file.size));
+      audit(authReq.user, "work_item_completed", "work_item", item.id, { commentId: id, evidenceCount: files.length, projectId: item.project_id }, req.ip);
+      return id;
+    })();
+    res.json({ ok: true, commentId });
+  } catch (error) {
+    await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
+    next(error);
+  }
+});
+
 staffRouter.post("/tickets/:id/comments", upload.array("attachments", 3), async (req, res, next) => {
   try {
     const authReq = req as unknown as AuthenticatedRequest;
@@ -1224,6 +1262,15 @@ staffRouter.get("/attachments/:id", (req, res) => {
   const attachment = db.prepare("SELECT * FROM attachments WHERE id = ?").get(req.params.id) as { stored_name: string; original_name: string } | undefined;
   if (!attachment) return res.status(404).end();
   res.download(path.join(paths.uploads, attachment.stored_name), attachment.original_name);
+});
+
+staffRouter.get("/attachments/:id/preview", (req, res) => {
+  const attachment = db.prepare("SELECT stored_name, mime_type FROM attachments WHERE id = ?").get(req.params.id) as { stored_name: string; mime_type: string } | undefined;
+  if (!attachment || !["image/jpeg", "image/png", "image/webp"].includes(attachment.mime_type)) return res.status(404).end();
+  res.setHeader("Content-Type", attachment.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.sendFile(path.resolve(paths.uploads, attachment.stored_name));
 });
 
 staffRouter.get("/requests", requireRole("admin", "lead"), (_req, res) => {

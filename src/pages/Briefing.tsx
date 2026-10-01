@@ -6,6 +6,7 @@ import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader, StatCard } from 
 import { compressProgressImage } from "../progressImages";
 import { useLiveRefresh } from "../live";
 import { AssigneePicker } from "../components/AssigneePicker";
+import { TaskProgress } from "../components/TaskProgress";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusOptions = [
@@ -157,6 +158,7 @@ function BriefingProjectCard({ project, presentationOrder }: { project: any; pre
       <h2>{project.name}</h2>
       <p>{project.current_update || "No current progress update has been published yet."}</p>
       <div className="briefing-progress"><div><span>Delivery progress</span><strong>{progress}%</strong></div><div className="bar"><i style={{ width: `${progress}%` }} /></div></div>
+      <TaskProgress project={project} compact />
       {linkCount > 0 && <div className="briefing-card-links"><span>System links</span><strong>{linkCount}</strong></div>}
       <footer><span><small>Owner</small>{project.owner_name || "Unassigned"}</span><span><small>Due</small>{formatDate(project.due_date)}</span><span><small>Open work</small>{project.open_work_count}</span></footer>
     </div>
@@ -229,6 +231,7 @@ export function BriefingProjectPage() {
     </section>
     <div className="briefing-detail-grid">
       <main>
+        <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Task delivery</span><h2>Task completion</h2></div></div><TaskProgress project={project} /></section>
         <section className="panel briefing-current-update"><div className="panel-heading"><div><span className="eyebrow">Latest position</span><h2>Current management update</h2></div>{project.progress_updated_at && <time>{formatDate(project.progress_updated_at, true)}</time>}</div>
           <div className="project-update-content"><div><strong>What changed</strong><p>{project.current_update || "No current progress update has been published."}</p></div><div><strong>Next planned action</strong><p className={!project.next_action ? "project-update-empty" : ""}>{project.next_action || "No next action was recorded for this update."}</p></div></div>
           <small>Updated by {project.progress_updated_by_name || project.owner_name || "DTU"}</small>

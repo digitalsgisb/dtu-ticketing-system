@@ -85,7 +85,7 @@ export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>,
         aria-label={visible ? "Hide password" : "Show password"}
         aria-pressed={visible}
       >
-        <i aria-hidden="true" />
+        {visible ? "Hide" : "Show"}
       </button>
     </div>
   );
