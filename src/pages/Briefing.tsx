@@ -5,6 +5,7 @@ import { ArrowIcon, CheckIcon, ClockIcon, PlusIcon, ProjectIcon } from "../compo
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader, StatCard } from "../components/UI";
 import { compressProgressImage } from "../progressImages";
 import { useLiveRefresh } from "../live";
+import { AssigneePicker } from "../components/AssigneePicker";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusOptions = [
@@ -260,7 +261,7 @@ export function BriefingProjectPage() {
 }
 
 function BriefingWorkItemModal({ project, users, onClose, onSaved }: { project: any; users: any[]; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ type: "task", title: "", description: "", priority: "medium", assigneeId: "", dueDate: "" });
+  const [form, setForm] = useState({ type: "task", title: "", description: "", priority: "medium", assigneeIds: [] as number[], dueDate: "" });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const save = async (event: FormEvent) => {
@@ -274,8 +275,8 @@ function BriefingWorkItemModal({ project, users, onClose, onSaved }: { project: 
         title: form.title,
         description: form.description,
         priority: form.priority,
-        status: form.assigneeId ? "assigned" : "new",
-        assigneeId: form.assigneeId ? Number(form.assigneeId) : null,
+        status: form.assigneeIds.length ? "assigned" : "new",
+        assigneeIds: form.assigneeIds,
         dueDate: form.dueDate || null
       }));
       onSaved();
@@ -287,7 +288,7 @@ function BriefingWorkItemModal({ project, users, onClose, onSaved }: { project: 
   return <Modal title="Add task or issue" onClose={onClose} wide><form className="form-stack" onSubmit={save}>
     <ErrorNotice message={error} />
     <div className="progress-update-summary"><span className="mono">{project.project_no}</span><strong>{project.name}</strong><small>Create delivery work without leaving the management briefing. The selected PIC will be notified automatically.</small></div>
-    <div className="form-grid"><label>Work type<select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}><option value="task">Task</option><option value="issue">Issue</option></select></label><label>PIC / assignee<select value={form.assigneeId} onChange={event => setForm({ ...form, assigneeId: event.target.value })}><option value="">Unassigned</option>{users.filter(user => user.active).map(user => <option value={user.id} key={user.id}>{user.name}</option>)}</select></label></div>
+    <div className="form-grid"><label>Work type<select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}><option value="task">Task</option><option value="issue">Issue</option></select></label><AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} /></div>
     <label>Title<input required minLength={3} maxLength={200} value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder={form.type === "task" ? "What needs to be completed?" : "What needs attention?"} /></label>
     <label>Description<textarea rows={5} maxLength={5000} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} placeholder="Add the expected outcome, context, or next action." /></label>
     <div className="form-grid"><label>Priority<select value={form.priority} onChange={event => setForm({ ...form, priority: event.target.value })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label><label>Due date<input type="date" value={form.dueDate} onChange={event => setForm({ ...form, dueDate: event.target.value })} /></label></div>

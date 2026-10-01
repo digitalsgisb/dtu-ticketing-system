@@ -56,6 +56,6 @@ After deploying through HTTPS:
 1. Open the staff URL on a phone and sign in.
 2. Use the browser's **Add to Home Screen** action or the in-app **Install app** action when shown.
 3. Open **Notifications**, enable device notifications, and accept the browser permission prompt.
-4. Assign a test ticket to that user and confirm the in-app badge and device alert appear while the installed app is signed in.
+4. Configure VAPID keys as described in `OPERATIONS.md`, then assign a test ticket to that user. Confirm the in-app badge, email, and phone alert appear, including when the app is closed.
 
-The current device alerts are driven by authenticated polling every 30 seconds. Private notification data and API responses are never stored in the service-worker cache.
+Live updates use server sent events while the app is open. Background phone alerts use Web Push after the user opts in. Private notification data and API responses are never stored in the service-worker cache.

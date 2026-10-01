@@ -6,6 +6,7 @@ import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../compon
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
 import { useAuth } from "../auth";
+import { AssigneePicker } from "../components/AssigneePicker";
 
 export function TicketsPage() {
   const { t } = useI18n();
@@ -26,7 +27,7 @@ export function TicketsPage() {
   useLiveRefresh(load);
   const filtered = useMemo(() => (tickets ?? []).filter(item =>
     (queue === "all" || !["resolved", "closed"].includes(item.status)) &&
-    (queue !== "mine" || item.assignee_id === user?.id) &&
+    (queue !== "mine" || item.assignees?.some((assignee: { id: number }) => assignee.id === user?.id)) &&
     (!type || item.type === type) &&
     `${item.ticket_no} ${item.title} ${item.project_name || ""}`.toLowerCase().includes(search.toLowerCase())
   ), [tickets, search, queue, type, user?.id]);
@@ -63,12 +64,12 @@ export function TicketsPage() {
 
 function CreateTicket({ projects, users, defaultProject, onClose, onCreated }: { projects: any[]; users: any[]; defaultProject: string; onClose: () => void; onCreated: () => void }) {
   const { t } = useI18n();
-  const [form, setForm] = useState({ projectId: defaultProject, type: "task", title: "", description: "", priority: "medium", assigneeId: "", dueDate: "" });
+  const [form, setForm] = useState({ projectId: defaultProject, type: "task", title: "", description: "", priority: "medium", assigneeIds: [] as number[], dueDate: "" });
   const [error, setError] = useState("");
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api("/api/staff/tickets", json("POST", { ...form, status: form.assigneeId ? "assigned" : "new", projectId: form.projectId ? Number(form.projectId) : null, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null }));
+      await api("/api/staff/tickets", json("POST", { ...form, status: form.assigneeIds.length ? "assigned" : "new", projectId: form.projectId ? Number(form.projectId) : null, dueDate: form.dueDate || null }));
       onCreated();
     } catch (err) { setError((err as Error).message); }
   };
@@ -81,7 +82,7 @@ function CreateTicket({ projects, users, defaultProject, onClose, onCreated }: {
     <label>{t("description")}<textarea rows={5} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
     <div className="form-grid">
       <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
-      <label>{t("assignee")}<select value={form.assigneeId} onChange={e => setForm({ ...form, assigneeId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
+      <AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} />
       <label>{t("dueDate")}<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
     </div>
     <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose}>{t("cancel")}</button><button className="button button-primary">{t("create")}</button></div>

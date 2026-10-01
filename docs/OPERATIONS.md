@@ -34,6 +34,16 @@ Application data and secrets remain under `/var/lib/dtu-control` and `/etc/dtu-c
 - Port 587 normally uses `SMTP_SECURE=false`; port 465 normally uses `SMTP_SECURE=true`.
 - Staff accounts without an email address still receive in-app notifications, but cannot receive email notifications.
 - If the admin test fails, check `journalctl -u dtu-control`, then verify the relay hostname, port, TLS mode, credentials, sender address, and whether the relay allows the Pi's network address.
+- Every staff alert now includes a branded HTML email and a plain text alternative. Set each staff member's email in their profile or Administration → Users.
+
+## Phone push notifications
+
+1. Generate one VAPID key pair with `npx web-push generate-vapid-keys` on a trusted computer.
+2. Put `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT=mailto:admin@your-domain` in `/etc/dtu-control.env`. Keep the private key out of Git and backups that are shared externally. Restart `dtu-control`.
+3. Open the HTTPS staff site on each phone, install the app where the browser requires it, sign in, and select **Enable notifications** on the Notifications page.
+4. Create a test task assigned to that user and verify the in-app alert, email, and phone notification. Browser and phone notification permission must be allowed. On iPhone, add the site to the Home Screen before enabling push.
+
+If VAPID keys are absent, the in-app feed and email still work, and device alerts appear while the app is open. Push subscriptions are tied to the signed-in user and removed when they turn off notifications.
 
 ## Incident response
 

@@ -56,3 +56,15 @@ self.addEventListener("notificationclick", event => {
     })
   );
 });
+
+self.addEventListener("push", event => {
+  let message = {};
+  try { message = event.data?.json() || {}; } catch { message = {}; }
+  event.waitUntil(self.registration.showNotification(message.title || "DTU Control Centre", {
+    body: message.body || "You have a new update.",
+    icon: "/pwa-192.png",
+    badge: "/pwa-192.png",
+    tag: `dtu-push-${Date.now()}`,
+    data: { url: message.url || "/notifications" }
+  }));
+});

@@ -46,7 +46,7 @@ export function Layout() {
             return;
           }
           const lastId = Number(stored) || 0;
-          const enabled = localStorage.getItem("dtu-device-notifications") === "enabled";
+          const enabled = localStorage.getItem("dtu-device-notifications") === "enabled" && localStorage.getItem(`dtu-background-push-${user.id}`) !== "enabled";
           if (enabled && "Notification" in window && Notification.permission === "granted") {
             result.latestUnread
               .filter(item => item.id > lastId)

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { app } from "../server/app.js";
 import { db, resetDatabaseForTests, seedDatabase } from "../server/db.js";
-import { projectHandoverEmailContent, submissionUpdateEmailContent, trackingEmailContent } from "../server/services.js";
+import { projectHandoverEmailContent, standardEmailHtml, submissionUpdateEmailContent, trackingEmailContent } from "../server/services.js";
 import fs from "node:fs";
 import path from "node:path";
 import { paths } from "../server/config.js";
@@ -109,6 +109,30 @@ describe("DTU Control Centre API", () => {
       .set("Cookie", cookie).set("x-csrf-token", csrf)
       .send({ active: false });
     expect(selfDisable.status).toBe(400);
+  });
+
+  it("assigns one task to several people and notifies each of them", async () => {
+    const active = await request(app).patch(`/api/staff/users/${managedUserId}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ active: true });
+    expect(active.status).toBe(200);
+    const created = await request(app).post("/api/staff/tickets")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ type: "task", title: "Prepare shared report", assigneeIds: [adminUserId, managedUserId], status: "assigned" });
+    expect(created.status).toBe(201);
+    const detail = await request(app).get(`/api/staff/tickets/${created.body.id}`).set("Cookie", cookie);
+    expect(detail.body.item.assignees.map((user: { id: number }) => user.id).sort()).toEqual([adminUserId, managedUserId].sort());
+    const assigned = db.prepare("SELECT user_id FROM notifications WHERE type = 'assignment' AND link = ? ORDER BY user_id")
+      .all(`/tickets/${created.body.id}`) as Array<{ user_id: number }>;
+    expect(assigned.map(row => row.user_id)).toEqual([adminUserId, managedUserId].sort());
+    const wallboard = await request(app).get("/api/wallboard");
+    expect(wallboard.body.tickets.find((item: { id: number }) => item.id === created.body.id).assignee_name).toContain("Managed User");
+  });
+
+  it("renders ordinary alerts in the branded email template", () => {
+    const html = standardEmailHtml("Assignment <ready>", "Please open the new task.");
+    expect(html).toContain("Digital Transformation Unit");
+    expect(html).toContain("Assignment &lt;ready&gt;");
+    expect(html).not.toContain("Assignment <ready>");
   });
 
   it("resets a staff password and requires a change on next sign-in", async () => {

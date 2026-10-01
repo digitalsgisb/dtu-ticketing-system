@@ -14,9 +14,27 @@ import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js"
 import type { AuthenticatedRequest } from "../types.js";
 import { malaysiaDate } from "../time.js";
 import { addLiveClient } from "../liveUpdates.js";
+import { assigneesFor, replaceAssignees, validAssignees, withAssignees } from "../assignees.js";
+import { pushConfigured } from "../push.js";
 
 export const staffRouter = Router();
 staffRouter.get("/live", (_req, res) => addLiveClient(res));
+staffRouter.get("/push/config", (_req, res) => res.json({ publicKey: pushConfigured ? config.vapid.publicKey : null }));
+staffRouter.post("/push/subscriptions", (req, res) => {
+  if (!pushConfigured) return res.status(503).json({ error: "Phone push is not configured" });
+  const parsed = z.object({ endpoint: z.string().url().max(2048), keys: z.object({ p256dh: z.string().min(20).max(255), auth: z.string().min(10).max(255) }) }).safeParse(req.body);
+  if (!parsed.success || !parsed.data.endpoint.startsWith("https://")) return res.status(400).json({ error: "Invalid push subscription" });
+  db.prepare(`INSERT INTO push_subscriptions(endpoint, user_id, p256dh, auth) VALUES (?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth`)
+    .run(parsed.data.endpoint, (req as AuthenticatedRequest).user.id, parsed.data.keys.p256dh, parsed.data.keys.auth);
+  res.json({ ok: true });
+});
+staffRouter.delete("/push/subscriptions", (req, res) => {
+  const parsed = z.object({ endpoint: z.string().url() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid push subscription" });
+  db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?").run(parsed.data.endpoint, (req as AuthenticatedRequest).user.id);
+  res.json({ ok: true });
+});
 staffRouter.patch("/profile", (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const parsed = z.object({
@@ -593,15 +611,15 @@ staffRouter.get("/dashboard", (req, res) => {
     openIssues: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE type = 'issue' AND status NOT IN ('resolved','closed')").get() as { n: number }).n,
     overdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE due_date < ? AND status NOT IN ('resolved','closed')").get(today) as { n: number }).n,
     untriaged: (db.prepare("SELECT COUNT(*) AS n FROM project_requests WHERE status IN ('submitted','triage')").get() as { n: number }).n,
-    personalOpen: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE assignee_id = ? AND status NOT IN ('resolved','closed')").get(user.id) as { n: number }).n,
-    personalOverdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE assignee_id = ? AND due_date < ? AND status NOT IN ('resolved','closed')").get(user.id, today) as { n: number }).n,
+    personalOpen: (db.prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_item_assignees a ON a.work_item_id = w.id WHERE a.user_id = ? AND w.status NOT IN ('resolved','closed')").get(user.id) as { n: number }).n,
+    personalOverdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_item_assignees a ON a.work_item_id = w.id WHERE a.user_id = ? AND w.due_date < ? AND w.status NOT IN ('resolved','closed')").get(user.id, today) as { n: number }).n,
     ownedProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE owner_id = ? AND status NOT IN ('completed','cancelled')").get(user.id) as { n: number }).n,
     unreadNotifications: (db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").get(user.id) as { n: number }).n
   };
   const myWork = db.prepare(`
     SELECT w.*, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id
-    WHERE w.assignee_id = ? AND w.status NOT IN ('resolved','closed')
+    WHERE EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = w.id AND a.user_id = ?) AND w.status NOT IN ('resolved','closed')
     ORDER BY CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, w.due_date
     LIMIT 8
   `).all(user.id);
@@ -614,16 +632,16 @@ staffRouter.get("/dashboard", (req, res) => {
   const myUpcoming = db.prepare(`
     SELECT w.id, w.ticket_no, w.title, w.status, w.priority, w.due_date, p.name AS project_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id
-    WHERE w.assignee_id = ? AND w.due_date IS NOT NULL AND w.status NOT IN ('resolved','closed')
+    WHERE EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = w.id AND a.user_id = ?) AND w.due_date IS NOT NULL AND w.status NOT IN ('resolved','closed')
     ORDER BY w.due_date LIMIT 8
   `).all(user.id);
   const workload = db.prepare(`
     SELECT u.id, u.name, COUNT(w.id) AS count
-    FROM users u LEFT JOIN work_items w ON w.assignee_id = u.id AND w.status NOT IN ('resolved','closed')
+    FROM users u LEFT JOIN work_item_assignees a ON a.user_id = u.id LEFT JOIN work_items w ON w.id = a.work_item_id AND w.status NOT IN ('resolved','closed')
     WHERE u.active = 1 GROUP BY u.id ORDER BY count DESC, u.name
   `).all();
   const activity = db.prepare("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT 10").all();
-  res.json({ stats, myWork, upcoming, myUpcoming, workload, activity });
+  res.json({ stats, myWork: withAssignees(myWork as Array<{ id: number }>), upcoming: withAssignees(upcoming as Array<{ id: number }>), myUpcoming: withAssignees(myUpcoming as Array<{ id: number }>), workload, activity });
 });
 
 staffRouter.get("/projects", (_req, res) => {
@@ -721,10 +739,10 @@ staffRouter.get("/projects/:id", (req, res) => {
     WHERE p.id = ?
   `).get(req.params.id);
   if (!project) return res.status(404).json({ error: "Project not found" });
-  const workItems = db.prepare(`
+  const workItems = withAssignees(db.prepare(`
     SELECT w.*, u.name AS assignee_name FROM work_items w LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.project_id = ? ORDER BY w.updated_at DESC
-  `).all(req.params.id);
+  `).all(req.params.id) as Array<{ id: number }>);
   const updates = db.prepare(`
     SELECT pu.*, COUNT(pui.id) AS image_count
     FROM project_updates pu
@@ -904,14 +922,14 @@ staffRouter.get("/briefing/projects/:id", requireRole("admin", "lead"), (req, re
     WHERE pu.project_id = ?
     ORDER BY pui.created_at DESC, pui.id DESC
   `).all(req.params.id);
-  const workItems = db.prepare(`
+  const workItems = withAssignees(db.prepare(`
     SELECT w.id, w.ticket_no, w.title, w.type, w.status, w.priority, w.due_date, u.name AS assignee_name
     FROM work_items w LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.project_id = ?
     ORDER BY CASE WHEN w.status IN ('resolved','closed') THEN 1 ELSE 0 END,
       CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       w.due_date
-  `).all(req.params.id);
+  `).all(req.params.id) as Array<{ id: number }>);
   const navigationProjects = db.prepare(`
     SELECT id, project_no, name FROM projects WHERE status != 'cancelled'
     ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'complete_monitoring' THEN 1 WHEN 'on_hold' THEN 2 WHEN 'planned' THEN 3 ELSE 4 END,
@@ -1068,15 +1086,16 @@ staffRouter.get("/projects/:id/qr", async (req, res) => {
 staffRouter.get("/tickets", (req, res) => {
   const where: string[] = [];
   const values: unknown[] = [];
-  for (const [key, column] of [["status", "w.status"], ["type", "w.type"], ["projectId", "w.project_id"], ["assigneeId", "w.assignee_id"]] as const) {
+  for (const [key, column] of [["status", "w.status"], ["type", "w.type"], ["projectId", "w.project_id"]] as const) {
     if (req.query[key]) { where.push(`${column} = ?`); values.push(req.query[key]); }
   }
+  if (req.query.assigneeId) { where.push("EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = w.id AND a.user_id = ?)"); values.push(req.query.assigneeId); }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  res.json(db.prepare(`
+  res.json(withAssignees(db.prepare(`
     SELECT w.*, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id
     ${clause} ORDER BY w.updated_at DESC
-  `).all(...values));
+  `).all(...values) as Array<{ id: number }>));
 });
 
 staffRouter.post("/tickets", (req, res) => {
@@ -1089,29 +1108,37 @@ staffRouter.post("/tickets", (req, res) => {
     priority: z.enum(priorities).default("medium"),
     status: z.enum(statuses).default("new"),
     assigneeId: z.number().int().positive().nullable().optional(),
+    assigneeIds: z.array(z.number().int().positive()).max(30).optional(),
     dueDate: z.string().nullable().optional()
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid work item", details: parsed.error.flatten() });
+  const assigneeIds = parsed.data.assigneeIds ?? (parsed.data.assigneeId ? [parsed.data.assigneeId] : []);
+  if (!validAssignees(assigneeIds)) return res.status(400).json({ error: "Choose distinct active assignees" });
   const ticketNo = nextIdentifier("TKT");
+  const id = db.transaction(() => {
   const result = db.prepare(`
     INSERT INTO work_items(ticket_no, project_id, type, title, description, priority, status, assignee_id, due_date, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(ticketNo, parsed.data.projectId ?? null, parsed.data.type, cleanText(parsed.data.title, 200),
-    cleanText(parsed.data.description), parsed.data.priority, parsed.data.status, parsed.data.assigneeId ?? null,
+    cleanText(parsed.data.description), parsed.data.priority, parsed.data.status, assigneeIds[0] ?? null,
     parsed.data.dueDate || null, authReq.user.id);
-  const id = Number(result.lastInsertRowid);
-  if (parsed.data.assigneeId) notify(parsed.data.assigneeId, "assignment", `${ticketNo} assigned to you`, parsed.data.title, `/tickets/${id}`);
+  const createdId = Number(result.lastInsertRowid);
+  replaceAssignees(createdId, assigneeIds);
+  return createdId;
+  })();
+  for (const userId of assigneeIds) notify(userId, "assignment", `${ticketNo} assigned to you`, parsed.data.title, `/tickets/${id}`);
   audit(authReq.user, "work_item_created", "work_item", id, { ticketNo }, req.ip);
   res.status(201).json({ id, ticketNo });
 });
 
 staffRouter.get("/tickets/:id", (req, res) => {
-  const item = db.prepare(`
+  const rawItem = db.prepare(`
     SELECT w.*, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.id = ?
-  `).get(req.params.id);
-  if (!item) return res.status(404).json({ error: "Work item not found" });
+  `).get(req.params.id) as { id: number } | undefined;
+  if (!rawItem) return res.status(404).json({ error: "Work item not found" });
+  const item = withAssignees([rawItem])[0];
   const comments = db.prepare(`
     SELECT c.*, u.name AS user_name FROM comments c LEFT JOIN users u ON u.id = c.author_user_id
     WHERE c.work_item_id = ? ORDER BY c.created_at
@@ -1131,18 +1158,26 @@ staffRouter.patch("/tickets/:id", (req, res) => {
     priority: z.enum(priorities).optional(),
     status: z.enum(statuses).optional(),
     assigneeId: z.number().int().positive().nullable().optional(),
+    assigneeIds: z.array(z.number().int().positive()).max(30).optional(),
     dueDate: z.string().nullable().optional()
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid work item update" });
   const d = parsed.data;
+  const previousIds = assigneesFor(Number(req.params.id)).map(user => user.id);
+  const assigneeIds = d.assigneeIds ?? (d.assigneeId === undefined ? previousIds : d.assigneeId ? [d.assigneeId] : []);
+  if (new Set(assigneeIds).size !== assigneeIds.length || !validAssignees(assigneeIds.filter(id => !previousIds.includes(id))))
+    return res.status(400).json({ error: "Choose distinct active assignees" });
+  db.transaction(() => {
   db.prepare(`
     UPDATE work_items SET title = ?, description = ?, priority = ?, status = ?, assignee_id = ?, due_date = ?,
       resolved_at = CASE WHEN ? IN ('resolved','closed') THEN COALESCE(resolved_at, CURRENT_TIMESTAMP) ELSE NULL END,
       updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(d.title ?? existing.title, d.description ?? existing.description, d.priority ?? existing.priority,
-    d.status ?? existing.status, d.assigneeId === undefined ? existing.assignee_id : d.assigneeId,
+    d.status ?? existing.status, assigneeIds[0] ?? null,
     d.dueDate === undefined ? existing.due_date : d.dueDate, d.status ?? existing.status, req.params.id);
-  if (d.assigneeId && d.assigneeId !== existing.assignee_id) notify(d.assigneeId, "assignment", `${existing.ticket_no} assigned to you`, String(d.title ?? existing.title), `/tickets/${req.params.id}`);
+  replaceAssignees(Number(req.params.id), assigneeIds);
+  })();
+  for (const userId of assigneeIds.filter(id => !previousIds.includes(id))) notify(userId, "assignment", `${existing.ticket_no} assigned to you`, String(d.title ?? existing.title), `/tickets/${req.params.id}`);
   if (existing.reporter_email && d.status && d.status !== existing.status) {
     void sendMailSafely(String(existing.reporter_email), `${existing.ticket_no} status updated`,
       `Your issue is now ${d.status.replaceAll("_", " ")}.`);
@@ -1178,7 +1213,7 @@ staffRouter.post("/tickets/:id/comments", upload.array("attachments", 3), async 
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(item.id, commentId, cleanText(file.originalname, 255), storedName, file.mimetype, file.size, parsed.data.publicVisible ? 1 : 0);
     }
-    if (item.assignee_id && item.assignee_id !== authReq.user.id) notify(item.assignee_id, "comment", `New comment on ${item.ticket_no}`, parsed.data.body.slice(0, 140), `/tickets/${item.id}`);
+    for (const assignee of assigneesFor(item.id)) if (assignee.id !== authReq.user.id) notify(assignee.id, "comment", `New comment on ${item.ticket_no}`, parsed.data.body.slice(0, 140), `/tickets/${item.id}`);
     if (parsed.data.publicVisible && item.reporter_email) void sendMailSafely(item.reporter_email, `Update on ${item.ticket_no}`, parsed.data.body);
     audit(authReq.user, "comment_created", "work_item", item.id, { publicVisible: parsed.data.publicVisible }, req.ip);
     res.status(201).json({ id: commentId });

@@ -23,8 +23,9 @@ export function WallboardPage() {
   const load = async () => {
     const next = await api<any>("/api/wallboard");
     const nextIds = new Set<number>(next.tickets.map((item: any) => Number(item.id)));
+    let arrivals = new Set<number>();
     if (previousTicketIds.current) {
-      const arrivals = new Set([...nextIds].filter(id => !previousTicketIds.current?.has(id)));
+      arrivals = new Set([...nextIds].filter(id => !previousTicketIds.current?.has(id)));
       if (arrivals.size) {
         setNewTicketIds(arrivals);
         if (soundEnabled && soundRef.current) {
@@ -38,6 +39,7 @@ export function WallboardPage() {
         highlightTimer.current = setTimeout(() => setNewTicketIds(new Set()), 2_600);
       }
     }
+    if (arrivals.size) next.tickets.sort((a: any, b: any) => Number(arrivals.has(Number(b.id))) - Number(arrivals.has(Number(a.id))));
     previousTicketIds.current = nextIds;
     setData(next);
   };
@@ -91,13 +93,13 @@ export function WallboardPage() {
     {view === "overview"
       ? <div className="wallboard-shell">
         <main className="wallboard-main">
-          <WallboardCommand totalLive={totalLive} generatedAt={data.generatedAt} />
+          <WallboardCommand totalLive={totalLive} />
           <WallboardStats data={data} t={t} />
           <WallboardTicker data={data} />
           <section className="wall-panel wall-priority-panel">
             <WallHeading index="01" eyebrow="OPERATIONS" title={t("criticalWork")} count={`${data.tickets.length} queued`} actionLabel="View all →" onClick={() => setView("tickets")} />
             {data.tickets.length
-              ? <CyclingTickets tickets={data.tickets} newTicketIds={newTicketIds} />
+              ? <CyclingTickets key={newTicketIds.size ? [...newTicketIds].join(",") : "queue"} tickets={data.tickets} newTicketIds={newTicketIds} />
               : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
           </section>
         </main>
@@ -111,7 +113,6 @@ export function WallboardPage() {
       </div>
       : <WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} />}
 
-    <footer className="wallboard-footer"><span className="status-dot" /> Systems operational <span>•</span> {t("refreshes")} <span>•</span> Secure local display</footer>
     <div className="wallboard-watermark">© DIGITAL TRANSFORMATION UNIT</div>
   </div>;
 }
@@ -225,15 +226,10 @@ function CyclePosition({ page, pageCount }: { page: number; pageCount: number })
   </div>;
 }
 
-function WallboardCommand({ totalLive, generatedAt }: { totalLive: number; generatedAt: string }) {
+function WallboardCommand({ totalLive }: { totalLive: number }) {
   return <section className="wallboard-command">
     <div className="wallboard-command-copy"><span>Operations overview</span><h1>Digital Transformation Unit Task Board</h1><p>Live delivery, service demand, and priority work across the unit.</p></div>
     <div className="wallboard-command-summary"><small>Live workload</small><strong>{totalLive}</strong><span>items in motion</span></div>
-    <div className="wallboard-command-readout">
-      <span>Next refresh</span>
-      <div className="refresh-track" key={generatedAt}><i /></div>
-      <small>Automatic · 30 seconds</small>
-    </div>
   </section>;
 }
 

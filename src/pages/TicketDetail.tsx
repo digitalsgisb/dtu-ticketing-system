@@ -4,6 +4,7 @@ import { api, formatDate, json } from "../api";
 import { Badge, Empty, ErrorNotice, Loading, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
+import { AssigneePicker } from "../components/AssigneePicker";
 
 export function TicketDetailPage() {
   const { id } = useParams();
@@ -48,19 +49,19 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
     ["resolved", "Resolved"],
     ["closed", "Closed"]
   ] as const;
-  const [form, setForm] = useState({ status: item.status, priority: item.priority, assigneeId: item.assignee_id ? String(item.assignee_id) : "", dueDate: item.due_date || "" });
+  const [form, setForm] = useState({ status: item.status, priority: item.priority, assigneeIds: (item.assignees || []).map((user: { id: number }) => user.id) as number[], dueDate: item.due_date || "" });
   const [busy, setBusy] = useState(false);
   const [statusBusy, setStatusBusy] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    setForm({ status: item.status, priority: item.priority, assigneeId: item.assignee_id ? String(item.assignee_id) : "", dueDate: item.due_date || "" });
-  }, [item.status, item.priority, item.assignee_id, item.due_date]);
+    setForm({ status: item.status, priority: item.priority, assigneeIds: (item.assignees || []).map((user: { id: number }) => user.id), dueDate: item.due_date || "" });
+  }, [item.status, item.priority, item.assignee_name, item.due_date]);
   const changeStatus = async (status: string) => {
     if (status === item.status || statusBusy) return;
     setError("");
     setStatusBusy(status);
     try {
-      await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...form, status, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null }));
+      await api(`/api/staff/tickets/${item.id}`, json("PATCH", { status }));
       onUpdated();
     } catch (err) { setError((err as Error).message); }
     finally {
@@ -70,7 +71,7 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
   const save = async () => {
     setError("");
     setBusy(true);
-    try { await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...form, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null })); onUpdated(); }
+    try { await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...form, dueDate: form.dueDate || null })); onUpdated(); }
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
@@ -84,7 +85,7 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
     <div className="settings-divider"><span>Details & schedule</span></div>
     <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{statuses.map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
     <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
-    <label>{t("assignee")}<select value={form.assigneeId} onChange={e => setForm({ ...form, assigneeId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
+    <AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} />
     <label>{t("dueDate")}<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
     <button className="button button-primary button-block" onClick={save} disabled={busy || Boolean(statusBusy)}>{busy ? "Saving…" : "Save changes"}</button>
     <div className="sidebar-facts">{item.project_id && <Link to={`/projects/${item.project_id}`}><small>Project</small><strong>{item.project_name}</strong></Link>}<div><small>Created</small><strong>{formatDate(item.created_at, true)}</strong></div><div><small>Source</small><strong>{item.source.toUpperCase()}</strong></div></div>

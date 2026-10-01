@@ -12,6 +12,7 @@ import { importRouter } from "./routes/imports.js";
 import { db } from "./db.js";
 import { malaysiaDate, malaysiaMonthStartUtc } from "./time.js";
 import { addLiveClient, publishLiveUpdate } from "./liveUpdates.js";
+import { withAssignees } from "./assignees.js";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -85,13 +86,13 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       CASE WHEN p.status = 'completed' THEN p.updated_at END DESC, p.due_date
   `).all();
-  const tickets = db.prepare(`
+  const tickets = withAssignees(db.prepare(`
     SELECT w.id, w.ticket_no, w.title, w.type, w.status, w.priority, w.due_date, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.status NOT IN ('resolved','closed')
     ORDER BY CASE WHEN w.due_date < ? THEN 0 ELSE 1 END,
       CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, w.due_date
-  `).all(today);
+  `).all(today) as Array<{ id: number }>);
   res.json({ stats, projects, tickets, generatedAt: new Date().toISOString() });
 });
 

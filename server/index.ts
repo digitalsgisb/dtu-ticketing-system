@@ -16,12 +16,13 @@ const deadlineTimer = setInterval(() => {
   const users = db.prepare("SELECT id FROM users WHERE active = 1").all() as { id: number }[];
   for (const user of users) {
     const items = db.prepare(`
-      SELECT id, ticket_no, title, due_date FROM work_items
-      WHERE assignee_id = ? AND status NOT IN ('resolved','closed')
-        AND due_date BETWEEN ? AND ?
+      SELECT w.id, w.ticket_no, w.title, w.due_date FROM work_items w
+      JOIN work_item_assignees a ON a.work_item_id = w.id
+      WHERE a.user_id = ? AND w.status NOT IN ('resolved','closed')
+        AND w.due_date BETWEEN ? AND ?
         AND NOT EXISTS (
           SELECT 1 FROM notifications n WHERE n.user_id = ? AND n.type = 'deadline'
-            AND n.link = '/tickets/' || work_items.id AND date(n.created_at, '+8 hours') = ?
+            AND n.link = '/tickets/' || w.id AND date(n.created_at, '+8 hours') = ?
         )
     `).all(user.id, today, reminderEnd, user.id, today) as { id: number; ticket_no: string; title: string; due_date: string }[];
     for (const item of items) notify(user.id, "deadline", `${item.ticket_no} is due soon`, `${item.title} · ${item.due_date}`, `/tickets/${item.id}`);

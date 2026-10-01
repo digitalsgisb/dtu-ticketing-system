@@ -50,6 +50,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    if (user && "serviceWorker" in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager?.getSubscription();
+        if (subscription) {
+          await api("/api/staff/push/subscriptions", json("DELETE", { endpoint: subscription.endpoint }));
+          await subscription.unsubscribe();
+        }
+      } catch { /* Logout still proceeds if push cleanup fails. */ }
+      localStorage.removeItem(`dtu-background-push-${user.id}`);
+    }
     await api("/api/auth/logout", json("POST"));
     setUser(null);
     setCsrf("");

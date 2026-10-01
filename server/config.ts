@@ -26,6 +26,11 @@ export const config = {
   turnstileSecret: process.env.TURNSTILE_SECRET || "",
   turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || "",
   minFreeStorageMb: integer("MIN_FREE_STORAGE_MB", 512),
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || "",
+    privateKey: process.env.VAPID_PRIVATE_KEY || "",
+    subject: process.env.VAPID_SUBJECT || ""
+  },
   smtp: {
     host: process.env.SMTP_HOST || "",
     port: integer("SMTP_PORT", 587),

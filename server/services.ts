@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { publishLiveUpdate } from "./liveUpdates.js";
+import { sendPush } from "./push.js";
 
 let mailTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
@@ -38,6 +39,7 @@ export function notify(userId: number, type: string, title: string, body: string
     INSERT INTO notifications(user_id, type, title, body, link) VALUES (?, ?, ?, ?, ?)
   `).run(userId, type, title, body, link ?? null);
   publishLiveUpdate();
+  sendPush(userId, title, body, link);
   const recipient = db.prepare("SELECT email FROM users WHERE id = ? AND active = 1").get(userId) as { email: string | null } | undefined;
   if (recipient?.email) {
     const url = staffLink(link);
@@ -64,7 +66,7 @@ export async function sendMail(to: string | null | undefined, subject: string, t
     to,
     subject,
     text,
-    html,
+    html: html ?? standardEmailHtml(subject, text),
     attachments,
     disableFileAccess: true,
     disableUrlAccess: true
@@ -86,6 +88,20 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, character => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   })[character] ?? character);
+}
+
+export function standardEmailHtml(subject: string, message: string) {
+  const paragraphs = message.trim().split(/\n\s*\n/).map(paragraph =>
+    `<p style="margin:0 0 16px;line-height:1.65;color:#405d6d">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`).join("");
+  const firstUrl = message.match(/https?:\/\/[^\s<>]+/i)?.[0];
+  const action = firstUrl ? `<table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="border-radius:9px;background:#168b86"><a href="${escapeHtml(firstUrl)}" style="display:inline-block;padding:14px 22px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold">Open in DTU Control Centre</a></td></tr></table>` : "";
+  return `<!doctype html><html lang="en"><body style="margin:0;background:#f2f6f7;font-family:Arial,Helvetica,sans-serif;color:#18384b">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f2f6f7;padding:28px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #dce7ea;border-radius:16px;overflow:hidden">
+<tr><td style="padding:26px 30px;background:#0b2638;color:#ffffff"><div style="font-size:11px;letter-spacing:1.7px;color:#6fd0c8;font-weight:bold">SUGIHARA GRAND INDUSTRIES SDN BHD</div><div style="margin-top:7px;font-size:22px;font-weight:bold">Digital Transformation Unit</div></td></tr>
+<tr><td style="padding:32px 30px"><h1 style="margin:0 0 22px;font-size:24px;line-height:1.3;color:#0b2638">${escapeHtml(subject)}</h1>${paragraphs}${action}</td></tr>
+<tr><td style="padding:20px 30px;border-top:1px solid #e4ecee;font-size:12px;line-height:1.6;color:#718995">Digital Transformation Unit<br>Sugihara Grand Industries Sdn Bhd</td></tr>
+</table></td></tr></table></body></html>`;
 }
 
 export type TrackingEmailInput = {
