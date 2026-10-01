@@ -78,6 +78,10 @@ export function RequestDetailPage() {
   const [trackingNotice, setTrackingNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [trackingCopied, setTrackingCopied] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [requesterEmail, setRequesterEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [decisionBusy, setDecisionBusy] = useState("");
   const [updatingProgress, setUpdatingProgress] = useState(false);
@@ -157,13 +161,24 @@ export function RequestDetailPage() {
       setShowDelete(false);
     }
   };
+  const saveRequesterEmail = async (event: FormEvent) => {
+    event.preventDefault();
+    setEmailError(""); setEmailSaving(true);
+    try {
+      await api(`/api/staff/requests/${id}/requester-email`, json("PATCH", { email: requesterEmail.trim() }));
+      setEditingEmail(false);
+      setTrackingNotice(null);
+      await load(false);
+    } catch (err) { setEmailError((err as Error).message); }
+    finally { setEmailSaving(false); }
+  };
   return <>
     <PageHeader eyebrow={item.request_no} title={item.title} description={`Requested by ${item.requester_name} · ${item.department_name}`} actions={<><Badge value={item.urgency} kind="priority" /><Badge value={item.status} /><button className="button button-danger" onClick={() => setShowDelete(true)}>Delete request</button></>} />
     <ErrorNotice message={error} />
     <div className="detail-layout">
       <div className="detail-main">
         <section className="panel request-brief"><div><span className="eyebrow">Current problem</span><p>{item.current_problem}</p></div><div><span className="eyebrow">Desired outcome</span><p>{item.desired_outcome}</p></div>
-          <div className="detail-facts"><div><small>Expected users</small><strong>{item.expected_users || "—"}</strong></div><div><small>Target date</small><strong>{formatDate(item.target_date)}</strong></div><div><small>Contact</small><strong>{item.requester_email}</strong></div></div>
+          <div className="detail-facts"><div><small>Expected users</small><strong>{item.expected_users || "—"}</strong></div><div><small>Target date</small><strong>{formatDate(item.target_date)}</strong></div><div><small>Requester email</small><strong>{item.requester_email}</strong><button type="button" className="button button-secondary button-compact" onClick={() => { setRequesterEmail(item.requester_email); setEmailError(""); setEditingEmail(true); }}>Correct email</button></div></div>
           <div className="request-attachment-block">
             <div className="request-attachment-heading">
               <div><span className="eyebrow">Supporting documents</span><strong>Documents uploaded with this request</strong></div>
@@ -231,6 +246,14 @@ export function RequestDetailPage() {
         {item.created_project_id && <div className="notice">The approved project will be kept. Only its link back to this request will be removed.</div>}
         <div className="form-actions"><button className="button button-secondary" disabled={deleting} onClick={() => setShowDelete(false)}>Cancel</button><button className="button button-danger" disabled={deleting} onClick={() => void deleteRequest()}>{deleting ? "Deleting…" : "Delete permanently"}</button></div>
       </div>
+    </Modal>}
+    {editingEmail && <Modal title="Correct requester email" onClose={() => !emailSaving && setEditingEmail(false)}>
+      <form className="form-stack" onSubmit={saveRequesterEmail}>
+        <p className="muted">Future tracking, progress, and handover emails will use the corrected address. Old tracking links will expire; resend a fresh link after saving.</p>
+        <ErrorNotice message={emailError} />
+        <label>Requester email<input type="email" required maxLength={254} autoFocus value={requesterEmail} onChange={event => setRequesterEmail(event.target.value)} /></label>
+        <div className="form-actions"><button type="button" className="button button-secondary" disabled={emailSaving} onClick={() => setEditingEmail(false)}>Cancel</button><button className="button button-primary" disabled={emailSaving || requesterEmail.trim() === item.requester_email}>{emailSaving ? "Saving…" : "Save email"}</button></div>
+      </form>
     </Modal>}
     {updatingProgress && project && <ProgressUpdate project={project} onClose={() => setUpdatingProgress(false)} onSaved={() => { setUpdatingProgress(false); void load(); }} />}
     {showHandover && project && <ProjectHandoverModal request={item} project={project} onClose={() => setShowHandover(false)} onSent={async result => {

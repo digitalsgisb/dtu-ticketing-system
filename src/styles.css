@@ -2455,6 +2455,23 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   .wall-project-visual-fallback > svg { width: 18px; }
   .wall-project-visual-fallback > small { top: calc(50% + 15px); }
   .wallboard-shell .wall-project-rail .wall-project-showcase-copy p { -webkit-line-clamp: 1; }
+
+/* Account, work queue, and wallboard controls */
+.profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.profile-link { padding: 8px; margin: -8px; border-radius: 11px; }
+.profile-link:hover, .profile-link:focus-visible { background: rgba(255,255,255,.08); outline: none; }
+.request-brief .detail-facts button { margin-top: 9px; width: fit-content; }
+.work-filter-divider { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
+.ticket-quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.ticket-quick-actions .button { flex: 1; white-space: nowrap; }
+.wallboard-header { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.wallboard-sound-toggle { border: 1px solid #315466; border-radius: 8px; padding: 8px 10px; background: #102d3e; color: #a9c4cf; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.wallboard-sound-toggle:hover, .wallboard-sound-toggle:focus-visible { border-color: #53b8b0; color: #fff; }
+.wallboard-sound-toggle.is-on { border-color: #3aa69c; color: #9de8db; }
+.wallboard-group-list { display: grid; gap: 20px; }
+.wallboard-group h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; color: #e4f4f5; font-size: 15px; letter-spacing: .02em; }
+.wallboard-group h3 span { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 50px; background: #173f4e; color: #7cddd1; font-size: 11px; }
+@media (max-width: 900px) { .profile-grid { grid-template-columns: 1fr; } .wallboard-header { gap: 10px; } }
 }
 
 /* Executive progress briefing */

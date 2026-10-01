@@ -16,6 +16,8 @@ export function WallboardPage() {
   const [now, setNow] = useState(new Date());
   const [newTicketIds, setNewTicketIds] = useState<Set<number>>(() => new Set());
   const [view, setView] = useState<WallboardView>("overview");
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("dtu-wallboard-sound") === "on");
+  const soundRef = useRef<HTMLAudioElement | null>(null);
   const previousTicketIds = useRef<Set<number> | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const load = async () => {
@@ -25,6 +27,13 @@ export function WallboardPage() {
       const arrivals = new Set([...nextIds].filter(id => !previousTicketIds.current?.has(id)));
       if (arrivals.size) {
         setNewTicketIds(arrivals);
+        if (soundEnabled && soundRef.current) {
+          soundRef.current.currentTime = 0;
+          void soundRef.current.play().catch(() => {
+            setSoundEnabled(false);
+            localStorage.removeItem("dtu-wallboard-sound");
+          });
+        }
         if (highlightTimer.current) clearTimeout(highlightTimer.current);
         highlightTimer.current = setTimeout(() => setNewTicketIds(new Set()), 2_600);
       }
@@ -35,13 +44,33 @@ export function WallboardPage() {
   useLiveRefresh(load, "/api/wallboard/live");
 
   useEffect(() => {
+    soundRef.current = new Audio("/wallboard-notification.mp3");
+    soundRef.current.preload = "auto";
     void load();
     const clockTimer = setInterval(() => setNow(new Date()), 1_000);
     return () => {
       clearInterval(clockTimer);
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
+      soundRef.current?.pause();
+      soundRef.current = null;
     };
   }, []);
+
+  const toggleSound = async () => {
+    if (soundEnabled) {
+      setSoundEnabled(false);
+      localStorage.removeItem("dtu-wallboard-sound");
+      soundRef.current?.pause();
+      return;
+    }
+    if (!soundRef.current) return;
+    try {
+      soundRef.current.currentTime = 0;
+      await soundRef.current.play();
+      setSoundEnabled(true);
+      localStorage.setItem("dtu-wallboard-sound", "on");
+    } catch { setSoundEnabled(false); }
+  };
 
   if (!data) return <div className="wallboard"><Loading /></div>;
 
@@ -55,6 +84,7 @@ export function WallboardPage() {
     <header className="wallboard-header">
       <div className="brand company-brand wallboard-brand"><CompanyLogo /><small>DTU Control Centre · {t("controlCentre")}</small></div>
       <div className="wallboard-clock"><strong>{time}</strong><span>{date}</span><small>{t("lastUpdated")}: {new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(data.generatedAt))}</small></div>
+      <button type="button" className={`wallboard-sound-toggle${soundEnabled ? " is-on" : ""}`} onClick={() => void toggleSound()} aria-pressed={soundEnabled} title="Play a sound when new work appears">{soundEnabled ? "🔊 Sound on" : "🔇 Enable sound"}</button>
       <button className="language-button" onClick={() => setLang(lang === "en" ? "ms" : "en")}>{t("language")}</button>
     </header>
 
@@ -228,6 +258,17 @@ function WallboardFullView({ view, data, t, newTicketIds, onBack }: {
   onBack: () => void;
 }) {
   const projects = view === "projects";
+  const projectGroups = [
+    { title: "In progress", statuses: ["in_progress"] },
+    { title: "On hold", statuses: ["on_hold"] },
+    { title: "Planned", statuses: ["planned"] },
+    { title: "Monitoring", statuses: ["complete_monitoring"] },
+    { title: "Completed", statuses: ["completed"] }
+  ];
+  const ticketGroups = [
+    { title: "Issues", type: "issue" },
+    { title: "Tasks", type: "task" }
+  ];
   return <main className="wallboard-full-view">
     <section className="wallboard-command wallboard-focus-command">
       <div className="wallboard-command-copy"><span>{projects ? "PORTFOLIO VIEW" : "OPERATIONS VIEW"}</span><h1>{projects ? t("projectPortfolio") : t("criticalWork")}</h1><p>{projects ? "Every DTU project in one live delivery view." : "Every open issue and task ordered by urgency."}</p></div>
@@ -244,10 +285,16 @@ function WallboardFullView({ view, data, t, newTicketIds, onBack }: {
       </div>
       {projects
         ? data.projects.length
-          ? <div className="wallboard-all-projects">{data.projects.map((project: any) => <WallProject key={project.id} project={project} expanded />)}</div>
+          ? <div className="wallboard-group-list">{projectGroups.map(group => {
+            const items = data.projects.filter((project: any) => group.statuses.includes(project.status));
+            return items.length ? <section className="wallboard-group" key={group.title}><h3>{group.title}<span>{items.length}</span></h3><div className="wallboard-all-projects">{items.map((project: any) => <WallProject key={project.id} project={project} expanded />)}</div></section> : null;
+          })}</div>
           : <WallClearState label="Portfolio clear" body="No projects require display." />
         : data.tickets.length
-          ? <div className="wallboard-all-tickets">{data.tickets.map((item: any, index: number) => <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />)}</div>
+          ? <div className="wallboard-group-list">{ticketGroups.map(group => {
+            const items = data.tickets.filter((item: any) => item.type === group.type);
+            return items.length ? <section className="wallboard-group" key={group.type}><h3>{group.title}<span>{items.length}</span></h3><div className="wallboard-all-tickets">{items.map((item: any, index: number) => <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />)}</div></section> : null;
+          })}</div>
           : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
     </section>
   </main>;

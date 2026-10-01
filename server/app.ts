@@ -86,7 +86,7 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
       CASE WHEN p.status = 'completed' THEN p.updated_at END DESC, p.due_date
   `).all();
   const tickets = db.prepare(`
-    SELECT w.id, w.ticket_no, w.title, w.status, w.priority, w.due_date, p.name AS project_name, u.name AS assignee_name
+    SELECT w.id, w.ticket_no, w.title, w.type, w.status, w.priority, w.due_date, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.status NOT IN ('resolved','closed')
     ORDER BY CASE WHEN w.due_date < ? THEN 0 ELSE 1 END,

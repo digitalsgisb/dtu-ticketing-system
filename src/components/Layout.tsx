@@ -106,6 +106,8 @@ export function Layout() {
   ];
   const currentSection = location.pathname.startsWith("/notifications")
     ? "Notifications"
+    : location.pathname.startsWith("/profile")
+      ? "Profile"
     : projectSectionActive
       ? t("projects")
       : items.find(([to]) => to === "/" ? location.pathname === "/" : location.pathname.startsWith(to))?.[1] ?? t("dashboard");
@@ -148,10 +150,10 @@ export function Layout() {
           </nav>
         </div>
         <div className="sidebar-footer">
-          <div className="user-card">
+          <NavLink className="user-card profile-link" to="/profile" onClick={() => setMobileOpen(false)} title="Edit your profile">
             <div className="avatar">{user?.name.split(" ").map(s => s[0]).slice(0, 2).join("")}</div>
-            <div><strong>{user?.name}</strong><small>{roleNames[user?.role ?? "member"]}</small></div>
-          </div>
+            <div><strong>{user?.name}</strong><small>View and edit profile →</small></div>
+          </NavLink>
           <button className="sidebar-action" onClick={() => { void logout().then(() => navigate("/login")); }}>{t("signOut")}</button>
         </div>
       </aside>

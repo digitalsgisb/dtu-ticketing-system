@@ -43,6 +43,46 @@ describe("DTU Control Centre API", () => {
     expect(response.status).toBe(403);
   });
 
+  it("lets a signed-in user update their own profile", async () => {
+    const changed = await request(app).patch("/api/staff/profile")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "DTU Administrator", email: "admin.updated@example.com", language: "ms" });
+    expect(changed.status).toBe(200);
+    const profile = await request(app).get("/api/auth/me").set("Cookie", cookie);
+    expect(profile.body.user).toMatchObject({ name: "DTU Administrator", email: "admin.updated@example.com", language: "ms" });
+    const invalid = await request(app).patch("/api/staff/profile")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "DTU Administrator", email: "invalid", language: "en" });
+    expect(invalid.status).toBe(400);
+  });
+
+  it("lets a lead or admin correct a project requester email", async () => {
+    const submitted = await request(app).post("/api/public/requests")
+      .field("requesterName", "Request Owner")
+      .field("department", "Quality")
+      .field("email", "typo@example.com")
+      .field("title", "Correct the request contact")
+      .field("currentProblem", "The existing request email is incorrect")
+      .field("desiredOutcome", "Notifications reach the right person")
+      .field("urgency", "medium");
+    expect(submitted.status).toBe(201);
+    const row = db.prepare("SELECT id FROM project_requests WHERE request_no = ?").get(submitted.body.requestNo) as { id: number };
+    const oldLinks = db.prepare("SELECT COUNT(*) AS count FROM public_tracking_tokens WHERE project_request_id = ?").get(row.id) as { count: number };
+    expect(oldLinks.count).toBeGreaterThan(0);
+    const changed = await request(app).patch(`/api/staff/requests/${row.id}/requester-email`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ email: "correct@example.com" });
+    expect(changed.status).toBe(200);
+    const detail = await request(app).get(`/api/staff/requests/${row.id}`).set("Cookie", cookie);
+    expect(detail.body.item.requester_email).toBe("correct@example.com");
+    const remainingLinks = db.prepare("SELECT COUNT(*) AS count FROM public_tracking_tokens WHERE project_request_id = ?").get(row.id) as { count: number };
+    expect(remainingLinks.count).toBe(0);
+    const invalid = await request(app).patch(`/api/staff/requests/${row.id}/requester-email`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ email: "not-an-email" });
+    expect(invalid.status).toBe(400);
+  });
+
   it("creates and safely manages a staff account", async () => {
     const created = await request(app).post("/api/staff/users")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

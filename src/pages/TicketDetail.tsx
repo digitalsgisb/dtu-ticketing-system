@@ -48,48 +48,45 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
     ["resolved", "Resolved"],
     ["closed", "Closed"]
   ] as const;
-  const [form, setForm] = useState({ priority: item.priority, assigneeId: item.assignee_id ? String(item.assignee_id) : "", dueDate: item.due_date || "" });
+  const [form, setForm] = useState({ status: item.status, priority: item.priority, assigneeId: item.assignee_id ? String(item.assignee_id) : "", dueDate: item.due_date || "" });
   const [busy, setBusy] = useState(false);
   const [statusBusy, setStatusBusy] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
-    setForm({ priority: item.priority, assigneeId: item.assignee_id ? String(item.assignee_id) : "", dueDate: item.due_date || "" });
-  }, [item.priority, item.assignee_id, item.due_date]);
+    setForm({ status: item.status, priority: item.priority, assigneeId: item.assignee_id ? String(item.assignee_id) : "", dueDate: item.due_date || "" });
+  }, [item.status, item.priority, item.assignee_id, item.due_date]);
   const changeStatus = async (status: string) => {
     if (status === item.status || statusBusy) return;
+    setError("");
     setStatusBusy(status);
     try {
-      await api(`/api/staff/tickets/${item.id}`, json("PATCH", { status }));
+      await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...form, status, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null }));
       onUpdated();
-    } finally {
+    } catch (err) { setError((err as Error).message); }
+    finally {
       setStatusBusy("");
     }
   };
   const save = async () => {
+    setError("");
     setBusy(true);
     try { await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...form, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null })); onUpdated(); }
+    catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
   return <aside className="panel detail-sidebar ticket-control-panel"><div className="panel-heading"><div><span className="eyebrow">Control</span><h2>Work settings</h2></div></div>
-    <div className="status-control">
-      <div className="status-control-label"><span>{t("status")}</span><small>Click a stage to update immediately</small></div>
-      <div className="status-stage-grid">
-        {statuses.map(([status, label], index) => <button
-          type="button"
-          key={status}
-          className={`status-stage status-stage-${status} ${item.status === status ? "active" : ""}`}
-          disabled={Boolean(statusBusy)}
-          onClick={() => void changeStatus(status)}
-        >
-          <i>{statusBusy === status ? "…" : item.status === status ? "✓" : String(index + 1).padStart(2, "0")}</i>
-          <span>{label}</span>
-        </button>)}
-      </div>
+    <ErrorNotice message={error} />
+    <div className="ticket-quick-actions">
+      {!['in_progress', 'resolved', 'closed'].includes(item.status) && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
+      {!['resolved', 'closed'].includes(item.status) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("resolved")}>{statusBusy === "resolved" ? "Resolving…" : "Mark resolved"}</button>}
+      {['resolved', 'closed'].includes(item.status) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Reopening…" : "Reopen work"}</button>}
     </div>
-    <div className="settings-divider"><span>Assignment & schedule</span></div>
+    <div className="settings-divider"><span>Details & schedule</span></div>
+    <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{statuses.map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
     <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
     <label>{t("assignee")}<select value={form.assigneeId} onChange={e => setForm({ ...form, assigneeId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
     <label>{t("dueDate")}<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
-    <button className="button button-primary button-block" onClick={save} disabled={busy}>{busy ? "Saving…" : t("save")}</button>
+    <button className="button button-primary button-block" onClick={save} disabled={busy || Boolean(statusBusy)}>{busy ? "Saving…" : "Save changes"}</button>
     <div className="sidebar-facts">{item.project_id && <Link to={`/projects/${item.project_id}`}><small>Project</small><strong>{item.project_name}</strong></Link>}<div><small>Created</small><strong>{formatDate(item.created_at, true)}</strong></div><div><small>Source</small><strong>{item.source.toUpperCase()}</strong></div></div>
   </aside>;
 }

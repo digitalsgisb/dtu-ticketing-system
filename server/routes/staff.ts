@@ -17,6 +17,19 @@ import { addLiveClient } from "../liveUpdates.js";
 
 export const staffRouter = Router();
 staffRouter.get("/live", (_req, res) => addLiveClient(res));
+staffRouter.patch("/profile", (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const parsed = z.object({
+    name: z.string().trim().min(2).max(120),
+    email: z.union([z.string().trim().email(), z.null()]),
+    language: z.enum(["en", "ms"])
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Enter a valid name and email address" });
+  db.prepare("UPDATE users SET name = ?, email = ?, language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(parsed.data.name, parsed.data.email, parsed.data.language, authReq.user.id);
+  audit(authReq.user, "profile_updated", "user", authReq.user.id, { emailChanged: parsed.data.email !== authReq.user.email }, req.ip);
+  res.json({ ok: true });
+});
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 3 } });
 const progressUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 4 } });
 const showcaseUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
@@ -1225,6 +1238,24 @@ staffRouter.get("/requests/:id", requireRole("admin", "lead"), (req, res) => {
     ORDER BY ph.created_at DESC, ph.id DESC
   `).all(item.created_project_id) : [];
   res.json({ item, project, handovers, comments, attachments });
+});
+
+staffRouter.patch("/requests/:id/requester-email", requireRole("admin", "lead"), (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const parsed = z.object({ email: z.string().trim().email().max(254) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Enter a valid requester email address" });
+  const item = db.prepare("SELECT id, requester_email FROM project_requests WHERE id = ?").get(req.params.id) as {
+    id: number; requester_email: string;
+  } | undefined;
+  if (!item) return res.status(404).json({ error: "Request not found" });
+  if (parsed.data.email !== item.requester_email) db.transaction(() => {
+    db.prepare("UPDATE project_requests SET requester_email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(parsed.data.email, item.id);
+    db.prepare("DELETE FROM public_tracking_tokens WHERE project_request_id = ?").run(item.id);
+  })();
+  audit(authReq.user, "project_request_email_updated", "project_request", item.id,
+    { previousEmail: item.requester_email, email: parsed.data.email }, req.ip);
+  res.json({ ok: true, email: parsed.data.email });
 });
 
 staffRouter.post("/requests/:id/handover", requireRole("admin", "lead"), progressUpload.array("images", 4), async (req, res, next) => {

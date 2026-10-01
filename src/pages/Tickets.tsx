@@ -5,15 +5,18 @@ import { PlusIcon, SearchIcon } from "../components/Icons";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
+import { useAuth } from "../auth";
 
 export function TicketsPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [params] = useSearchParams();
   const [tickets, setTickets] = useState<any[] | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [queue, setQueue] = useState<"open" | "mine" | "all">("open");
+  const [type, setType] = useState<"" | "task" | "issue">("");
   const [showCreate, setShowCreate] = useState(false);
   const load = () => {
     const projectId = params.get("projectId");
@@ -22,8 +25,11 @@ export function TicketsPage() {
   useEffect(() => { void load(); void api<any[]>("/api/staff/projects").then(setProjects); void api<any[]>("/api/staff/users").then(setUsers); }, [params]);
   useLiveRefresh(load);
   const filtered = useMemo(() => (tickets ?? []).filter(item =>
-    (!status || item.status === status) && `${item.ticket_no} ${item.title} ${item.project_name || ""}`.toLowerCase().includes(search.toLowerCase())
-  ), [tickets, search, status]);
+    (queue === "all" || !["resolved", "closed"].includes(item.status)) &&
+    (queue !== "mine" || item.assignee_id === user?.id) &&
+    (!type || item.type === type) &&
+    `${item.ticket_no} ${item.title} ${item.project_name || ""}`.toLowerCase().includes(search.toLowerCase())
+  ), [tickets, search, queue, type, user?.id]);
   if (!tickets) return <Loading />;
 
   return <>
@@ -32,9 +38,13 @@ export function TicketsPage() {
       <div className="search-box"><SearchIcon /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`${t("search")} work…`} /></div>
       <div className="result-count">{filtered.length} items</div>
     </div>
-    <div className="status-filter-bar" aria-label="Filter by status">
-      {[["", t("all")], ["new", "New"], ["triaged", "Triaged"], ["assigned", "Assigned"], ["in_progress", "In progress"], ["waiting", "Waiting"], ["resolved", "Resolved"], ["closed", "Closed"]].map(([value, label]) =>
-        <button type="button" key={value || "all"} className={status === value ? "active" : ""} onClick={() => setStatus(value)}><i />{label}</button>
+    <div className="status-filter-bar" aria-label="Work queue">
+      {([['open', 'Open work'], ['mine', 'Assigned to me'], ['all', 'All work']] as const).map(([value, label]) =>
+        <button type="button" key={value} className={queue === value ? "active" : ""} onClick={() => setQueue(value)}><i />{label}</button>
+      )}
+      <span className="work-filter-divider" />
+      {([['', 'Tasks & issues'], ['task', 'Tasks'], ['issue', 'Issues']] as const).map(([value, label]) =>
+        <button type="button" key={value || 'both'} className={type === value ? "active" : ""} onClick={() => setType(value)}><i />{label}</button>
       )}
     </div>
     {filtered.length ? <section className="panel panel-flush"><div className="data-table tickets-table">
@@ -53,12 +63,12 @@ export function TicketsPage() {
 
 function CreateTicket({ projects, users, defaultProject, onClose, onCreated }: { projects: any[]; users: any[]; defaultProject: string; onClose: () => void; onCreated: () => void }) {
   const { t } = useI18n();
-  const [form, setForm] = useState({ projectId: defaultProject, type: "task", title: "", description: "", priority: "medium", status: "new", assigneeId: "", dueDate: "" });
+  const [form, setForm] = useState({ projectId: defaultProject, type: "task", title: "", description: "", priority: "medium", assigneeId: "", dueDate: "" });
   const [error, setError] = useState("");
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api("/api/staff/tickets", json("POST", { ...form, projectId: form.projectId ? Number(form.projectId) : null, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null }));
+      await api("/api/staff/tickets", json("POST", { ...form, status: form.assigneeId ? "assigned" : "new", projectId: form.projectId ? Number(form.projectId) : null, assigneeId: form.assigneeId ? Number(form.assigneeId) : null, dueDate: form.dueDate || null }));
       onCreated();
     } catch (err) { setError((err as Error).message); }
   };
@@ -71,7 +81,6 @@ function CreateTicket({ projects, users, defaultProject, onClose, onCreated }: {
     <label>{t("description")}<textarea rows={5} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
     <div className="form-grid">
       <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
-      <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option>new</option><option>triaged</option><option>assigned</option><option value="in_progress">in progress</option><option>waiting</option></select></label>
       <label>{t("assignee")}<select value={form.assigneeId} onChange={e => setForm({ ...form, assigneeId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
       <label>{t("dueDate")}<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
     </div>

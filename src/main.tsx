@@ -20,6 +20,7 @@ import { WallboardPage } from "./pages/Wallboard";
 import { BriefingProjectPage, ProgressBriefingPage } from "./pages/Briefing";
 import { PublicShowcaseDetailPage, PublicShowcasePage, ShowcasePage } from "./pages/Showcase";
 import { LinksPage } from "./pages/Links";
+import { ProfilePage } from "./pages/Profile";
 import "./styles.css";
 
 function Protected() {
@@ -59,6 +60,7 @@ function App() {
       <Route path="projects" element={<ProjectsPage />} />
       <Route path="projects/:id" element={<ProjectDetailPage />} />
       <Route path="links" element={<LinksPage />} />
+      <Route path="profile" element={<ProfilePage />} />
       <Route path="tickets" element={<TicketsPage />} />
       <Route path="tickets/:id" element={<TicketDetailPage />} />
       <Route element={<LeadProtected />}>
