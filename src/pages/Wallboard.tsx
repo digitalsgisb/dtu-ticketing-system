@@ -190,7 +190,7 @@ function CyclingTickets({ tickets, newTicketIds }: { tickets: any[]; newTicketId
       style={{ transform: `translate3d(-${page * 100}%, 0, 0)` }}
       onTransitionEnd={event => { if (event.target === event.currentTarget) finishTransition(); }}
     >
-      {renderedPages.map((items, pageIndex) => <div className="wall-cycle-page wall-priority-grid" key={`${pageIndex}-${items[0]?.id ?? "empty"}`}>
+      {renderedPages.map((items, pageIndex) => <div className={`wall-cycle-page wall-priority-grid wall-priority-count-${items.length}`} key={`${pageIndex}-${items[0]?.id ?? "empty"}`}>
         {items.map(item => {
           const index = tickets.findIndex(ticket => ticket.id === item.id);
           return <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />;
