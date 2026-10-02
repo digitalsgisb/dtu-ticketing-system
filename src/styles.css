@@ -1572,7 +1572,9 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 }
 
 /* TV-distance wallboard refinement */
-.wallboard-header { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.wallboard-header { grid-template-columns: minmax(0, 1fr) auto auto auto auto; }
+.wallboard-home-link { display:inline-flex; align-items:center; justify-content:center; min-height:38px; padding:8px 13px; border:1px solid rgba(107,157,174,.3); border-radius:9px; color:#d7eded; background:rgba(255,255,255,.055); font-size:11px; font-weight:800; white-space:nowrap; text-decoration:none; }
+.wallboard-home-link:hover, .wallboard-home-link:focus-visible { border-color:#58c7bd; color:#fff; background:rgba(58,172,169,.16); outline:none; }
 .wallboard-brand small { font-size: 8.5px; }
 .wallboard-clock { min-width: 190px; }
 .wallboard-clock strong { font-size: 24px; }
@@ -2175,6 +2177,9 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 }
 
 @media (max-width: 1100px) {
+  .wallboard-header { gap:10px; }
+  .wallboard-brand .company-logo { width:190px; }
+  .wallboard-clock { min-width:150px; }
   .wallboard-shell {
     min-width: 1040px;
     grid-template-columns: minmax(0, 1fr) 290px;

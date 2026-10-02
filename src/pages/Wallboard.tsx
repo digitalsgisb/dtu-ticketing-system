@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
 import { api, formatDate } from "../api";
 import { AlertIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icons";
 import { Badge, Loading, StatCard } from "../components/UI";
@@ -88,6 +89,7 @@ export function WallboardPage() {
       <div className="brand company-brand wallboard-brand"><CompanyLogo /><small>DTU Control Centre · {t("controlCentre")}</small></div>
       <div className="wallboard-clock"><strong>{time}</strong><span>{date}</span><small>{t("lastUpdated")}: {new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(data.generatedAt))}</small></div>
       <button type="button" className={`wallboard-sound-toggle${soundEnabled ? " is-on" : ""}`} onClick={() => void toggleSound()} aria-pressed={soundEnabled} title="Play a sound when new work appears">{soundEnabled ? "🔊 Sound on" : "🔇 Enable sound"}</button>
+      <Link to="/" className="wallboard-home-link">← Main page</Link>
       <button className="language-button" onClick={() => setLang(lang === "en" ? "ms" : "en")}>{t("language")}</button>
     </header>
 
