@@ -5,6 +5,7 @@ import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../compon
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
 import { AssigneePicker } from "../components/AssigneePicker";
+import { useAuth } from "../auth";
 
 export function TicketDetailPage() {
   const { id } = useParams();
@@ -41,6 +42,12 @@ export function TicketDetailPage() {
 
 function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; onUpdated: () => void }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const canManageTask = user?.role === "admin" || user?.role === "lead";
+  const myAssignment = item.type === "task" ? item.assignees?.find((assignee: { id: number }) => assignee.id === user?.id) : null;
+  const canComplete = !["resolved", "closed"].includes(item.status) && (item.type !== "task" ||
+    (item.assignee_total ? Boolean(myAssignment && !myAssignment.completed_at) : canManageTask));
+  const canEditSettings = item.type !== "task" || canManageTask;
   const statuses = [
     ["new", "New"],
     ["triaged", "Triaged"],
@@ -80,16 +87,19 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
   return <aside className="panel detail-sidebar ticket-control-panel"><div className="panel-heading"><div><span className="eyebrow">Control</span><h2>Work settings</h2></div></div>
     <ErrorNotice message={error} />
     <div className="ticket-quick-actions">
-      {!['in_progress', 'resolved', 'closed'].includes(item.status) && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
-      {!['resolved', 'closed'].includes(item.status) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>Complete with evidence</button>}
-      {['resolved', 'closed'].includes(item.status) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Reopening…" : "Reopen work"}</button>}
+      {!['in_progress', 'resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask || Boolean(myAssignment && !myAssignment.completed_at)) && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
+      {canComplete && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>{item.type === "task" && item.assignee_total ? "Complete my part" : "Complete with evidence"}</button>}
+      {['resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Reopening…" : "Reopen work"}</button>}
     </div>
-    <div className="settings-divider"><span>Details & schedule</span></div>
-    <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{statuses.map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
+    {item.type === "task" && item.assignee_total > 0 && <p className="ticket-team-summary">{item.assignee_completed} of {item.assignee_total} people finished.{myAssignment?.completed_at && !["resolved", "closed"].includes(item.status) ? " Your part is complete; others are still working." : ""}</p>}
+    {canEditSettings && <><div className="settings-divider"><span>Details & schedule</span></div>
+    <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{statuses.filter(([status]) =>
+      item.type !== "task" || !item.assignee_total || item.assignee_completed === item.assignee_total || !["resolved", "closed"].includes(status)
+    ).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
     <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
     <AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} />
     <label>{t("dueDate")}<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
-    <button className="button button-primary button-block" onClick={save} disabled={busy || Boolean(statusBusy)}>{busy ? "Saving…" : "Save changes"}</button>
+    <button className="button button-primary button-block" onClick={save} disabled={busy || Boolean(statusBusy)}>{busy ? "Saving…" : "Save changes"}</button></>}
     <div className="sidebar-facts">{item.project_id && <Link to={`/projects/${item.project_id}`}><small>Project</small><strong>{item.project_name}</strong></Link>}<div><small>Created</small><strong>{formatDate(item.created_at, true)}</strong></div><div><small>Source</small><strong>{item.source.toUpperCase()}</strong></div></div>
     {showComplete && <CompleteTaskModal item={item} onClose={() => setShowComplete(false)} onCompleted={() => { setShowComplete(false); onUpdated(); }} />}
   </aside>;
@@ -110,29 +120,45 @@ function CompleteTaskModal({ item, onClose, onCompleted }: { item: any; onClose:
     try { await api(`/api/staff/tickets/${item.id}/complete`, { method: "POST", body }); onCompleted(); }
     catch (failure) { setError((failure as Error).message); setBusy(false); }
   };
-  return <Modal title={`Complete ${item.ticket_no}`} onClose={onClose} wide><form className="form-stack" onSubmit={submit}>
-    <p className="muted">Add a short result and up to 3 documents or photos. Everyone assigned to this work item will see the completion evidence.</p>
-    {item.project_id && item.type === "task" && <div className="notice notice-success">This task will count toward the project’s task completion percentage.</div>}
+  return <Modal title={`${item.type === "task" && item.assignee_total ? "Complete my part of" : "Complete"} ${item.ticket_no}`} onClose={onClose} wide><form className="form-stack" onSubmit={submit}>
+    <p className="muted">Add a short result and up to 3 documents or photos. Your completion and evidence are recorded separately from the other assignees.</p>
+    {item.type === "task" && item.assignee_total > 1 && <div className="notice notice-success">The shared task closes when all {item.assignee_total} assignees finish.</div>}
+    {item.project_id && item.type === "task" && <div className="notice notice-success">Your part contributes to the project’s separate task completion percentage.</div>}
     <ErrorNotice message={error} />
     <label>Completion note (optional)<textarea rows={4} maxLength={5000} value={note} onChange={event => setNote(event.target.value)} placeholder="What was delivered?" /></label>
     <label>Documents or photos (optional)<input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={event => setFiles(Array.from(event.target.files ?? []))} /><small>Up to 3 files, 5 MB each.</small></label>
     {files.length > 0 && <div className="completion-file-list">{files.map((file, index) => <span key={`${file.name}-${index}`}>{file.name}</span>)}</div>}
-    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || files.length > 3}>{busy ? "Completing…" : "Mark complete"}</button></div>
+    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || files.length > 3}>{busy ? "Submitting…" : item.type === "task" && item.assignee_total ? "Submit my part" : "Mark complete"}</button></div>
   </form></Modal>;
 }
 
 function CompletionEvidence({ data }: { data: any }) {
   const completions = data.comments.filter((comment: any) => comment.is_completion);
-  if (!completions.length) return null;
+  const assignees = data.item.type === "task" ? data.item.assignees || [] : [];
+  if (!completions.length && !assignees.length) return null;
+  const currentCommentIds = new Set(assignees.map((assignee: any) => assignee.completion_comment_id).filter(Boolean));
+  const historical = assignees.length ? completions.filter((comment: any) => !currentCommentIds.has(comment.id)) : [];
+  const evidence = (comment: any) => {
+    const files = data.attachments.filter((attachment: any) => attachment.comment_id === comment.id);
+    return <><p>{comment.body}</p>{files.length > 0 && <div className="completion-evidence-files">{files.map((file: any) => {
+      const previewable = file.mime_type.startsWith("image/") || file.mime_type === "application/pdf";
+      return <a key={file.id} href={`/api/staff/attachments/${file.id}${previewable ? "/preview" : ""}`} target={previewable ? "_blank" : undefined} rel={previewable ? "noopener noreferrer" : undefined}>
+      {file.mime_type.startsWith("image/") && <img src={`/api/staff/attachments/${file.id}/preview`} alt={file.original_name} />}
+      <span>📎 {file.original_name}</span></a>;
+    })}</div>}</>;
+  };
   return <section className="panel completion-evidence"><div className="panel-heading"><div><span className="eyebrow">Delivery record</span><h2>Completion evidence</h2></div></div>
-    {completions.map((comment: any) => {
-      const files = data.attachments.filter((attachment: any) => attachment.comment_id === comment.id);
-      return <article key={comment.id} className="completion-evidence-entry"><div><strong>{comment.author_name}</strong><small>{formatDate(comment.created_at, true)}</small></div><p>{comment.body}</p>
-        {files.length > 0 && <div className="completion-evidence-files">{files.map((file: any) => <a key={file.id} href={`/api/staff/attachments/${file.id}`}>
-          {file.mime_type.startsWith("image/") && <img src={`/api/staff/attachments/${file.id}/preview`} alt={file.original_name} />}
-          <span>📎 {file.original_name}</span></a>)}</div>}
-      </article>;
-    })}
+    {assignees.length > 0 ? <>
+      <p className="ticket-team-summary">{data.item.assignee_completed} of {data.item.assignee_total} people finished. Each person’s note and files appear below.</p>
+      {assignees.map((assignee: any) => {
+        const comment = completions.find((entry: any) => entry.id === assignee.completion_comment_id);
+        return <article key={assignee.id} className={`completion-evidence-entry${assignee.completed_at ? " is-complete" : " is-pending"}`}>
+          <div><strong>{assignee.name}</strong><small>{assignee.completed_at ? `Completed ${formatDate(assignee.completed_at, true)}` : "Waiting for submission"}</small></div>
+          {comment ? evidence(comment) : <p>{assignee.completed_at ? "Completed before individual evidence was recorded." : "No evidence submitted yet."}</p>}
+        </article>;
+      })}
+      {historical.length > 0 && <div className="completion-history"><h3>Earlier completion records</h3>{historical.map((comment: any) => <article key={comment.id} className="completion-evidence-entry"><div><strong>{comment.author_name}</strong><small>{formatDate(comment.created_at, true)}</small></div>{evidence(comment)}</article>)}</div>}
+    </> : completions.map((comment: any) => <article key={comment.id} className="completion-evidence-entry"><div><strong>{comment.author_name}</strong><small>{formatDate(comment.created_at, true)}</small></div>{evidence(comment)}</article>)}
   </section>;
 }
 

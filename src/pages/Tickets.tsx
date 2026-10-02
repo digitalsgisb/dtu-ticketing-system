@@ -27,7 +27,7 @@ export function TicketsPage() {
   useLiveRefresh(load);
   const filtered = useMemo(() => (tickets ?? []).filter(item =>
     (queue === "all" || !["resolved", "closed"].includes(item.status)) &&
-    (queue !== "mine" || item.assignees?.some((assignee: { id: number }) => assignee.id === user?.id)) &&
+    (queue !== "mine" || item.assignees?.some((assignee: { id: number; completed_at: string | null }) => assignee.id === user?.id && !assignee.completed_at)) &&
     (!type || item.type === type) &&
     `${item.ticket_no} ${item.title} ${item.project_name || ""}`.toLowerCase().includes(search.toLowerCase())
   ), [tickets, search, queue, type, user?.id]);
@@ -52,7 +52,7 @@ export function TicketsPage() {
       <div className="table-head"><span>Reference</span><span>Work item</span><span>Project</span><span>{t("assignee")}</span><span>{t("dueDate")}</span><span>{t("status")}</span></div>
       {filtered.map(item => <Link to={`/tickets/${item.id}`} className="table-row" key={item.id}>
         <span><strong className="mono">{item.ticket_no}</strong><small><Badge value={item.priority} kind="priority" /></small></span>
-        <span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" /></small></span>
+        <span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" />{item.type === "task" && item.assignee_total > 1 ? ` ${item.assignee_completed}/${item.assignee_total} done` : ""}</small></span>
         <span>{item.project_name || "General"}</span><span>{item.assignee_name || "Unassigned"}</span>
         <span className={item.due_date && new Date(`${item.due_date}T23:59:00`) < new Date() && !["resolved","closed"].includes(item.status) ? "date-overdue" : ""}>{formatDate(item.due_date)}</span>
         <span><Badge value={item.status} /></span>

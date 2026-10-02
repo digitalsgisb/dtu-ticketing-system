@@ -129,6 +129,8 @@ CREATE TABLE IF NOT EXISTS work_items (
 CREATE TABLE IF NOT EXISTS work_item_assignees (
   work_item_id INTEGER NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  completed_at TEXT,
+  completion_comment_id INTEGER,
   PRIMARY KEY (work_item_id, user_id)
 );
 
@@ -434,6 +436,10 @@ ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");
 ensureColumn("project_updates", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("comments", "is_completion", "INTEGER NOT NULL DEFAULT 0");
+const needsAssigneeCompletionMigration = !(db.prepare("PRAGMA table_info(work_item_assignees)").all() as { name: string }[])
+  .some(column => column.name === "completed_at");
+ensureColumn("work_item_assignees", "completed_at", "TEXT");
+ensureColumn("work_item_assignees", "completion_comment_id", "INTEGER");
 ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
 ensureColumn("showcase_projects", "category", "TEXT NOT NULL DEFAULT ''");
@@ -455,6 +461,30 @@ ensureProjectStatusCheckAllowsMonitoring();
 db.exec("CREATE INDEX IF NOT EXISTS idx_work_item_assignees_user ON work_item_assignees(user_id, work_item_id)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)");
 db.exec("INSERT OR IGNORE INTO work_item_assignees(work_item_id, user_id) SELECT id, assignee_id FROM work_items WHERE assignee_id IS NOT NULL");
+if (needsAssigneeCompletionMigration) {
+  db.transaction(() => {
+    db.exec(`UPDATE work_item_assignees AS a SET completion_comment_id = (
+      SELECT c.id FROM comments c JOIN work_items w ON w.id = c.work_item_id
+      WHERE c.work_item_id = a.work_item_id AND c.author_user_id = a.user_id AND c.is_completion = 1
+        AND w.status IN ('resolved', 'closed') ORDER BY c.id DESC LIMIT 1
+    ) WHERE EXISTS (
+      SELECT 1 FROM comments c JOIN work_items w ON w.id = c.work_item_id
+      WHERE c.work_item_id = a.work_item_id AND c.author_user_id = a.user_id AND c.is_completion = 1
+        AND w.status IN ('resolved', 'closed')
+    )`);
+    db.exec(`UPDATE work_item_assignees SET completed_at =
+      (SELECT created_at FROM comments WHERE id = completion_comment_id)
+      WHERE completion_comment_id IS NOT NULL`);
+    db.exec(`UPDATE work_item_assignees AS a SET completed_at = (
+      SELECT COALESCE(w.resolved_at, w.updated_at) FROM work_items w WHERE w.id = a.work_item_id
+    ) WHERE completed_at IS NULL AND EXISTS (
+      SELECT 1 FROM work_items w WHERE w.id = a.work_item_id AND w.status IN ('resolved', 'closed')
+    ) AND (SELECT COUNT(*) FROM work_item_assignees other WHERE other.work_item_id = a.work_item_id) = 1`);
+    db.exec(`UPDATE work_items SET status = 'in_progress', resolved_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE type = 'task' AND status IN ('resolved', 'closed')
+        AND EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = work_items.id AND a.completed_at IS NULL)`);
+  })();
+}
 
 function ensureShowcaseSettings() {
   db.prepare(`

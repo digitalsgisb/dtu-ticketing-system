@@ -220,6 +220,79 @@ describe("DTU Control Centre API", () => {
     expect(result.body.error).toContain("VAPID_PUBLIC_KEY");
   });
 
+  it("tracks each shared-task completion and its evidence separately", async () => {
+    const project = await request(app).post("/api/staff/projects")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "Shared delivery project", departmentName: "DTU" });
+    expect(project.status).toBe(201);
+    const task = await request(app).post("/api/staff/tickets")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ type: "task", title: "Each person submits their own proof", projectId: project.body.id,
+        assigneeIds: [adminUserId, managedUserId], status: "assigned" });
+    expect(task.status).toBe(201);
+    const before = await request(app).get("/api/staff/dashboard").set("Cookie", managedCookie);
+
+    const first = await request(app).post(`/api/staff/tickets/${task.body.id}/complete`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
+      .field("note", "My own deliverable is ready")
+      .attach("attachments", Buffer.from("%PDF-1.4\nIndividual evidence"), { filename: "member-proof.pdf", contentType: "application/pdf" });
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ completed: 1, total: 2, allComplete: false });
+    const detail = await request(app).get(`/api/staff/tickets/${task.body.id}`).set("Cookie", cookie);
+    expect(detail.body.item.status).toBe("in_progress");
+    expect(detail.body.item.assignee_completed).toBe(1);
+    const memberAssignment = detail.body.item.assignees.find((assignee: { id: number }) => assignee.id === managedUserId);
+    const adminAssignment = detail.body.item.assignees.find((assignee: { id: number }) => assignee.id === adminUserId);
+    expect(memberAssignment.completed_at).toBeTruthy();
+    expect(adminAssignment.completed_at).toBeNull();
+    expect(detail.body.comments.find((comment: { id: number }) => comment.id === memberAssignment.completion_comment_id).body).toBe("My own deliverable is ready");
+    const proof = detail.body.attachments.find((attachment: { comment_id: number }) => attachment.comment_id === memberAssignment.completion_comment_id);
+    expect(proof.original_name).toBe("member-proof.pdf");
+    const preview = await request(app).get(`/api/staff/attachments/${proof.id}/preview`).set("Cookie", managedCookie);
+    expect(preview.status).toBe(200);
+    expect(preview.headers["content-type"]).toContain("application/pdf");
+    const progress = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(progress.body.project).toMatchObject({ progress: 0, task_total: 1, task_completed: 0, task_progress: 50 });
+    const after = await request(app).get("/api/staff/dashboard").set("Cookie", managedCookie);
+    expect(after.body.stats.personalOpen).toBe(before.body.stats.personalOpen - 1);
+    expect(after.body.myWork.some((item: { id: number }) => item.id === task.body.id)).toBe(false);
+
+    const edited = await request(app).patch(`/api/staff/tickets/${task.body.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ priority: "high", assigneeIds: [adminUserId, managedUserId] });
+    expect(edited.status).toBe(200);
+    const afterEdit = await request(app).get(`/api/staff/tickets/${task.body.id}`).set("Cookie", cookie);
+    expect(afterEdit.body.item.assignee_completed).toBe(1);
+
+    const repeated = await request(app).post(`/api/staff/tickets/${task.body.id}/complete`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf).field("note", "Again");
+    expect(repeated.status).toBe(409);
+    const memberClose = await request(app).patch(`/api/staff/tickets/${task.body.id}`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf).send({ status: "resolved" });
+    expect(memberClose.status).toBe(403);
+    const adminClose = await request(app).patch(`/api/staff/tickets/${task.body.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ status: "resolved" });
+    expect(adminClose.status).toBe(409);
+
+    const second = await request(app).post(`/api/staff/tickets/${task.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "Admin deliverable ready");
+    expect(second.status).toBe(200);
+    expect(second.body).toMatchObject({ completed: 2, total: 2, allComplete: true });
+    const finished = await request(app).get(`/api/staff/tickets/${task.body.id}`).set("Cookie", cookie);
+    expect(finished.body.item.status).toBe("resolved");
+    const completeProgress = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(completeProgress.body.project).toMatchObject({ task_completed: 1, task_progress: 100 });
+
+    const reopened = await request(app).patch(`/api/staff/tickets/${task.body.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ status: "in_progress" });
+    expect(reopened.status).toBe(200);
+    const reset = await request(app).get(`/api/staff/tickets/${task.body.id}`).set("Cookie", cookie);
+    expect(reset.body.item.assignee_completed).toBe(0);
+    expect(reset.body.comments.filter((comment: { is_completion: number }) => comment.is_completion)).toHaveLength(2);
+    const resetProgress = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(resetProgress.body.project).toMatchObject({ task_completed: 0, task_progress: 0 });
+  });
+
   it("creates a project and accepts a QR issue report", async () => {
     const created = await request(app).post("/api/staff/projects")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

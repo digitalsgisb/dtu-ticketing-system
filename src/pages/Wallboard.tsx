@@ -345,7 +345,7 @@ function WallProject({ project, expanded = false, showcase = false }: { project:
 function WallTicket({ item, index, isNew }: { item: any; index: number; isNew: boolean }) {
   return <article className={isNew ? "wall-ticket-new" : ""}>
     <div className="wall-rank">{String(index + 1).padStart(2, "0")}</div>
-    <div className="wall-ticket-copy"><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><h3>{item.title}</h3><p>{item.project_name || "General DTU work"}</p></div>
+    <div className="wall-ticket-copy"><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><h3>{item.title}</h3><p>{item.project_name || "General DTU work"}{item.type === "task" && item.assignee_total > 1 ? ` · ${item.assignee_completed}/${item.assignee_total} done` : ""}</p></div>
     <div className="wall-ticket-meta"><Badge value={item.status} /><strong>{item.assignee_name || "Unassigned"}</strong><span>{formatDate(item.due_date)}</span></div>
   </article>;
 }

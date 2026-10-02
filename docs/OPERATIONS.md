@@ -5,8 +5,8 @@
 - Check the dashboard for untriaged requests, unassigned issues, overdue work, and low storage.
 - Make public comments only when they are appropriate for the reporter.
 - Resolve work first, then close it after the reporter or DTU confirms completion.
-- Use **Complete with evidence** to save a completion note and up to three photos or documents on a task. Evidence stays on the task record and is available to signed-in staff.
-- Project task completion is displayed as a separate count and percentage of resolved or closed project tasks. The manually published delivery progress remains a management update and is not changed by task completion. General tasks do not affect any project percentage.
+- Each assignee uses **Complete my part** to save their own note and up to three photos or documents. The task detail shows every person's completion and evidence; a shared task closes only after everyone finishes. A lead or admin can reopen it if all assignees need to submit again.
+- Project task completion is displayed separately from manually published delivery progress. Each completed assignee contributes their share of a project task's percentage; the task counts as fully done only after all its assignees finish. General tasks do not affect project percentages.
 
 ## Weekly
 

@@ -425,6 +425,12 @@ input[type=range] { padding:0; box-shadow:none; border:0; }
 .completion-evidence-files { display:flex; flex-wrap:wrap; gap:10px; }
 .completion-evidence-files a { display:grid; gap:6px; max-width:180px; color:#167f7a; font-size:11px; overflow-wrap:anywhere; }
 .completion-evidence-files img { width:120px; height:86px; object-fit:cover; border-radius:8px; }
+.ticket-team-summary { margin:0 0 12px; color:#577586; font-size:12px; line-height:1.5; }
+.completion-evidence-entry.is-complete { border-left:3px solid #44aa95; padding-left:13px; }
+.completion-evidence-entry.is-pending { border-left:3px solid #d6e0e4; padding-left:13px; }
+.completion-evidence-entry.is-pending p { color:#859aa5; }
+.completion-history { margin-top:18px; }
+.completion-history h3 { margin:0 0 8px; color:#617c8a; font-size:12px; }
 .temporary-password-notice p { margin:6px 0; }
 .temporary-password-notice > div { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .temporary-password-notice code { overflow-wrap:anywhere; }

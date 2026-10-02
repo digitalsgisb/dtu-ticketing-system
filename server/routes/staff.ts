@@ -14,7 +14,7 @@ import { normalizePublicBaseUrl, publicBaseForRequest } from "../publicLinks.js"
 import type { AuthenticatedRequest } from "../types.js";
 import { malaysiaDate } from "../time.js";
 import { addLiveClient } from "../liveUpdates.js";
-import { assigneesFor, replaceAssignees, validAssignees, withAssignees } from "../assignees.js";
+import { assigneesFor, reconcileTaskStatus, replaceAssignees, taskAssigneeProgress, validAssignees, withAssignees } from "../assignees.js";
 import { pushConfigured, pushSubscriptionCount, sendTestPush } from "../push.js";
 import { withTaskProgress } from "../projectTasks.js";
 
@@ -629,15 +629,15 @@ staffRouter.get("/dashboard", (req, res) => {
     openIssues: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE type = 'issue' AND status NOT IN ('resolved','closed')").get() as { n: number }).n,
     overdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items WHERE due_date < ? AND status NOT IN ('resolved','closed')").get(today) as { n: number }).n,
     untriaged: (db.prepare("SELECT COUNT(*) AS n FROM project_requests WHERE status IN ('submitted','triage')").get() as { n: number }).n,
-    personalOpen: (db.prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_item_assignees a ON a.work_item_id = w.id WHERE a.user_id = ? AND w.status NOT IN ('resolved','closed')").get(user.id) as { n: number }).n,
-    personalOverdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_item_assignees a ON a.work_item_id = w.id WHERE a.user_id = ? AND w.due_date < ? AND w.status NOT IN ('resolved','closed')").get(user.id, today) as { n: number }).n,
+    personalOpen: (db.prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_item_assignees a ON a.work_item_id = w.id WHERE a.user_id = ? AND a.completed_at IS NULL AND w.status NOT IN ('resolved','closed')").get(user.id) as { n: number }).n,
+    personalOverdue: (db.prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_item_assignees a ON a.work_item_id = w.id WHERE a.user_id = ? AND a.completed_at IS NULL AND w.due_date < ? AND w.status NOT IN ('resolved','closed')").get(user.id, today) as { n: number }).n,
     ownedProjects: (db.prepare("SELECT COUNT(*) AS n FROM projects WHERE owner_id = ? AND status NOT IN ('completed','cancelled')").get(user.id) as { n: number }).n,
     unreadNotifications: (db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").get(user.id) as { n: number }).n
   };
   const myWork = db.prepare(`
     SELECT w.*, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id
-    WHERE EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = w.id AND a.user_id = ?) AND w.status NOT IN ('resolved','closed')
+    WHERE EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = w.id AND a.user_id = ? AND a.completed_at IS NULL) AND w.status NOT IN ('resolved','closed')
     ORDER BY CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, w.due_date
     LIMIT 8
   `).all(user.id);
@@ -650,12 +650,12 @@ staffRouter.get("/dashboard", (req, res) => {
   const myUpcoming = db.prepare(`
     SELECT w.id, w.ticket_no, w.title, w.status, w.priority, w.due_date, p.name AS project_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id
-    WHERE EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = w.id AND a.user_id = ?) AND w.due_date IS NOT NULL AND w.status NOT IN ('resolved','closed')
+    WHERE EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = w.id AND a.user_id = ? AND a.completed_at IS NULL) AND w.due_date IS NOT NULL AND w.status NOT IN ('resolved','closed')
     ORDER BY w.due_date LIMIT 8
   `).all(user.id);
   const workload = db.prepare(`
     SELECT u.id, u.name, COUNT(w.id) AS count
-    FROM users u LEFT JOIN work_item_assignees a ON a.user_id = u.id LEFT JOIN work_items w ON w.id = a.work_item_id AND w.status NOT IN ('resolved','closed')
+    FROM users u LEFT JOIN work_item_assignees a ON a.user_id = u.id AND a.completed_at IS NULL LEFT JOIN work_items w ON w.id = a.work_item_id AND w.status NOT IN ('resolved','closed')
     WHERE u.active = 1 GROUP BY u.id ORDER BY count DESC, u.name
   `).all();
   const activity = db.prepare("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT 10").all();
@@ -1133,6 +1133,8 @@ staffRouter.post("/tickets", (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid work item", details: parsed.error.flatten() });
   const assigneeIds = parsed.data.assigneeIds ?? (parsed.data.assigneeId ? [parsed.data.assigneeId] : []);
   if (!validAssignees(assigneeIds)) return res.status(400).json({ error: "Choose distinct active assignees" });
+  if (parsed.data.type === "task" && assigneeIds.length && ["resolved", "closed"].includes(parsed.data.status))
+    return res.status(400).json({ error: "Assigned tasks can be completed only after each assignee submits their work" });
   const ticketNo = nextIdentifier("TKT");
   const id = db.transaction(() => {
   const result = db.prepare(`
@@ -1182,10 +1184,22 @@ staffRouter.patch("/tickets/:id", (req, res) => {
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid work item update" });
   const d = parsed.data;
-  const previousIds = assigneesFor(Number(req.params.id)).map(user => user.id);
+  if (authReq.user.role === "member" && existing.type === "task") {
+    const assignment = assigneesFor(Number(req.params.id)).find(user => user.id === authReq.user.id);
+    if (!assignment || assignment.completed_at || ["resolved", "closed"].includes(String(existing.status)) ||
+        d.assigneeId !== undefined || d.assigneeIds !== undefined || d.title !== undefined ||
+        d.description !== undefined || d.priority !== undefined || d.dueDate !== undefined ||
+        (d.status !== undefined && !["in_progress", "waiting"].includes(d.status)))
+      return res.status(403).json({ error: "Only a lead or admin can change task settings or reopen completed work" });
+  }
+  const previousAssignees = assigneesFor(Number(req.params.id));
+  const previousIds = previousAssignees.map(user => user.id);
   const assigneeIds = d.assigneeIds ?? (d.assigneeId === undefined ? previousIds : d.assigneeId ? [d.assigneeId] : []);
   if (new Set(assigneeIds).size !== assigneeIds.length || !validAssignees(assigneeIds.filter(id => !previousIds.includes(id))))
     return res.status(400).json({ error: "Choose distinct active assignees" });
+  if (existing.type === "task" && assigneeIds.length && d.status && ["resolved", "closed"].includes(d.status)
+      && !assigneeIds.every(id => previousAssignees.some(user => user.id === id && user.completed_at)))
+    return res.status(409).json({ error: "Each assignee must complete their part before this task can be closed" });
   db.transaction(() => {
   db.prepare(`
     UPDATE work_items SET title = ?, description = ?, priority = ?, status = ?, assignee_id = ?, due_date = ?,
@@ -1195,6 +1209,12 @@ staffRouter.patch("/tickets/:id", (req, res) => {
     d.status ?? existing.status, assigneeIds[0] ?? null,
     d.dueDate === undefined ? existing.due_date : d.dueDate, d.status ?? existing.status, req.params.id);
   replaceAssignees(Number(req.params.id), assigneeIds);
+  if (existing.type === "task") {
+    if (["resolved", "closed"].includes(String(existing.status)) && d.status && !["resolved", "closed"].includes(d.status)) {
+      db.prepare("UPDATE work_item_assignees SET completed_at = NULL, completion_comment_id = NULL WHERE work_item_id = ?").run(req.params.id);
+    }
+    reconcileTaskStatus(Number(req.params.id));
+  }
   })();
   for (const userId of assigneeIds.filter(id => !previousIds.includes(id))) notify(userId, "assignment", `${existing.ticket_no} assigned to you`, String(d.title ?? existing.title), `/tickets/${req.params.id}`);
   if (existing.reporter_email && d.status && d.status !== existing.status) {
@@ -1209,11 +1229,18 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
   const storedNames: string[] = [];
   try {
     const authReq = req as AuthenticatedRequest;
-    const item = db.prepare("SELECT id, ticket_no, title, status, project_id FROM work_items WHERE id = ?").get(req.params.id) as {
-      id: number; ticket_no: string; title: string; status: string; project_id: number | null;
+    const item = db.prepare("SELECT id, ticket_no, title, type, status, project_id FROM work_items WHERE id = ?").get(req.params.id) as {
+      id: number; ticket_no: string; title: string; type: string; status: string; project_id: number | null;
     } | undefined;
     if (!item) return res.status(404).json({ error: "Work item not found" });
     if (["resolved", "closed"].includes(item.status)) return res.status(409).json({ error: "This work item is already complete" });
+    const assignees = item.type === "task" ? assigneesFor(item.id) : [];
+    if (item.type === "task" && assignees.length && !assignees.some(user => user.id === authReq.user.id))
+      return res.status(403).json({ error: "Only an assigned person can complete their part of this task" });
+    if (item.type === "task" && !assignees.length && authReq.user.role === "member")
+      return res.status(403).json({ error: "This task must be assigned before you can complete it" });
+    if (assignees.some(user => user.id === authReq.user.id && user.completed_at))
+      return res.status(409).json({ error: "You have already completed your part of this task" });
     const parsed = z.object({ note: z.string().trim().max(5000).default("") }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Completion note is too long" });
     const files = (req.files as Express.Multer.File[]) ?? [];
@@ -1225,18 +1252,31 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
       storedNames.push(storedName);
     }
     const commentId = db.transaction(() => {
-      db.prepare("UPDATE work_items SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(item.id);
       const result = db.prepare(`INSERT INTO comments(work_item_id, author_user_id, author_name, body, is_completion)
         VALUES (?, ?, ?, ?, 1)`).run(item.id, authReq.user.id, authReq.user.name, cleanText(parsed.data.note) || "Task completed");
       const id = Number(result.lastInsertRowid);
+      if (assignees.length) {
+        const completion = db.prepare(`UPDATE work_item_assignees SET completed_at = CURRENT_TIMESTAMP, completion_comment_id = ?
+          WHERE work_item_id = ? AND user_id = ? AND completed_at IS NULL`).run(id, item.id, authReq.user.id);
+        if (!completion.changes) throw new Error("ASSIGNEE_ALREADY_COMPLETE");
+        db.prepare("UPDATE work_items SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(item.id);
+        reconcileTaskStatus(item.id);
+      } else {
+        db.prepare("UPDATE work_items SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(item.id);
+      }
       files.forEach((file, index) => db.prepare(`INSERT INTO attachments(work_item_id, comment_id, original_name, stored_name, mime_type, size)
         VALUES (?, ?, ?, ?, ?, ?)`).run(item.id, id, cleanText(file.originalname, 255), storedNames[index], file.mimetype, file.size));
-      audit(authReq.user, "work_item_completed", "work_item", item.id, { commentId: id, evidenceCount: files.length, projectId: item.project_id }, req.ip);
+      const completionProgress = taskAssigneeProgress(item.id);
+      audit(authReq.user, completionProgress.total && completionProgress.completed < completionProgress.total ? "task_part_completed" : "work_item_completed",
+        "work_item", item.id, { commentId: id, evidenceCount: files.length, projectId: item.project_id,
+          completed: completionProgress.completed, total: completionProgress.total }, req.ip);
       return id;
     })();
-    res.json({ ok: true, commentId });
+    const progress = taskAssigneeProgress(item.id);
+    res.json({ ok: true, commentId, completed: progress.completed, total: progress.total, allComplete: !progress.total || progress.completed === progress.total });
   } catch (error) {
     await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
+    if (error instanceof Error && error.message === "ASSIGNEE_ALREADY_COMPLETE") return res.status(409).json({ error: "You have already completed your part of this task" });
     next(error);
   }
 });
@@ -1283,8 +1323,9 @@ staffRouter.get("/attachments/:id", (req, res) => {
 
 staffRouter.get("/attachments/:id/preview", (req, res) => {
   const attachment = db.prepare("SELECT stored_name, mime_type FROM attachments WHERE id = ?").get(req.params.id) as { stored_name: string; mime_type: string } | undefined;
-  if (!attachment || !["image/jpeg", "image/png", "image/webp"].includes(attachment.mime_type)) return res.status(404).end();
+  if (!attachment || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(attachment.mime_type)) return res.status(404).end();
   res.setHeader("Content-Type", attachment.mime_type);
+  res.setHeader("Content-Disposition", "inline");
   res.setHeader("Content-Disposition", "inline");
   res.setHeader("Cache-Control", "private, max-age=300");
   res.sendFile(path.resolve(paths.uploads, attachment.stored_name));
