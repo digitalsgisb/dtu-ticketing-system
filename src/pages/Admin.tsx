@@ -249,8 +249,8 @@ function SystemPanel({ storage }: { storage: any }) {
         <ErrorNotice message={error} />{message && <div className="notice notice-success">{message}</div>}
       </form>}
       <div className="integration-row"><div><strong>Phone push</strong><span>{storage.pushConfigured ? `${storage.pushSubscriptions} device${storage.pushSubscriptions === 1 ? "" : "s"} registered to your account` : "Add VAPID keys to the server environment"}</span></div><Badge value={storage.pushConfigured ? "configured" : "not_configured"} kind="type" /></div>
-      <div className="email-test-form">
-        <p>On your phone, sign in to this account and enable background alerts on the <a href="/notifications">Notifications page</a>. The test goes to every device registered to your account.</p>
+      <div className="push-test-panel">
+        <p>{storage.pushSubscriptions === 0 ? "No device linked yet. " : ""}On your phone, sign in to this admin account, open <a href="/notifications">Notifications</a>, and enable background alerts. Refresh this page after linking your phone.</p>
         <button type="button" className="button button-secondary" onClick={() => void testPush()} disabled={testingPush}>{testingPush ? "Testing…" : "Send test phone notification"}</button>
         <ErrorNotice message={pushError} />{pushMessage && <div className="notice notice-success">{pushMessage}</div>}
       </div>

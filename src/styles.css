@@ -529,6 +529,9 @@ input[type=range] { padding:0; box-shadow:none; border:0; }
 .email-test-form { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:end; padding:16px 0; border-bottom:1px solid var(--line); }
 .email-test-form label { margin:0; }
 .email-test-form .notice { grid-column:1 / -1; margin:0; }
+.push-test-panel { display:grid; justify-items:start; gap:12px; padding:16px 0; border-bottom:1px solid var(--line); }
+.push-test-panel p { max-width:48ch; margin:0; color:var(--muted); font-size:11px; line-height:1.5; }
+.push-test-panel .notice { width:100%; margin:0; }
 
 .login-page { min-height:100vh; display:grid; grid-template-columns:1.15fr .85fr; background:white; }
 .login-visual { background:var(--navy); color:white; position:relative; overflow:hidden; min-height:100vh; display:flex; align-items:center; padding:10%; }
