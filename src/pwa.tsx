@@ -17,7 +17,8 @@ const PwaContext = createContext<PwaValue | null>(null);
 export function PwaProvider({ children }: { children: ReactNode }) {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches);
+  const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches ||
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {

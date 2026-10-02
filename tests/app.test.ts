@@ -213,6 +213,13 @@ describe("DTU Control Centre API", () => {
     managedCsrf = login.body.csrfToken;
   });
 
+  it("lets a staff member run their own phone push diagnostic", async () => {
+    const result = await request(app).post("/api/staff/push/test")
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf);
+    expect(result.status).toBe(503);
+    expect(result.body.error).toContain("VAPID_PUBLIC_KEY");
+  });
+
   it("creates a project and accepts a QR issue report", async () => {
     const created = await request(app).post("/api/staff/projects")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

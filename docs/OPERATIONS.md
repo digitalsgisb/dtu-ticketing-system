@@ -44,7 +44,7 @@ Application data and secrets remain under `/var/lib/dtu-control` and `/etc/dtu-c
 2. Put `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT=mailto:admin@your-domain` in `/etc/dtu-control.env`. Keep the private key out of Git and backups that are shared externally. Restart `dtu-control`.
 3. Open the HTTPS staff site on each phone, install the app where the browser requires it, sign in, and select **Enable notifications** on the Notifications page.
 4. In **Administration → System**, check **Phone push** and select **Send test phone notification**. It sends to the devices registered to your admin account and reports whether the push service accepted it. Confirm that the alert actually appeared on the phone; acceptance alone does not prove display.
-5. Create a test task assigned to another user and verify the in-app alert, email, and phone notification. Browser and phone notification permission must be allowed. On iPhone, add the site to the Home Screen before enabling push.
+5. Each staff member can use **Send test to my phone** on their Notifications page after background push is linked. Create a test task assigned to another user and verify the in-app alert, email, and phone notification. Browser and phone notification permission must be allowed. On iPhone, add the site to the Home Screen before enabling push.
 
 If VAPID keys are absent, the in-app feed and email still work, and device alerts appear while the app is open. Push subscriptions are tied to the signed-in user and removed when they turn off notifications.
 

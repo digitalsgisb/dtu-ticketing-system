@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import QRCode from "qrcode";
 import argon2 from "argon2";
@@ -36,6 +36,23 @@ staffRouter.delete("/push/subscriptions", (req, res) => {
   db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?").run(parsed.data.endpoint, (req as AuthenticatedRequest).user.id);
   res.json({ ok: true });
 });
+async function testPushForSignedInUser(req: Request, res: Response) {
+  const authReq = req as AuthenticatedRequest;
+  if (!pushConfigured) return res.status(503).json({ error: "Phone push is not configured. Add VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT to the server environment." });
+  if (!pushSubscriptionCount(authReq.user.id)) return res.status(409).json({ error: "No device is registered for your account. On your phone, open Notifications and enable background alerts, then try again." });
+  const result = await sendTestPush(authReq.user.id);
+  audit(authReq.user, "push_test_sent", "system", null, { attempted: result.attempted, accepted: result.accepted, failed: result.failed }, req.ip);
+  if (!result.accepted) {
+    const reason = result.expired === result.attempted
+      ? "The registered device subscriptions have expired. Re-enable background alerts on your phone."
+      : result.failureCodes.some(code => code === 401 || code === 403)
+        ? "The push service rejected the server credentials. Check the VAPID settings."
+        : `The push service did not accept the test${result.failureCodes.length ? ` (HTTP ${result.failureCodes.join(", ")})` : ""}. Check the server logs and phone subscription.`;
+    return res.status(502).json({ error: reason, ...result });
+  }
+  res.json(result);
+}
+staffRouter.post("/push/test", testPushForSignedInUser);
 staffRouter.patch("/profile", (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const parsed = z.object({
@@ -1749,22 +1766,7 @@ staffRouter.get("/system/storage", requireRole("admin"), async (req, res) => {
   });
 });
 
-staffRouter.post("/system/push/test", requireRole("admin"), async (req, res) => {
-  const authReq = req as AuthenticatedRequest;
-  if (!pushConfigured) return res.status(503).json({ error: "Phone push is not configured. Add VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT to the server environment." });
-  if (!pushSubscriptionCount(authReq.user.id)) return res.status(409).json({ error: "No device is registered for your account. On your phone, open Notifications and enable background alerts, then try again." });
-  const result = await sendTestPush(authReq.user.id);
-  audit(authReq.user, "push_test_sent", "system", null, { attempted: result.attempted, accepted: result.accepted, failed: result.failed }, req.ip);
-  if (!result.accepted) {
-    const reason = result.expired === result.attempted
-      ? "The registered device subscriptions have expired. Re-enable background alerts on your phone."
-      : result.failureCodes.some(code => code === 401 || code === 403)
-        ? "The push service rejected the server credentials. Check the VAPID settings."
-        : `The push service did not accept the test${result.failureCodes.length ? ` (HTTP ${result.failureCodes.join(", ")})` : ""}. Check the server logs and phone subscription.`;
-    return res.status(502).json({ error: reason, ...result });
-  }
-  res.json(result);
-});
+staffRouter.post("/system/push/test", requireRole("admin"), testPushForSignedInUser);
 
 staffRouter.post("/system/email/test", requireRole("admin"), async (req, res) => {
   const authReq = req as AuthenticatedRequest;

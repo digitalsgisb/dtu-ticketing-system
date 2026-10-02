@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, json, setCsrf } from "./api";
+import { disablePush, getPushStatus } from "./pushNotifications";
 
 export type User = {
   id: number;
@@ -42,6 +43,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void refresh(); }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    void getPushStatus(user.id).catch(() => {
+      localStorage.removeItem(`dtu-background-push-${user.id}`);
+    });
+  }, [user?.id]);
+
   const login = async (username: string, password: string) => {
     const result = await api<{ user: User; csrfToken: string; mustChangePassword: boolean }>("/api/auth/login", json("POST", { username, password }));
     setCsrf(result.csrfToken);
@@ -50,16 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    if (user && "serviceWorker" in navigator) {
+    if (user) {
       try {
-        const registration = await navigator.serviceWorker.getRegistration();
-        const subscription = await registration?.pushManager?.getSubscription();
-        if (subscription) {
-          await api("/api/staff/push/subscriptions", json("DELETE", { endpoint: subscription.endpoint }));
-          await subscription.unsubscribe();
-        }
+        await disablePush(user.id);
       } catch { /* Logout still proceeds if push cleanup fails. */ }
-      localStorage.removeItem(`dtu-background-push-${user.id}`);
     }
     await api("/api/auth/logout", json("POST"));
     setUser(null);
