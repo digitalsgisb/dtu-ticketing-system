@@ -12,7 +12,7 @@ import { importRouter } from "./routes/imports.js";
 import { db } from "./db.js";
 import { malaysiaDate, malaysiaMonthStartUtc } from "./time.js";
 import { addLiveClient, publishLiveUpdate } from "./liveUpdates.js";
-import { withAssignees } from "./assignees.js";
+import { assigneesFor, withAssignees } from "./assignees.js";
 import { withTaskProgress } from "./projectTasks.js";
 
 export const app = express();
@@ -88,13 +88,43 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
       CASE WHEN p.status = 'completed' THEN p.updated_at END DESC, p.due_date
   `).all() as Array<{ id: number }>);
   const tickets = withAssignees(db.prepare(`
-    SELECT w.id, w.ticket_no, w.title, w.type, w.status, w.priority, w.due_date, p.name AS project_name, u.name AS assignee_name
+    SELECT w.id, w.ticket_no, w.title, w.type, w.completion_mode, w.status, w.priority, w.due_date, p.name AS project_name, u.name AS assignee_name
     FROM work_items w LEFT JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.assignee_id
     WHERE w.status NOT IN ('resolved','closed')
     ORDER BY CASE WHEN w.due_date < ? THEN 0 ELSE 1 END,
       CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, w.due_date
   `).all(today) as Array<{ id: number }>);
   res.json({ stats, projects, tickets, generatedAt: new Date().toISOString() });
+});
+
+app.get("/api/wallboard/work/:id", blockStaffOnPublicHost, (req, res) => {
+  const item = db.prepare(`SELECT w.id, w.ticket_no, w.title, w.description, w.type, w.completion_mode,
+    w.status, w.priority, w.due_date, w.created_at, w.resolved_at, p.name AS project_name
+    FROM work_items w LEFT JOIN projects p ON p.id = w.project_id
+    WHERE w.id = ? AND w.type = 'task' AND w.status NOT IN ('resolved','closed')`).get(req.params.id) as Record<string, unknown> | undefined;
+  if (!item) return res.status(404).json({ error: "Work item not found" });
+  const submissions = db.prepare(`SELECT id, author_name, body, created_at FROM comments
+    WHERE work_item_id = ? AND is_completion = 1 ORDER BY created_at, id`).all(req.params.id) as Array<{ id: number }>;
+  const attachments = db.prepare(`SELECT a.id, a.comment_id, a.original_name, a.mime_type, a.size
+    FROM attachments a JOIN comments c ON c.id = a.comment_id
+    WHERE c.work_item_id = ? AND c.is_completion = 1 ORDER BY a.id`).all(req.params.id);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({ item: { ...item, assignees: assigneesFor(Number(req.params.id)) }, submissions, attachments });
+});
+
+app.get("/api/wallboard/completion-files/:id", blockStaffOnPublicHost, (req, res) => {
+  const file = db.prepare(`SELECT a.stored_name, a.original_name, a.mime_type FROM attachments a
+    JOIN comments c ON c.id = a.comment_id JOIN work_items w ON w.id = c.work_item_id
+    WHERE a.id = ? AND c.is_completion = 1 AND w.type = 'task' AND w.status NOT IN ('resolved','closed')`).get(req.params.id) as {
+      stored_name: string; original_name: string; mime_type: string;
+    } | undefined;
+  if (!file) return res.status(404).end();
+  if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.mime_type))
+    return res.download(path.resolve(config.dataDir, "uploads", file.stored_name), file.original_name);
+  res.setHeader("Content-Type", file.mime_type);
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.sendFile(path.resolve(config.dataDir, "uploads", file.stored_name));
 });
 
 app.get("/api/wallboard/progress-images/:id", blockStaffOnPublicHost, (req, res) => {

@@ -251,6 +251,17 @@ describe("DTU Control Centre API", () => {
     const preview = await request(app).get(`/api/staff/attachments/${proof.id}/preview`).set("Cookie", managedCookie);
     expect(preview.status).toBe(200);
     expect(preview.headers["content-type"]).toContain("application/pdf");
+    const wallDetail = await request(app).get(`/api/wallboard/work/${task.body.id}`);
+    expect(wallDetail.status).toBe(200);
+    expect(wallDetail.body.item).toMatchObject({ title: "Each person submits their own proof", status: "in_progress" });
+    expect(wallDetail.body.item.assignees).toHaveLength(2);
+    expect(wallDetail.body.submissions[0].body).toBe("My own deliverable is ready");
+    expect(wallDetail.body.attachments[0].original_name).toBe("member-proof.pdf");
+    const wallFile = await request(app).get(`/api/wallboard/completion-files/${proof.id}`);
+    expect(wallFile.status).toBe(200);
+    expect(wallFile.headers["content-type"]).toContain("application/pdf");
+    expect((await request(app).get(`/api/wallboard/work/${task.body.id}`).set("Host", "report.example.com")).status).toBe(404);
+    expect((await request(app).get(`/api/wallboard/completion-files/${proof.id}`).set("Host", "report.example.com")).status).toBe(404);
     const progress = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
     expect(progress.body.project).toMatchObject({ progress: 0, task_total: 1, task_completed: 0, task_progress: 50 });
     const after = await request(app).get("/api/staff/dashboard").set("Cookie", managedCookie);
@@ -280,6 +291,7 @@ describe("DTU Control Centre API", () => {
     expect(second.body).toMatchObject({ completed: 2, total: 2, allComplete: true });
     const finished = await request(app).get(`/api/staff/tickets/${task.body.id}`).set("Cookie", cookie);
     expect(finished.body.item.status).toBe("resolved");
+    expect((await request(app).get(`/api/wallboard/work/${task.body.id}`)).status).toBe(404);
     const completeProgress = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
     expect(completeProgress.body.project).toMatchObject({ task_completed: 1, task_progress: 100 });
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { api, formatDate } from "../api";
 import { AlertIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icons";
 import { Badge, Loading, StatCard } from "../components/UI";
@@ -18,6 +19,7 @@ export function WallboardPage() {
   const [now, setNow] = useState(new Date());
   const [newTicketIds, setNewTicketIds] = useState<Set<number>>(() => new Set());
   const [view, setView] = useState<WallboardView>("overview");
+  const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("dtu-wallboard-sound") === "on");
   const soundRef = useRef<HTMLAudioElement | null>(null);
   const previousTicketIds = useRef<Set<number> | null>(null);
@@ -102,7 +104,7 @@ export function WallboardPage() {
           <section className="wall-panel wall-priority-panel">
             <WallHeading index="01" eyebrow="OPERATIONS" title={t("criticalWork")} count={`${data.tickets.length} queued`} actionLabel="View all →" onClick={() => setView("tickets")} />
             {data.tickets.length
-              ? <CyclingTickets key={newTicketIds.size ? [...newTicketIds].join(",") : "queue"} tickets={data.tickets} newTicketIds={newTicketIds} />
+              ? <CyclingTickets key={newTicketIds.size ? [...newTicketIds].join(",") : "queue"} tickets={data.tickets} newTicketIds={newTicketIds} onSelect={setSelectedWorkId} />
               : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
           </section>
         </main>
@@ -114,9 +116,10 @@ export function WallboardPage() {
             : <WallClearState label="Portfolio clear" body="No active, monitoring, or completed projects require display." />}
         </aside>
       </div>
-      : <WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} />}
+      : <WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} onSelectWork={setSelectedWorkId} />}
 
     <div className="wallboard-watermark">© DIGITAL TRANSFORMATION UNIT</div>
+    {selectedWorkId !== null && <WallWorkDetail id={selectedWorkId} onClose={() => setSelectedWorkId(null)} />}
   </div>;
 }
 
@@ -182,7 +185,7 @@ function useWallboardFade(itemCount: number, intervalMs: number) {
   return { page, pageCount };
 }
 
-function CyclingTickets({ tickets, newTicketIds }: { tickets: any[]; newTicketIds: Set<number> }) {
+function CyclingTickets({ tickets, newTicketIds, onSelect }: { tickets: any[]; newTicketIds: Set<number>; onSelect: (id: number) => void }) {
   const pages = pageItems(tickets);
   const { page, pageCount, animate, finishTransition } = useWallboardCycle(tickets.length, 8_000);
   const renderedPages = pageCount > 1 ? [...pages, pages[0]] : pages;
@@ -195,7 +198,7 @@ function CyclingTickets({ tickets, newTicketIds }: { tickets: any[]; newTicketId
       {renderedPages.map((items, pageIndex) => <div className={`wall-cycle-page wall-priority-grid wall-priority-count-${items.length}`} key={`${pageIndex}-${items[0]?.id ?? "empty"}`}>
         {items.map(item => {
           const index = tickets.findIndex(ticket => ticket.id === item.id);
-          return <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />;
+          return <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} onSelect={onSelect} />;
         })}
       </div>)}
     </div>
@@ -249,12 +252,13 @@ function WallboardTicker({ data }: { data: any }) {
   return <div className="wallboard-ticker"><div><span>LIVE</span><b>{data.stats.activeProjects} active projects</b><i /><b>{data.stats.openIssues} open issues</b><i /><b>{data.stats.overdue} overdue items</b><i /><b>{data.stats.completedMonth} completed this month</b><i /><b>DTU operations online</b></div></div>;
 }
 
-function WallboardFullView({ view, data, t, newTicketIds, onBack }: {
+function WallboardFullView({ view, data, t, newTicketIds, onBack, onSelectWork }: {
   view: Exclude<WallboardView, "overview">;
   data: any;
   t: ReturnType<typeof useI18n>["t"];
   newTicketIds: Set<number>;
   onBack: () => void;
+  onSelectWork: (id: number) => void;
 }) {
   const projects = view === "projects";
   const projectGroups = [
@@ -292,7 +296,7 @@ function WallboardFullView({ view, data, t, newTicketIds, onBack }: {
         : data.tickets.length
           ? <div className="wallboard-group-list">{ticketGroups.map(group => {
             const items = data.tickets.filter((item: any) => item.type === group.type);
-            return items.length ? <section className="wallboard-group" key={group.type}><h3>{group.title}<span>{items.length}</span></h3><div className="wallboard-all-tickets">{items.map((item: any, index: number) => <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} />)}</div></section> : null;
+            return items.length ? <section className="wallboard-group" key={group.type}><h3>{group.title}<span>{items.length}</span></h3><div className="wallboard-all-tickets">{items.map((item: any, index: number) => <WallTicket key={item.id} item={item} index={index} isNew={newTicketIds.has(Number(item.id))} onSelect={onSelectWork} />)}</div></section> : null;
           })}</div>
           : <WallClearState label="Priority queue clear" body="No open work is competing for attention." />}
     </section>
@@ -342,12 +346,68 @@ function WallProject({ project, expanded = false, showcase = false }: { project:
   </article>;
 }
 
-function WallTicket({ item, index, isNew }: { item: any; index: number; isNew: boolean }) {
-  return <article className={isNew ? "wall-ticket-new" : ""}>
+function WallTicket({ item, index, isNew, onSelect }: { item: any; index: number; isNew: boolean; onSelect: (id: number) => void }) {
+  const clickable = item.type === "task";
+  return <article className={`${clickable ? "wall-ticket-open" : ""}${isNew ? " wall-ticket-new" : ""}`} role={clickable ? "button" : undefined} tabIndex={clickable ? 0 : undefined}
+    aria-label={clickable ? `Open details for ${item.ticket_no}: ${item.title}` : undefined} onClick={clickable ? () => onSelect(item.id) : undefined}
+    onKeyDown={clickable ? event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(item.id); } } : undefined}>
     <div className="wall-rank">{String(index + 1).padStart(2, "0")}</div>
     <div className="wall-ticket-copy"><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><h3>{item.title}</h3><p>{item.project_name || "General DTU work"}{item.type === "task" && item.assignee_total > 1 ? item.completion_mode === "group" ? " · Group task" : ` · ${item.assignee_completed}/${item.assignee_total} done` : ""}</p></div>
     <div className="wall-ticket-meta"><Badge value={item.status} /><strong>{item.assignee_name || "Unassigned"}</strong><span>{formatDate(item.due_date)}</span></div>
   </article>;
+}
+
+function WallWorkDetail({ id, onClose }: { id: number; onClose: () => void }) {
+  const [detail, setDetail] = useState<any>(null);
+  const [error, setError] = useState("");
+  const load = () => api<any>(`/api/wallboard/work/${id}`).then(result => { setDetail(result); setError(""); }).catch(failure => setError((failure as Error).message));
+  useEffect(() => {
+    void load();
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.body.classList.add("wall-work-open");
+    window.addEventListener("keydown", onKeyDown);
+    return () => { document.body.classList.remove("wall-work-open"); window.removeEventListener("keydown", onKeyDown); };
+  }, [id]);
+  useLiveRefresh(load, "/api/wallboard/live");
+  const item = detail?.item;
+  const submissions: any[] = detail?.submissions ?? [];
+  const attachments: any[] = detail?.attachments ?? [];
+  const currentCommentIds = new Set((item?.assignees ?? []).map((assignee: any) => assignee.completion_comment_id).filter(Boolean));
+  const earlierSubmissions = item?.completion_mode === "individual" ? submissions.filter(submission => !currentCommentIds.has(submission.id)) : [];
+  const filesFor = (submissionId: number) => attachments.filter(file => file.comment_id === submissionId);
+  const renderSubmission = (submission: any) => <div className="wall-work-submission-body">
+    <p>{submission.body}</p>
+    {filesFor(submission.id).length > 0 && <div className="wall-work-files">{filesFor(submission.id).map((file: any) => {
+      const url = `/api/wallboard/completion-files/${file.id}`;
+      const preview = file.mime_type.startsWith("image/") || file.mime_type === "application/pdf";
+      return <a href={url} target="_blank" rel="noopener noreferrer" key={file.id}>
+        {file.mime_type.startsWith("image/") && <img src={url} alt={file.original_name} />}
+        <span>📎 {file.original_name}</span><small>{preview ? "Open evidence ↗" : "Download evidence ↗"}</small>
+      </a>;
+    })}</div>}
+  </div>;
+  return createPortal(<div className="wall-work-backdrop" onMouseDown={onClose}>
+    <section className="wall-work-dialog" role="dialog" aria-modal="true" aria-label={item ? `${item.ticket_no} details` : "Work item details"} onMouseDown={event => event.stopPropagation()}>
+      <header className="wall-work-dialog-header"><div><small>DTU CONTROL CENTRE · WORK DETAILS</small><h2>{item?.title || "Loading work item…"}</h2>{item && <span>{item.ticket_no} · {item.project_name || "General DTU work"}</span>}</div><button type="button" onClick={onClose} aria-label="Close work details">×</button></header>
+      {error ? <p className="wall-work-error">{error}</p> : !item ? <div className="wall-work-loading"><Loading /></div> : <div className="wall-work-dialog-content">
+        <div className="wall-work-facts"><Badge value={item.status} /><Badge value={item.priority} kind="priority" /><span>Due {formatDate(item.due_date)}</span><span>{item.type === "task" ? item.completion_mode === "group" ? "Group completion" : "Individual completion" : "Issue"}</span></div>
+        <section className="wall-work-brief"><h3>Task details</h3><p>{item.description || "No description was added."}</p></section>
+        <section className="wall-work-submissions"><div className="wall-work-section-head"><h3>Submissions and evidence</h3><span>{submissions.length} {submissions.length === 1 ? "submission" : "submissions"}</span></div>
+          {item.type === "task" && item.completion_mode === "individual" && item.assignees.length > 0
+            ? <div className="wall-work-submission-list">{item.assignees.map((assignee: any) => {
+              const submission = submissions.find(entry => entry.id === assignee.completion_comment_id);
+              return <article key={assignee.id} className={submission ? "is-submitted" : "is-pending"}>
+                <div className="wall-work-submission-head"><strong>{assignee.name}</strong><span>{submission ? `Submitted ${formatDate(assignee.completed_at, true)}` : "Awaiting submission"}</span></div>
+                {submission && renderSubmission(submission)}
+              </article>;
+            })}</div>
+            : submissions.length > 0 ? <div className="wall-work-submission-list">{submissions.map(submission => <article key={submission.id} className="is-submitted"><div className="wall-work-submission-head"><strong>{submission.author_name}</strong><span>{formatDate(submission.created_at, true)}</span></div>{renderSubmission(submission)}</article>)}</div>
+              : <p className="wall-work-empty">No submission has been added yet.</p>}
+          {earlierSubmissions.length > 0 && <div className="wall-work-history"><h4>Earlier submissions</h4><div className="wall-work-submission-list">{earlierSubmissions.map(submission => <article key={submission.id}><div className="wall-work-submission-head"><strong>{submission.author_name}</strong><span>{formatDate(submission.created_at, true)}</span></div>{renderSubmission(submission)}</article>)}</div></div>}
+        </section>
+      </div>}
+    </section>
+  </div>, document.body);
 }
 
 function WallClearState({ label, body }: { label: string; body: string }) {

@@ -7,6 +7,7 @@
 - Resolve work first, then close it after the reporter or DTU confirms completion.
 - Choose **Individual** for a task that requires each assignee to complete their part and submit their own note and up to three photos or documents. It closes when everyone finishes. Choose **Group** when one assignee should submit the team's completion and evidence; that submission closes the task for everyone. A lead or admin can change the method in task settings. Changing it reopens the task and resets active completion checks while preserving earlier notes and files in the history.
 - To submit a result, open the assigned task, choose **Submit my work** (Individual) or **Submit for the team** (Group), write a note or choose at least one document/photo, then confirm. Attach up to three files of 5 MB each. The note and files appear in **Completion evidence** on the task page after submission.
+- On the internal TV wallboard, select a pending task card to view its brief, assignee status, and submissions with evidence files. Close the detail view to return to the live board. Completed tasks are not listed there.
 - Project task completion is displayed separately from manually published delivery progress. Individual tasks contribute each assignee's share; group tasks contribute when the team submission is complete. General tasks do not affect project percentages.
 
 ## Weekly
