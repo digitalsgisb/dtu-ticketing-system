@@ -180,9 +180,10 @@ export function Layout() {
       </main>
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         <NavLink to="/" end><GridIcon /><span>Home</span></NavLink>
-        <NavLink to="/projects"><ProjectIcon /><span>Projects</span></NavLink>
+        <NavLink to="/projects" className={projectSectionActive ? "active" : ""}><ProjectIcon /><span>Projects</span></NavLink>
         <NavLink to="/tickets"><TicketIcon /><span>Work</span></NavLink>
-        <button className={mobileOpen ? "active" : ""} onClick={() => setMobileOpen(true)}><span className="more-icon" aria-hidden="true">•••</span><span>More</span></button>
+        <NavLink to="/notifications" className="mobile-alerts-link"><BellIcon /><span>Alerts</span>{unreadCount > 0 && <b className="mobile-alert-count">{unreadCount > 99 ? "99+" : unreadCount}</b>}</NavLink>
+        <button type="button" className={mobileOpen ? "active" : ""} onClick={() => setMobileOpen(true)} aria-label="Open more navigation" aria-expanded={mobileOpen}><span className="more-icon" aria-hidden="true">☰</span><span>More</span></button>
       </nav>
       {mustChangePassword && <PasswordChange onChanged={() => void refresh()} />}
     </div>

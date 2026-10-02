@@ -3653,21 +3653,25 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
   .topbar-actions { gap: 7px; }
   .topbar-actions .language-button { min-width: 42px; padding: 0 8px; }
   .install-button { display: none; }
-  .content { padding: 22px 15px calc(94px + env(safe-area-inset-bottom)); }
+  .content { padding: 22px 15px calc(108px + env(safe-area-inset-bottom)); }
   .mobile-bottom-nav {
     position: fixed;
     z-index: 25;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    min-height: calc(64px + env(safe-area-inset-bottom));
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 12px;
+    max-width: 480px;
+    min-height: 68px;
+    margin: 0 auto;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    padding: 5px 8px env(safe-area-inset-bottom);
-    border-top: 1px solid #dce7ea;
-    background: rgba(255,255,255,.94);
-    box-shadow: 0 -12px 35px rgba(10,39,56,.09);
-    backdrop-filter: blur(18px);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid rgba(108, 230, 216, .24);
+    border-radius: 20px;
+    background: linear-gradient(110deg, #073343 0%, #075e65 48%, #072638 100%);
+    box-shadow: 0 14px 32px rgba(4, 32, 44, .28), inset 0 1px rgba(255, 255, 255, .12);
+    backdrop-filter: blur(16px);
   }
   .mobile-bottom-nav a, .mobile-bottom-nav button {
     min-width: 0;
@@ -3676,17 +3680,22 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 2px;
     border: 0;
-    border-radius: 12px;
-    color: #738995;
+    border-radius: 14px;
+    color: #b5d5d9;
     background: transparent;
-    font-size: 9px;
-    font-weight: 800;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    position: relative;
   }
   .mobile-bottom-nav svg { width: 20px; height: 20px; }
-  .mobile-bottom-nav a.active, .mobile-bottom-nav button.active { color: #18777e; background: #eaf6f4; }
-  .more-icon { height: 20px; color: currentColor; font-size: 16px; font-weight: 900; letter-spacing: 2px; line-height: 12px; }
+  .mobile-bottom-nav a.active, .mobile-bottom-nav button.active { color: #fff; background: rgba(94, 222, 207, .22); box-shadow: inset 0 0 0 1px rgba(125, 234, 220, .17); }
+  .mobile-bottom-nav a:focus-visible, .mobile-bottom-nav button:focus-visible { outline: 2px solid #9cebe2; outline-offset: -2px; }
+  .mobile-alert-count { position: absolute; top: 0; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 3px; display: grid; place-items: center; border-radius: 999px; color: #fff; background: #d94f61; font-size: 9px; line-height: 1; }
+  .more-icon { height: 20px; color: currentColor; font-size: 20px; line-height: 17px; }
   .notification-preferences { grid-template-columns: auto minmax(0, 1fr); }
   .notification-preference-actions { grid-column: 1 / -1; justify-content: stretch; }
   .notification-preference-actions .button { flex: 1; }
@@ -3837,7 +3846,7 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
     position: fixed;
     z-index: 24;
     right: 14px;
-    bottom: calc(74px + env(safe-area-inset-bottom));
+    bottom: calc(90px + env(safe-area-inset-bottom));
     left: 14px;
     min-height: 58px;
     display: flex;
