@@ -293,6 +293,49 @@ describe("DTU Control Centre API", () => {
     expect(resetProgress.body.project).toMatchObject({ task_completed: 0, task_progress: 0 });
   });
 
+  it("completes a group task once for all assignees and preserves evidence across mode changes", async () => {
+    const project = await request(app).post("/api/staff/projects")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ name: "Group delivery project", departmentName: "DTU" });
+    expect(project.status).toBe(201);
+    const task = await request(app).post("/api/staff/tickets")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ type: "task", completionMode: "group", title: "Deliver as one team", projectId: project.body.id,
+        assigneeIds: [adminUserId, managedUserId], status: "assigned" });
+    expect(task.status).toBe(201);
+    const blockedClose = await request(app).patch(`/api/staff/tickets/${task.body.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ status: "resolved" });
+    expect(blockedClose.status).toBe(409);
+    const before = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(before.body.project).toMatchObject({ task_total: 1, task_completed: 0, task_progress: 0 });
+
+    const completed = await request(app).post(`/api/staff/tickets/${task.body.id}/complete`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
+      .field("note", "Team deliverable approved")
+      .attach("attachments", Buffer.from("%PDF-1.4\nGroup evidence"), { filename: "team-proof.pdf", contentType: "application/pdf" });
+    expect(completed.status).toBe(200);
+    expect(completed.body.allComplete).toBe(true);
+    const detail = await request(app).get(`/api/staff/tickets/${task.body.id}`).set("Cookie", cookie);
+    expect(detail.body.item).toMatchObject({ completion_mode: "group", status: "resolved", assignee_total: 2, assignee_completed: 0 });
+    expect(detail.body.comments.some((comment: { body: string }) => comment.body === "Team deliverable approved")).toBe(true);
+    expect(detail.body.attachments[0].original_name).toBe("team-proof.pdf");
+    const after = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(after.body.project).toMatchObject({ task_completed: 1, task_progress: 100 });
+    const repeated = await request(app).post(`/api/staff/tickets/${task.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "Again");
+    expect(repeated.status).toBe(409);
+
+    const changed = await request(app).patch(`/api/staff/tickets/${task.body.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ completionMode: "individual", status: "resolved" });
+    expect(changed.status).toBe(200);
+    const reset = await request(app).get(`/api/staff/tickets/${task.body.id}`).set("Cookie", cookie);
+    expect(reset.body.item).toMatchObject({ completion_mode: "individual", status: "in_progress", assignee_completed: 0 });
+    expect(reset.body.comments.filter((comment: { is_completion: number }) => comment.is_completion)).toHaveLength(1);
+    expect(reset.body.attachments[0].original_name).toBe("team-proof.pdf");
+    const resetProgress = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
+    expect(resetProgress.body.project).toMatchObject({ task_completed: 0, task_progress: 0 });
+  });
+
   it("creates a project and accepts a QR issue report", async () => {
     const created = await request(app).post("/api/staff/projects")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

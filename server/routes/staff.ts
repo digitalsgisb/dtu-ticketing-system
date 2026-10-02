@@ -1122,6 +1122,7 @@ staffRouter.post("/tickets", (req, res) => {
   const parsed = z.object({
     projectId: z.number().int().positive().nullable().optional(),
     type: z.enum(["task", "issue"]),
+    completionMode: z.enum(["individual", "group"]).default("individual"),
     title: z.string().trim().min(3).max(200),
     description: z.string().max(5000).default(""),
     priority: z.enum(priorities).default("medium"),
@@ -1138,9 +1139,9 @@ staffRouter.post("/tickets", (req, res) => {
   const ticketNo = nextIdentifier("TKT");
   const id = db.transaction(() => {
   const result = db.prepare(`
-    INSERT INTO work_items(ticket_no, project_id, type, title, description, priority, status, assignee_id, due_date, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(ticketNo, parsed.data.projectId ?? null, parsed.data.type, cleanText(parsed.data.title, 200),
+    INSERT INTO work_items(ticket_no, project_id, type, completion_mode, title, description, priority, status, assignee_id, due_date, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(ticketNo, parsed.data.projectId ?? null, parsed.data.type, parsed.data.type === "task" ? parsed.data.completionMode : "individual", cleanText(parsed.data.title, 200),
     cleanText(parsed.data.description), parsed.data.priority, parsed.data.status, assigneeIds[0] ?? null,
     parsed.data.dueDate || null, authReq.user.id);
   const createdId = Number(result.lastInsertRowid);
@@ -1178,6 +1179,7 @@ staffRouter.patch("/tickets/:id", (req, res) => {
     description: z.string().max(5000).optional(),
     priority: z.enum(priorities).optional(),
     status: z.enum(statuses).optional(),
+    completionMode: z.enum(["individual", "group"]).optional(),
     assigneeId: z.number().int().positive().nullable().optional(),
     assigneeIds: z.array(z.number().int().positive()).max(30).optional(),
     dueDate: z.string().nullable().optional()
@@ -1188,29 +1190,33 @@ staffRouter.patch("/tickets/:id", (req, res) => {
     const assignment = assigneesFor(Number(req.params.id)).find(user => user.id === authReq.user.id);
     if (!assignment || assignment.completed_at || ["resolved", "closed"].includes(String(existing.status)) ||
         d.assigneeId !== undefined || d.assigneeIds !== undefined || d.title !== undefined ||
-        d.description !== undefined || d.priority !== undefined || d.dueDate !== undefined ||
+        d.description !== undefined || d.priority !== undefined || d.dueDate !== undefined || d.completionMode !== undefined ||
         (d.status !== undefined && !["in_progress", "waiting"].includes(d.status)))
       return res.status(403).json({ error: "Only a lead or admin can change task settings or reopen completed work" });
   }
   const previousAssignees = assigneesFor(Number(req.params.id));
   const previousIds = previousAssignees.map(user => user.id);
   const assigneeIds = d.assigneeIds ?? (d.assigneeId === undefined ? previousIds : d.assigneeId ? [d.assigneeId] : []);
+  const modeChanged = existing.type === "task" && d.completionMode !== undefined && d.completionMode !== existing.completion_mode;
+  const completionMode = d.completionMode ?? existing.completion_mode;
   if (new Set(assigneeIds).size !== assigneeIds.length || !validAssignees(assigneeIds.filter(id => !previousIds.includes(id))))
     return res.status(400).json({ error: "Choose distinct active assignees" });
-  if (existing.type === "task" && assigneeIds.length && d.status && ["resolved", "closed"].includes(d.status)
-      && !assigneeIds.every(id => previousAssignees.some(user => user.id === id && user.completed_at)))
-    return res.status(409).json({ error: "Each assignee must complete their part before this task can be closed" });
+  if (existing.type === "task" && assigneeIds.length && d.status && ["resolved", "closed"].includes(d.status) && !modeChanged
+      && ((completionMode === "group" && !["resolved", "closed"].includes(String(existing.status))) ||
+        (completionMode !== "group" && !assigneeIds.every(id => previousAssignees.some(user => user.id === id && user.completed_at)))))
+    return res.status(409).json({ error: completionMode === "group" ? "Submit the group completion before closing this task" : "Each assignee must complete their part before this task can be closed" });
+  const nextStatus = modeChanged ? (assigneeIds.length ? "in_progress" : "new") : d.status ?? existing.status;
   db.transaction(() => {
   db.prepare(`
-    UPDATE work_items SET title = ?, description = ?, priority = ?, status = ?, assignee_id = ?, due_date = ?,
+    UPDATE work_items SET title = ?, description = ?, priority = ?, status = ?, completion_mode = ?, assignee_id = ?, due_date = ?,
       resolved_at = CASE WHEN ? IN ('resolved','closed') THEN COALESCE(resolved_at, CURRENT_TIMESTAMP) ELSE NULL END,
       updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(d.title ?? existing.title, d.description ?? existing.description, d.priority ?? existing.priority,
-    d.status ?? existing.status, assigneeIds[0] ?? null,
-    d.dueDate === undefined ? existing.due_date : d.dueDate, d.status ?? existing.status, req.params.id);
+    nextStatus, existing.type === "task" ? completionMode : "individual", assigneeIds[0] ?? null,
+    d.dueDate === undefined ? existing.due_date : d.dueDate, nextStatus, req.params.id);
   replaceAssignees(Number(req.params.id), assigneeIds);
   if (existing.type === "task") {
-    if (["resolved", "closed"].includes(String(existing.status)) && d.status && !["resolved", "closed"].includes(d.status)) {
+    if (modeChanged || (["resolved", "closed"].includes(String(existing.status)) && d.status && !["resolved", "closed"].includes(d.status))) {
       db.prepare("UPDATE work_item_assignees SET completed_at = NULL, completion_comment_id = NULL WHERE work_item_id = ?").run(req.params.id);
     }
     reconcileTaskStatus(Number(req.params.id));
@@ -1229,8 +1235,8 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
   const storedNames: string[] = [];
   try {
     const authReq = req as AuthenticatedRequest;
-    const item = db.prepare("SELECT id, ticket_no, title, type, status, project_id FROM work_items WHERE id = ?").get(req.params.id) as {
-      id: number; ticket_no: string; title: string; type: string; status: string; project_id: number | null;
+    const item = db.prepare("SELECT id, ticket_no, title, type, completion_mode, status, project_id FROM work_items WHERE id = ?").get(req.params.id) as {
+      id: number; ticket_no: string; title: string; type: string; completion_mode: string; status: string; project_id: number | null;
     } | undefined;
     if (!item) return res.status(404).json({ error: "Work item not found" });
     if (["resolved", "closed"].includes(item.status)) return res.status(409).json({ error: "This work item is already complete" });
@@ -1239,7 +1245,7 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
       return res.status(403).json({ error: "Only an assigned person can complete their part of this task" });
     if (item.type === "task" && !assignees.length && authReq.user.role === "member")
       return res.status(403).json({ error: "This task must be assigned before you can complete it" });
-    if (assignees.some(user => user.id === authReq.user.id && user.completed_at))
+    if (item.completion_mode !== "group" && assignees.some(user => user.id === authReq.user.id && user.completed_at))
       return res.status(409).json({ error: "You have already completed your part of this task" });
     const parsed = z.object({ note: z.string().trim().max(5000).default("") }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Completion note is too long" });
@@ -1255,28 +1261,30 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
       const result = db.prepare(`INSERT INTO comments(work_item_id, author_user_id, author_name, body, is_completion)
         VALUES (?, ?, ?, ?, 1)`).run(item.id, authReq.user.id, authReq.user.name, cleanText(parsed.data.note) || "Task completed");
       const id = Number(result.lastInsertRowid);
-      if (assignees.length) {
+      if (assignees.length && item.completion_mode !== "group") {
         const completion = db.prepare(`UPDATE work_item_assignees SET completed_at = CURRENT_TIMESTAMP, completion_comment_id = ?
           WHERE work_item_id = ? AND user_id = ? AND completed_at IS NULL`).run(id, item.id, authReq.user.id);
         if (!completion.changes) throw new Error("ASSIGNEE_ALREADY_COMPLETE");
         db.prepare("UPDATE work_items SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(item.id);
         reconcileTaskStatus(item.id);
       } else {
-        db.prepare("UPDATE work_items SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(item.id);
+        const completion = db.prepare("UPDATE work_items SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('resolved', 'closed')").run(item.id);
+        if (!completion.changes) throw new Error("TASK_ALREADY_COMPLETE");
       }
       files.forEach((file, index) => db.prepare(`INSERT INTO attachments(work_item_id, comment_id, original_name, stored_name, mime_type, size)
         VALUES (?, ?, ?, ?, ?, ?)`).run(item.id, id, cleanText(file.originalname, 255), storedNames[index], file.mimetype, file.size));
       const completionProgress = taskAssigneeProgress(item.id);
-      audit(authReq.user, completionProgress.total && completionProgress.completed < completionProgress.total ? "task_part_completed" : "work_item_completed",
+      audit(authReq.user, item.completion_mode !== "group" && completionProgress.total && completionProgress.completed < completionProgress.total ? "task_part_completed" : "work_item_completed",
         "work_item", item.id, { commentId: id, evidenceCount: files.length, projectId: item.project_id,
           completed: completionProgress.completed, total: completionProgress.total }, req.ip);
       return id;
     })();
     const progress = taskAssigneeProgress(item.id);
-    res.json({ ok: true, commentId, completed: progress.completed, total: progress.total, allComplete: !progress.total || progress.completed === progress.total });
+    res.json({ ok: true, commentId, completed: item.completion_mode === "group" ? 1 : progress.completed, total: item.completion_mode === "group" ? 1 : progress.total, allComplete: item.completion_mode === "group" || !progress.total || progress.completed === progress.total });
   } catch (error) {
     await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
     if (error instanceof Error && error.message === "ASSIGNEE_ALREADY_COMPLETE") return res.status(409).json({ error: "You have already completed your part of this task" });
+    if (error instanceof Error && error.message === "TASK_ALREADY_COMPLETE") return res.status(409).json({ error: "This work item is already complete" });
     next(error);
   }
 });

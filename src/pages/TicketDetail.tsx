@@ -44,9 +44,10 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
   const { t } = useI18n();
   const { user } = useAuth();
   const canManageTask = user?.role === "admin" || user?.role === "lead";
+  const groupTask = item.type === "task" && item.completion_mode === "group";
   const myAssignment = item.type === "task" ? item.assignees?.find((assignee: { id: number }) => assignee.id === user?.id) : null;
   const canComplete = !["resolved", "closed"].includes(item.status) && (item.type !== "task" ||
-    (item.assignee_total ? Boolean(myAssignment && !myAssignment.completed_at) : canManageTask));
+    (item.assignee_total ? Boolean(myAssignment && (groupTask || !myAssignment.completed_at)) : canManageTask));
   const canEditSettings = item.type !== "task" || canManageTask;
   const statuses = [
     ["new", "New"],
@@ -57,14 +58,14 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
     ["resolved", "Resolved"],
     ["closed", "Closed"]
   ] as const;
-  const [form, setForm] = useState({ status: item.status, priority: item.priority, assigneeIds: (item.assignees || []).map((user: { id: number }) => user.id) as number[], dueDate: item.due_date || "" });
+  const [form, setForm] = useState({ status: item.status, priority: item.priority, completionMode: item.completion_mode || "individual", assigneeIds: (item.assignees || []).map((user: { id: number }) => user.id) as number[], dueDate: item.due_date || "" });
   const [busy, setBusy] = useState(false);
   const [statusBusy, setStatusBusy] = useState("");
   const [error, setError] = useState("");
   const [showComplete, setShowComplete] = useState(false);
   useEffect(() => {
-    setForm({ status: item.status, priority: item.priority, assigneeIds: (item.assignees || []).map((user: { id: number }) => user.id), dueDate: item.due_date || "" });
-  }, [item.status, item.priority, item.assignee_name, item.due_date]);
+    setForm({ status: item.status, priority: item.priority, completionMode: item.completion_mode || "individual", assigneeIds: (item.assignees || []).map((user: { id: number }) => user.id), dueDate: item.due_date || "" });
+  }, [item.status, item.priority, item.completion_mode, item.assignee_name, item.due_date]);
   const changeStatus = async (status: string) => {
     if (status === item.status || statusBusy) return;
     setError("");
@@ -87,16 +88,17 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
   return <aside className="panel detail-sidebar ticket-control-panel"><div className="panel-heading"><div><span className="eyebrow">Control</span><h2>Work settings</h2></div></div>
     <ErrorNotice message={error} />
     <div className="ticket-quick-actions">
-      {!['in_progress', 'resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask || Boolean(myAssignment && !myAssignment.completed_at)) && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
-      {canComplete && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>{item.type === "task" && item.assignee_total ? "Complete my part" : "Complete with evidence"}</button>}
+      {!['in_progress', 'resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask || Boolean(myAssignment && (groupTask || !myAssignment.completed_at))) && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
+      {canComplete && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>{groupTask ? "Complete group task" : item.type === "task" && item.assignee_total ? "Complete my part" : "Complete with evidence"}</button>}
       {['resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Reopening…" : "Reopen work"}</button>}
     </div>
-    {item.type === "task" && item.assignee_total > 0 && <p className="ticket-team-summary">{item.assignee_completed} of {item.assignee_total} people finished.{myAssignment?.completed_at && !["resolved", "closed"].includes(item.status) ? " Your part is complete; others are still working." : ""}</p>}
+    {item.type === "task" && item.assignee_total > 0 && <p className="ticket-team-summary">{groupTask ? `Group task · ${item.assignee_total} assignee${item.assignee_total === 1 ? "" : "s"}. One person submits the team's completion.` : `${item.assignee_completed} of ${item.assignee_total} people finished.${myAssignment?.completed_at && !["resolved", "closed"].includes(item.status) ? " Your part is complete; others are still working." : ""}`}</p>}
     {canEditSettings && <><div className="settings-divider"><span>Details & schedule</span></div>
     <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{statuses.filter(([status]) =>
-      item.type !== "task" || !item.assignee_total || item.assignee_completed === item.assignee_total || !["resolved", "closed"].includes(status)
+      item.type !== "task" || !item.assignee_total || status === item.status || (item.completion_mode !== "group" && item.assignee_completed === item.assignee_total) || !["resolved", "closed"].includes(status)
     ).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
     <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
+    {item.type === "task" && <label>Completion method<select value={form.completionMode} onChange={e => setForm({ ...form, completionMode: e.target.value })}><option value="individual">Individual — every assignee completes their part</option><option value="group">Group — one assignee completes for everyone</option></select><small>Changing this reopens the task and clears current completion checks. Earlier notes and files remain in the history.</small></label>}
     <AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} />
     <label>{t("dueDate")}<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
     <button className="button button-primary button-block" onClick={save} disabled={busy || Boolean(statusBusy)}>{busy ? "Saving…" : "Save changes"}</button></>}
@@ -120,21 +122,22 @@ function CompleteTaskModal({ item, onClose, onCompleted }: { item: any; onClose:
     try { await api(`/api/staff/tickets/${item.id}/complete`, { method: "POST", body }); onCompleted(); }
     catch (failure) { setError((failure as Error).message); setBusy(false); }
   };
-  return <Modal title={`${item.type === "task" && item.assignee_total ? "Complete my part of" : "Complete"} ${item.ticket_no}`} onClose={onClose} wide><form className="form-stack" onSubmit={submit}>
-    <p className="muted">Add a short result and up to 3 documents or photos. Your completion and evidence are recorded separately from the other assignees.</p>
-    {item.type === "task" && item.assignee_total > 1 && <div className="notice notice-success">The shared task closes when all {item.assignee_total} assignees finish.</div>}
-    {item.project_id && item.type === "task" && <div className="notice notice-success">Your part contributes to the project’s separate task completion percentage.</div>}
+  const groupTask = item.type === "task" && item.completion_mode === "group";
+  return <Modal title={`${groupTask ? "Complete group task" : item.type === "task" && item.assignee_total ? "Complete my part of" : "Complete"} ${item.ticket_no}`} onClose={onClose} wide><form className="form-stack" onSubmit={submit}>
+    <p className="muted">Add a short result and up to 3 documents or photos. {groupTask ? "This submission completes the task for the whole team." : "Your completion and evidence are recorded separately from the other assignees."}</p>
+    {item.type === "task" && item.assignee_total > 1 && !groupTask && <div className="notice notice-success">The shared task closes when all {item.assignee_total} assignees finish.</div>}
+    {item.project_id && item.type === "task" && <div className="notice notice-success">{groupTask ? "Completing this group task adds it to the project's separate task completion percentage." : "Your part contributes to the project’s separate task completion percentage."}</div>}
     <ErrorNotice message={error} />
     <label>Completion note (optional)<textarea rows={4} maxLength={5000} value={note} onChange={event => setNote(event.target.value)} placeholder="What was delivered?" /></label>
     <label>Documents or photos (optional)<input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={event => setFiles(Array.from(event.target.files ?? []))} /><small>Up to 3 files, 5 MB each.</small></label>
     {files.length > 0 && <div className="completion-file-list">{files.map((file, index) => <span key={`${file.name}-${index}`}>{file.name}</span>)}</div>}
-    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || files.length > 3}>{busy ? "Submitting…" : item.type === "task" && item.assignee_total ? "Submit my part" : "Mark complete"}</button></div>
+    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || files.length > 3}>{busy ? "Submitting…" : groupTask ? "Complete for team" : item.type === "task" && item.assignee_total ? "Submit my part" : "Mark complete"}</button></div>
   </form></Modal>;
 }
 
 function CompletionEvidence({ data }: { data: any }) {
   const completions = data.comments.filter((comment: any) => comment.is_completion);
-  const assignees = data.item.type === "task" ? data.item.assignees || [] : [];
+  const assignees = data.item.type === "task" && data.item.completion_mode !== "group" ? data.item.assignees || [] : [];
   if (!completions.length && !assignees.length) return null;
   const currentCommentIds = new Set(assignees.map((assignee: any) => assignee.completion_comment_id).filter(Boolean));
   const historical = assignees.length ? completions.filter((comment: any) => !currentCommentIds.has(comment.id)) : [];

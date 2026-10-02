@@ -5,14 +5,14 @@ export function withTaskProgress<T extends { id: number }>(projects: T[]): Array
   const ids = [...new Set(projects.map(project => project.id))];
   for (let start = 0; start < ids.length; start += 500) {
     const batch = ids.slice(start, start + 500);
-    const rows = db.prepare(`SELECT w.project_id, w.status,
+    const rows = db.prepare(`SELECT w.project_id, w.status, w.completion_mode,
       COUNT(a.user_id) AS assignee_total, COUNT(a.completed_at) AS assignee_completed
       FROM work_items w LEFT JOIN work_item_assignees a ON a.work_item_id = w.id
       WHERE w.type = 'task' AND w.project_id IN (${batch.map(() => "?").join(",")})
-      GROUP BY w.id`).all(...batch) as Array<{ project_id: number; status: string; assignee_total: number; assignee_completed: number }>;
+      GROUP BY w.id`).all(...batch) as Array<{ project_id: number; status: string; completion_mode: string; assignee_total: number; assignee_completed: number }>;
     for (const row of rows) {
       const current = totals.get(row.project_id) ?? { task_total: 0, task_completed: 0, completion_units: 0 };
-      const fraction = row.assignee_total
+      const fraction = row.completion_mode === "group" ? (["resolved", "closed"].includes(row.status) ? 1 : 0) : row.assignee_total
         ? row.assignee_completed / row.assignee_total
         : ["resolved", "closed"].includes(row.status) ? 1 : 0;
       current.task_total += 1;

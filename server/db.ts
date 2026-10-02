@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS work_items (
   ticket_no TEXT NOT NULL UNIQUE,
   project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
   type TEXT NOT NULL CHECK(type IN ('task','issue')),
+  completion_mode TEXT NOT NULL DEFAULT 'individual' CHECK(completion_mode IN ('individual','group')),
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high','critical')),
@@ -440,6 +441,7 @@ const needsAssigneeCompletionMigration = !(db.prepare("PRAGMA table_info(work_it
   .some(column => column.name === "completed_at");
 ensureColumn("work_item_assignees", "completed_at", "TEXT");
 ensureColumn("work_item_assignees", "completion_comment_id", "INTEGER");
+ensureColumn("work_items", "completion_mode", "TEXT NOT NULL DEFAULT 'individual' CHECK(completion_mode IN ('individual','group'))");
 ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
 ensureColumn("showcase_projects", "category", "TEXT NOT NULL DEFAULT ''");
@@ -481,7 +483,7 @@ if (needsAssigneeCompletionMigration) {
       SELECT 1 FROM work_items w WHERE w.id = a.work_item_id AND w.status IN ('resolved', 'closed')
     ) AND (SELECT COUNT(*) FROM work_item_assignees other WHERE other.work_item_id = a.work_item_id) = 1`);
     db.exec(`UPDATE work_items SET status = 'in_progress', resolved_at = NULL, updated_at = CURRENT_TIMESTAMP
-      WHERE type = 'task' AND status IN ('resolved', 'closed')
+      WHERE type = 'task' AND completion_mode = 'individual' AND status IN ('resolved', 'closed')
         AND EXISTS (SELECT 1 FROM work_item_assignees a WHERE a.work_item_id = work_items.id AND a.completed_at IS NULL)`);
   })();
 }

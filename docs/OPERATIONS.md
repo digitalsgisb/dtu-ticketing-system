@@ -5,8 +5,8 @@
 - Check the dashboard for untriaged requests, unassigned issues, overdue work, and low storage.
 - Make public comments only when they are appropriate for the reporter.
 - Resolve work first, then close it after the reporter or DTU confirms completion.
-- Each assignee uses **Complete my part** to save their own note and up to three photos or documents. The task detail shows every person's completion and evidence; a shared task closes only after everyone finishes. A lead or admin can reopen it if all assignees need to submit again.
-- Project task completion is displayed separately from manually published delivery progress. Each completed assignee contributes their share of a project task's percentage; the task counts as fully done only after all its assignees finish. General tasks do not affect project percentages.
+- Choose **Individual** for a task that requires each assignee to complete their part and submit their own note and up to three photos or documents. It closes when everyone finishes. Choose **Group** when one assignee should submit the team's completion and evidence; that submission closes the task for everyone. A lead or admin can change the method in task settings. Changing it reopens the task and resets active completion checks while preserving earlier notes and files in the history.
+- Project task completion is displayed separately from manually published delivery progress. Individual tasks contribute each assignee's share; group tasks contribute when the team submission is complete. General tasks do not affect project percentages.
 
 ## Weekly
 
