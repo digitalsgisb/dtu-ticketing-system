@@ -6,6 +6,7 @@
 - Make public comments only when they are appropriate for the reporter.
 - Resolve work first, then close it after the reporter or DTU confirms completion.
 - Choose **Individual** for a task that requires each assignee to complete their part and submit their own note and up to three photos or documents. It closes when everyone finishes. Choose **Group** when one assignee should submit the team's completion and evidence; that submission closes the task for everyone. A lead or admin can change the method in task settings. Changing it reopens the task and resets active completion checks while preserving earlier notes and files in the history.
+- To submit a result, open the assigned task, choose **Submit my work** (Individual) or **Submit for the team** (Group), write a note or choose at least one document/photo, then confirm. Attach up to three files of 5 MB each. The note and files appear in **Completion evidence** on the task page after submission.
 - Project task completion is displayed separately from manually published delivery progress. Individual tasks contribute each assignee's share; group tasks contribute when the team submission is complete. General tasks do not affect project percentages.
 
 ## Weekly

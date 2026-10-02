@@ -10,6 +10,7 @@ import { useAuth } from "../auth";
 export function TicketDetailPage() {
   const { id } = useParams();
   const { t } = useI18n();
+  const { user } = useAuth();
   const [data, setData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [error, setError] = useState("");
@@ -19,33 +20,36 @@ export function TicketDetailPage() {
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const item = data.item;
+  const memberTask = user?.role === "member" && item.type === "task";
 
   return <>
     <PageHeader eyebrow={`${item.ticket_no} · ${item.type}`} title={item.title} description={item.project_name ? `Part of ${item.project_name}` : "General DTU work"} actions={<div className="ticket-header-badges"><Badge value={item.priority} kind="priority" /><Badge value={item.status} /></div>} />
-    <div className="detail-layout">
+    <div className={`detail-layout${memberTask ? " ticket-assignee-layout" : ""}`}>
       <div className="detail-main">
         <section className="panel">
           <div className="panel-heading"><div><span className="eyebrow">Work brief</span><h2>{t("description")}</h2></div></div>
           <p className="long-copy">{item.description || "No description has been added."}</p>
           {item.reporter_name && <div className="reporter-card"><div className="avatar">{item.reporter_name[0]}</div><div><small>{t("reporter")}</small><strong>{item.reporter_name}</strong><span>{[item.reporter_department, item.reporter_email, item.reporter_phone].filter(Boolean).join(" · ")}</span></div></div>}
         </section>
+        {memberTask && <TicketSidebar item={item} users={users} onUpdated={load} memberView />}
         <CompletionEvidence data={data} />
         <CommentsPanel data={data} item={item} onUpdated={load} />
         {data.auditEvents.length > 0 && <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Accountability</span><h2>Audit history</h2></div></div>
           <div className="timeline">{data.auditEvents.map((event: any) => <div className="timeline-item" key={event.id}><i /><div><strong>{event.actor_name}</strong><span>{event.action.replaceAll("_"," ")}</span><small>{formatDate(event.created_at, true)}</small></div></div>)}</div>
         </section>}
       </div>
-      <TicketSidebar item={item} users={users} onUpdated={load} />
+      {!memberTask && <TicketSidebar item={item} users={users} onUpdated={load} />}
     </div>
   </>;
 }
 
-function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; onUpdated: () => void }) {
+function TicketSidebar({ item, users, onUpdated, memberView = false }: { item: any; users: any[]; onUpdated: () => void; memberView?: boolean }) {
   const { t } = useI18n();
   const { user } = useAuth();
   const canManageTask = user?.role === "admin" || user?.role === "lead";
   const groupTask = item.type === "task" && item.completion_mode === "group";
   const myAssignment = item.type === "task" ? item.assignees?.find((assignee: { id: number }) => assignee.id === user?.id) : null;
+  const memberHeading = !myAssignment ? "Task details" : ["resolved", "closed"].includes(item.status) && groupTask ? "Team task complete" : myAssignment.completed_at ? "Your work submitted" : "Submit your work";
   const canComplete = !["resolved", "closed"].includes(item.status) && (item.type !== "task" ||
     (item.assignee_total ? Boolean(myAssignment && (groupTask || !myAssignment.completed_at)) : canManageTask));
   const canEditSettings = item.type !== "task" || canManageTask;
@@ -85,13 +89,16 @@ function TicketSidebar({ item, users, onUpdated }: { item: any; users: any[]; on
     catch (err) { setError((err as Error).message); }
     finally { setBusy(false); }
   };
-  return <aside className="panel detail-sidebar ticket-control-panel"><div className="panel-heading"><div><span className="eyebrow">Control</span><h2>Work settings</h2></div></div>
+  return <aside className={`panel detail-sidebar ticket-control-panel${memberView ? " ticket-assignee-panel" : ""}`}><div className="panel-heading"><div><span className="eyebrow">{memberView ? "Your assignment" : "Control"}</span><h2>{memberView ? memberHeading : "Work settings"}</h2></div></div>
     <ErrorNotice message={error} />
+    {memberView && <p className="ticket-assignee-guidance">{!myAssignment ? "You are not assigned to submit this task." : groupTask ? "One assignee can submit the team's result and files. This finishes the task for everyone." : "Submit your result and any files when your part is ready. The task finishes after every assignee submits."}</p>}
     <div className="ticket-quick-actions">
-      {!['in_progress', 'resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask || Boolean(myAssignment && (groupTask || !myAssignment.completed_at))) && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
-      {canComplete && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>{groupTask ? "Complete group task" : item.type === "task" && item.assignee_total ? "Complete my part" : "Complete with evidence"}</button>}
+      {canComplete && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>{groupTask ? "Submit for the team" : item.type === "task" && item.assignee_total ? "Submit my work" : "Complete with evidence"}</button>}
+      {!['in_progress', 'resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask || Boolean(myAssignment && (groupTask || !myAssignment.completed_at))) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
       {['resolved', 'closed'].includes(item.status) && (item.type !== "task" || canManageTask) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Reopening…" : "Reopen work"}</button>}
     </div>
+    {memberView && myAssignment?.completed_at && <p className="ticket-assignee-done">Your work was submitted. You can see your note and files in Completion evidence below.</p>}
+    {memberView && ["resolved", "closed"].includes(item.status) && groupTask && <p className="ticket-assignee-done">The team task is complete. Its submitted evidence is below.</p>}
     {item.type === "task" && item.assignee_total > 0 && <p className="ticket-team-summary">{groupTask ? `Group task · ${item.assignee_total} assignee${item.assignee_total === 1 ? "" : "s"}. One person submits the team's completion.` : `${item.assignee_completed} of ${item.assignee_total} people finished.${myAssignment?.completed_at && !["resolved", "closed"].includes(item.status) ? " Your part is complete; others are still working." : ""}`}</p>}
     {canEditSettings && <><div className="settings-divider"><span>Details & schedule</span></div>
     <label>{t("status")}<select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{statuses.filter(([status]) =>
@@ -114,6 +121,8 @@ function CompleteTaskModal({ item, onClose, onCompleted }: { item: any; onClose:
   const [error, setError] = useState("");
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!note.trim() && !files.length) return setError("Add a short note or choose at least one file before submitting.");
+    if (files.length > 3 || files.some(file => file.size > 5 * 1024 * 1024)) return setError("Choose up to 3 files, 5 MB each.");
     setBusy(true);
     setError("");
     const body = new FormData();
@@ -123,15 +132,13 @@ function CompleteTaskModal({ item, onClose, onCompleted }: { item: any; onClose:
     catch (failure) { setError((failure as Error).message); setBusy(false); }
   };
   const groupTask = item.type === "task" && item.completion_mode === "group";
-  return <Modal title={`${groupTask ? "Complete group task" : item.type === "task" && item.assignee_total ? "Complete my part of" : "Complete"} ${item.ticket_no}`} onClose={onClose} wide><form className="form-stack" onSubmit={submit}>
-    <p className="muted">Add a short result and up to 3 documents or photos. {groupTask ? "This submission completes the task for the whole team." : "Your completion and evidence are recorded separately from the other assignees."}</p>
-    {item.type === "task" && item.assignee_total > 1 && !groupTask && <div className="notice notice-success">The shared task closes when all {item.assignee_total} assignees finish.</div>}
-    {item.project_id && item.type === "task" && <div className="notice notice-success">{groupTask ? "Completing this group task adds it to the project's separate task completion percentage." : "Your part contributes to the project’s separate task completion percentage."}</div>}
+  return <Modal title={groupTask ? "Submit for the team" : "Submit your work"} onClose={onClose}><form className="form-stack task-completion-form" onSubmit={submit}>
+    <p className="task-completion-context"><strong>{item.ticket_no} · {item.title}</strong><span>{groupTask ? "This submission completes the task for everyone." : item.assignee_total > 1 ? `Your submission is recorded separately. The task finishes when all ${item.assignee_total} assignees submit.` : "This submission completes your task."}</span></p>
     <ErrorNotice message={error} />
-    <label>Completion note (optional)<textarea rows={4} maxLength={5000} value={note} onChange={event => setNote(event.target.value)} placeholder="What was delivered?" /></label>
-    <label>Documents or photos (optional)<input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={event => setFiles(Array.from(event.target.files ?? []))} /><small>Up to 3 files, 5 MB each.</small></label>
-    {files.length > 0 && <div className="completion-file-list">{files.map((file, index) => <span key={`${file.name}-${index}`}>{file.name}</span>)}</div>}
-    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || files.length > 3}>{busy ? "Submitting…" : groupTask ? "Complete for team" : item.type === "task" && item.assignee_total ? "Submit my part" : "Mark complete"}</button></div>
+    <label>What did you complete?<textarea rows={4} maxLength={5000} value={note} onChange={event => setNote(event.target.value)} placeholder="Describe the result or work delivered…" /><small>Optional if you attach a file.</small></label>
+    <label>Add photos or documents<input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={event => { setFiles(Array.from(event.target.files ?? [])); setError(""); }} /><small>Choose up to 3 files, 5 MB each. A note or file is required.</small></label>
+    {files.length > 0 && <div className="completion-file-list" aria-live="polite">{files.map((file, index) => <span key={`${file.name}-${index}`}>📎 {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span>)}</div>}
+    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || (!note.trim() && !files.length) || files.length > 3 || files.some(file => file.size > 5 * 1024 * 1024)}>{busy ? "Submitting…" : groupTask ? "Complete team task" : "Submit completion"}</button></div>
   </form></Modal>;
 }
 

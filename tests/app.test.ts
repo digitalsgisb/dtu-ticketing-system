@@ -183,7 +183,7 @@ describe("DTU Control Centre API", () => {
     expect(finishedAgain.status).toBe(200);
 
     const generalCompleted = await request(app).post(`/api/staff/tickets/${general.body.id}/complete`)
-      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "General task finished")
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "")
       .attach("attachments", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "result.jpg", contentType: "image/jpeg" });
     expect(generalCompleted.status).toBe(200);
     const generalDetail = await request(app).get(`/api/staff/tickets/${general.body.id}`).set("Cookie", cookie);
@@ -308,6 +308,9 @@ describe("DTU Control Centre API", () => {
     expect(blockedClose.status).toBe(409);
     const before = await request(app).get(`/api/staff/projects/${project.body.id}`).set("Cookie", cookie);
     expect(before.body.project).toMatchObject({ task_total: 1, task_completed: 0, task_progress: 0 });
+    const empty = await request(app).post(`/api/staff/tickets/${task.body.id}/complete`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf).field("note", "");
+    expect(empty.status).toBe(400);
 
     const completed = await request(app).post(`/api/staff/tickets/${task.body.id}/complete`)
       .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)

@@ -1250,6 +1250,7 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
     const parsed = z.object({ note: z.string().trim().max(5000).default("") }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Completion note is too long" });
     const files = (req.files as Express.Multer.File[]) ?? [];
+    if (!parsed.data.note && !files.length) return res.status(400).json({ error: "Add a completion note or attach at least one file" });
     if (files.some(file => !validProposalUpload(file))) return res.status(400).json({ error: "Attach valid pictures, PDF, Office documents, or text files" });
     if (!(await storageAvailable(files.reduce((total, file) => total + file.size, 0)))) return res.status(507).json({ error: "Storage capacity is too low" });
     for (const file of files) {
