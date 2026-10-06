@@ -1239,7 +1239,8 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
     if (!item) return res.status(404).json({ error: "Work item not found" });
     if (["resolved", "closed"].includes(item.status)) return res.status(409).json({ error: "This work item is already complete" });
     const assignees = assigneesFor(item.id);
-    if (assignees.length && !assignees.some(user => user.id === authReq.user.id))
+    const canCompleteForTeam = item.completion_mode === "group" && ["admin", "lead"].includes(authReq.user.role);
+    if (assignees.length && !assignees.some(user => user.id === authReq.user.id) && !canCompleteForTeam)
       return res.status(403).json({ error: "Only an assigned person can complete their part of this work item" });
     if (!assignees.length && authReq.user.role === "member")
       return res.status(403).json({ error: "This work item must be assigned before you can complete it" });

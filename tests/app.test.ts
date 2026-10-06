@@ -392,6 +392,33 @@ describe("DTU Control Centre API", () => {
     expect(defaultDetail.body.item.completion_mode).toBe("group");
   });
 
+  it.each(["issue", "task"])("lets an unassigned admin complete group %s with evidence", async type => {
+    const create = async (completionMode: string, assigneeId: number) => request(app).post("/api/staff/tickets")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ type, completionMode, title: "Team work managed by administrator", assigneeIds: [assigneeId], status: "assigned" });
+    const group = await create("group", managedUserId);
+    expect(group.status).toBe(201);
+    const empty = await request(app).post(`/api/staff/tickets/${group.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "");
+    expect(empty.status).toBe(400);
+    const complete = await request(app).post(`/api/staff/tickets/${group.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "Administrator verified the team's delivery");
+    expect(complete.status).toBe(200);
+    expect(complete.body.allComplete).toBe(true);
+    const detail = await request(app).get(`/api/staff/tickets/${group.body.id}`).set("Cookie", cookie);
+    expect(detail.body.item).toMatchObject({ status: "resolved", assignee_total: 1 });
+    expect(detail.body.comments.find((comment: { is_completion: number }) => comment.is_completion))
+      .toMatchObject({ author_user_id: adminUserId, body: "Administrator verified the team's delivery" });
+    const individual = await create("individual", managedUserId);
+    const blockedIndividual = await request(app).post(`/api/staff/tickets/${individual.body.id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "Cannot submit another person's part");
+    expect(blockedIndividual.status).toBe(403);
+    const memberGroup = await create("group", adminUserId);
+    const blockedMember = await request(app).post(`/api/staff/tickets/${memberGroup.body.id}/complete`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf).field("note", "Not assigned to this team");
+    expect(blockedMember.status).toBe(403);
+  });
+
   it("creates a project and accepts a QR issue report", async () => {
     const created = await request(app).post("/api/staff/projects")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

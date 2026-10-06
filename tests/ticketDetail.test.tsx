@@ -15,14 +15,18 @@ vi.mock("../src/api", async importOriginal => ({ ...await importOriginal<typeof 
 let root: Root;
 let host: HTMLDivElement;
 let itemType: "task" | "issue";
+let completionMode: "individual" | "group";
+let assigned: boolean;
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   session.role = "admin";
   itemType = "task";
+  completionMode = "individual";
+  assigned = false;
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation(async url => url.endsWith("/users") ? [] : {
-    item: { id: 42, title: "Fix retention", description: "One day", type: itemType, completion_mode: "individual", status: "in_progress", priority: "high", source: "staff", assignees: [], assignee_total: 0 },
+    item: { id: 42, title: "Fix retention", description: "One day", type: itemType, completion_mode: completionMode, status: "in_progress", priority: "high", source: "staff", assignees: assigned ? [{ id: 2, name: "Teammate", completed_at: null }] : [], assignee_total: assigned ? 1 : 0 },
     comments: [
       { id: 10, author_name: "Admin", author_user_id: 1, body: "See this screenshot" },
       { id: 11, author_name: "Teammate", author_user_id: 2, body: "Another update" }
@@ -97,4 +101,35 @@ it("does not offer issue editing to members", async () => {
   itemType = "issue";
   await render();
   expect(host.textContent).not.toContain("Edit issue");
+});
+
+it.each([
+  ["issue", "admin"], ["issue", "lead"], ["task", "admin"], ["task", "lead"]
+] as const)("lets an unassigned %s %s open group completion", async (type, role) => {
+  itemType = type;
+  session.role = role;
+  completionMode = "group";
+  assigned = true;
+  await render();
+  const button = Array.from(host.querySelectorAll("button")).find(button => button.textContent === "Complete for the team");
+  expect(button).toBeDefined();
+  await act(async () => button!.click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Complete team work");
+});
+
+it.each(["admin", "lead", "member"])("keeps individual completion assigned to each person for %s", async role => {
+  session.role = role;
+  itemType = "issue";
+  assigned = true;
+  await render();
+  expect(host.querySelector(".ticket-quick-actions")?.textContent).not.toContain("Submit my work");
+});
+
+it("keeps unassigned members from completing group work", async () => {
+  session.role = "member";
+  itemType = "issue";
+  completionMode = "group";
+  assigned = true;
+  await render();
+  expect(host.querySelector(".ticket-quick-actions")?.textContent).not.toContain("Complete for the team");
 });

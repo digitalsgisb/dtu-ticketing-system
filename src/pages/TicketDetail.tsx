@@ -79,7 +79,8 @@ function TicketSidebar({ item, users, onUpdated, memberView = false }: { item: a
   const groupTask = item.completion_mode === "group";
   const myAssignment = item.assignees?.find((assignee: { id: number }) => assignee.id === user?.id);
   const memberHeading = !myAssignment ? "Work details" : ["resolved", "closed"].includes(item.status) && groupTask ? "Team work complete" : myAssignment.completed_at ? "Your work submitted" : "Submit your work";
-  const canComplete = !["resolved", "closed"].includes(item.status) && (item.assignee_total ? Boolean(myAssignment && (groupTask || !myAssignment.completed_at)) : canManageTask);
+  const canComplete = !["resolved", "closed"].includes(item.status) &&
+    ((groupTask && canManageTask) || (item.assignee_total ? Boolean(myAssignment && (groupTask || !myAssignment.completed_at)) : canManageTask));
   const canEditSettings = canManageTask;
   const statuses = [
     ["new", "New"],
@@ -121,7 +122,7 @@ function TicketSidebar({ item, users, onUpdated, memberView = false }: { item: a
     <ErrorNotice message={error} />
     {memberView && <p className="ticket-assignee-guidance">{!myAssignment ? "You are not assigned to submit this work item." : groupTask ? "One assignee can submit the team's result and files. This finishes the work item for everyone." : "Submit your result and any files when your part is ready. The work finishes after every assignee submits."}</p>}
     <div className="ticket-quick-actions">
-      {canComplete && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>{groupTask ? "Submit for the team" : item.assignee_total ? "Submit my work" : "Complete with evidence"}</button>}
+      {canComplete && <button type="button" className="button button-primary" disabled={Boolean(statusBusy) || busy} onClick={() => setShowComplete(true)}>{groupTask ? "Complete for the team" : item.assignee_total ? "Submit my work" : "Complete with evidence"}</button>}
       {!['in_progress', 'resolved', 'closed'].includes(item.status) && (canManageTask || Boolean(myAssignment && (groupTask || !myAssignment.completed_at))) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Starting…" : "Start work"}</button>}
       {['resolved', 'closed'].includes(item.status) && (canManageTask) && <button type="button" className="button button-secondary" disabled={Boolean(statusBusy) || busy} onClick={() => void changeStatus("in_progress")}>{statusBusy === "in_progress" ? "Reopening…" : "Reopen work"}</button>}
     </div>
@@ -166,7 +167,7 @@ function CompleteTaskModal({ item, onClose, onCompleted }: { item: any; onClose:
     <label>What did you complete?<textarea rows={4} maxLength={5000} value={note} onChange={event => setNote(event.target.value)} placeholder="Describe the result or work delivered…" /><small>Optional if you attach a file.</small></label>
     <label>Add photos or documents<input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onChange={event => { setFiles(Array.from(event.target.files ?? [])); setError(""); }} /><small>Choose up to 3 files, 5 MB each. A note or file is required.</small></label>
     {files.length > 0 && <div className="completion-file-list" aria-live="polite">{files.map((file, index) => <span key={`${file.name}-${index}`}>📎 {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span>)}</div>}
-    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || (!note.trim() && !files.length) || files.length > 3 || files.some(file => file.size > 5 * 1024 * 1024)}>{busy ? "Submitting…" : groupTask ? "Complete team task" : "Submit completion"}</button></div>
+    <div className="form-actions"><button type="button" className="button button-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" disabled={busy || (!note.trim() && !files.length) || files.length > 3 || files.some(file => file.size > 5 * 1024 * 1024)}>{busy ? "Submitting…" : groupTask ? "Complete team work" : "Submit completion"}</button></div>
   </form></Modal>;
 }
 
