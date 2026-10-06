@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
@@ -14,6 +14,7 @@ export function TicketDetailPage() {
   const [data, setData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
   const load = () => api(`/api/staff/tickets/${id}`).then(setData).catch(e => setError(e.message));
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, [id]);
   useLiveRefresh(load);
@@ -23,7 +24,8 @@ export function TicketDetailPage() {
   const memberTask = user?.role === "member" && item.type === "task";
 
   return <>
-    <PageHeader eyebrow={`${item.ticket_no} · ${item.type}`} title={item.title} description={item.project_name ? `Part of ${item.project_name}` : "General DTU work"} actions={<div className="ticket-header-badges"><Badge value={item.priority} kind="priority" /><Badge value={item.status} /></div>} />
+    <PageHeader eyebrow={`${item.ticket_no} · ${item.type}`} title={item.title} description={item.project_name ? `Part of ${item.project_name}` : "General DTU work"} actions={<div className="ticket-header-badges"><Badge value={item.priority} kind="priority" /><Badge value={item.status} />{item.type === "task" && (user?.role === "admin" || user?.role === "lead") && <button className="button button-secondary" onClick={() => setEditing(true)}>Edit task</button>}</div>} />
+    {editing && <EditTaskModal item={item} users={users} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
     <div className={`detail-layout${memberTask ? " ticket-assignee-layout" : ""}`}>
       <div className="detail-main">
         <section className="panel">
@@ -41,6 +43,33 @@ export function TicketDetailPage() {
       {!memberTask && <TicketSidebar item={item} users={users} onUpdated={load} />}
     </div>
   </>;
+}
+
+function EditTaskModal({ item, users, onClose, onSaved }: { item: any; users: any[]; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ title: item.title as string, description: item.description || "", priority: item.priority,
+    completionMode: item.completion_mode || "individual", assigneeIds: (item.assignees || []).map((assignee: { id: number }) => assignee.id) as number[], dueDate: item.due_date || "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError("");
+    try { await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...form, dueDate: form.dueDate || null })); onSaved(); }
+    catch (failure) { setError((failure as Error).message); setBusy(false); }
+  };
+  return <Modal title="Edit task" onClose={() => { if (!busy) onClose(); }}><form className="form-stack" onSubmit={submit}>
+    <ErrorNotice message={error} />
+    <fieldset className="task-edit-fields" disabled={busy}>
+      <label>Title<input required minLength={3} maxLength={200} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
+      <label>Description<textarea rows={4} maxLength={5000} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
+      <label>Completion method<select value={form.completionMode} onChange={e => setForm({ ...form, completionMode: e.target.value })}><option value="individual">Individual — every assignee completes their part</option><option value="group">Group — one assignee completes for everyone</option></select></label>
+      {form.completionMode !== item.completion_mode && <p className="ticket-assignee-guidance" role="status">Changing the completion method reopens this task and resets completion checks. Existing updates and evidence stay in the history.</p>}
+      <AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} />
+      <label>Priority<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
+      <label>Due date<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
+    </fieldset>
+    <div className="form-actions"><button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="button button-primary" disabled={busy || form.title.trim().length < 3}>{busy ? "Saving…" : "Save changes"}</button></div>
+  </form></Modal>;
 }
 
 function TicketSidebar({ item, users, onUpdated, memberView = false }: { item: any; users: any[]; onUpdated: () => void; memberView?: boolean }) {
@@ -172,25 +201,66 @@ function CompletionEvidence({ data }: { data: any }) {
   </section>;
 }
 
+type ConversationAttachment = { id: number; original_name: string; mime_type: string; size: number; comment_id: number | null };
+
+function ConversationFiles({ files }: { files: ConversationAttachment[] }) {
+  return <div className="chat-files">{files.map(file => {
+    const isImage = ["image/jpeg", "image/png", "image/webp"].includes(file.mime_type);
+    const previewable = isImage || file.mime_type === "application/pdf";
+    return <a className="chat-file" key={file.id} href={`/api/staff/attachments/${file.id}${previewable ? "/preview" : ""}`} target={previewable ? "_blank" : undefined} rel={previewable ? "noopener noreferrer" : undefined}>
+      {isImage && <img src={`/api/staff/attachments/${file.id}/preview`} alt={file.original_name} loading="lazy" />}
+      <span>{isImage ? "" : "📎 "}{file.original_name}<small>{Math.ceil(file.size / 1024)} KB · {previewable ? "Open" : "Download"}</small></span>
+    </a>;
+  })}</div>;
+}
+
 function CommentsPanel({ data, item, onUpdated }: { data: any; item: any; onUpdated: () => void }) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [body, setBody] = useState("");
   const [publicVisible, setPublicVisible] = useState(false);
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const urls = files.map(file => ["image/jpeg", "image/png", "image/webp"].includes(file.type) ? URL.createObjectURL(file) : "");
+    setPreviews(urls);
+    return () => urls.forEach(url => { if (url) URL.revokeObjectURL(url); });
+  }, [files]);
   const [error, setError] = useState("");
   const comments = data.comments.filter((comment: any) => !comment.is_completion);
-  const attachments = data.attachments.filter((attachment: any) => !data.comments.some((comment: any) => comment.is_completion && comment.id === attachment.comment_id));
+  const attachments = data.attachments.filter((file: ConversationAttachment) => file.comment_id == null);
   const submit = async (e: FormEvent) => {
-    e.preventDefault(); setError("");
+    e.preventDefault();
+    if (busy) return;
+    if (!body.trim()) return setError("Write a short update to send with your files.");
+    if (files.length > 3 || files.some(file => file.size > 5 * 1024 * 1024)) return setError("Choose up to 3 files, 5 MB each.");
+    setError(""); setBusy(true);
     const form = new FormData(); form.set("body", body); form.set("publicVisible", String(publicVisible));
     Array.from(files ?? []).forEach(file => form.append("attachments", file));
-    try { await api(`/api/staff/tickets/${item.id}/comments`, { method: "POST", body: form }); setBody(""); setFiles(null); onUpdated(); }
+    try { await api(`/api/staff/tickets/${item.id}/comments`, { method: "POST", body: form }); setBody(""); setFiles([]); if (fileInput.current) fileInput.current.value = ""; onUpdated(); }
     catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
   };
   return <section className="panel"><div className="panel-heading"><div><span className="eyebrow">Conversation</span><h2>{t("comments")}</h2></div></div>
     <ErrorNotice message={error} />
-    {comments.length ? <div className="comment-list">{comments.map((comment: any) => <article className="comment" key={comment.id}><div className="avatar">{comment.author_name[0]}</div><div><div><strong>{comment.author_name}</strong><span>{formatDate(comment.created_at, true)}</span>{comment.public_visible ? <Badge value="public" kind="type" /> : null}</div><p>{comment.body}</p></div></article>)}</div> : <Empty title="No updates yet" />}
-    {attachments.length > 0 && <div className="attachment-list">{attachments.map((a: any) => <a href={`/api/staff/attachments/${a.id}`} key={a.id}>📎 {a.original_name} <small>{Math.ceil(a.size / 1024)} KB</small></a>)}</div>}
-    <form className="comment-form" onSubmit={submit}><textarea required rows={3} placeholder="Write a useful update…" value={body} onChange={e => setBody(e.target.value)} /><div><label className="checkbox"><input type="checkbox" checked={publicVisible} onChange={e => setPublicVisible(e.target.checked)} />{t("publicUpdate")}</label><input className="file-input" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple onChange={e => setFiles(e.target.files)} /><button className="button button-primary">{t("addComment")}</button></div></form>
+    {comments.length ? <div className="chat-messages">{comments.map((comment: any) => <article className={`chat-message${comment.author_user_id === user?.id ? " is-own" : ""}`} key={comment.id}>
+      <div className="avatar" aria-hidden="true">{comment.author_name?.[0] || "?"}</div>
+      <div className="chat-bubble"><div className="chat-meta"><strong>{comment.author_name}</strong><time>{formatDate(comment.created_at, true)}</time>{comment.public_visible ? <Badge value="public" kind="type" /> : null}</div>
+        <p>{comment.body}</p><ConversationFiles files={data.attachments.filter((file: ConversationAttachment) => file.comment_id === comment.id)} />
+      </div>
+    </article>)}</div> : <Empty title="No updates yet" />}
+    {attachments.length > 0 && <div className="chat-original-files"><h3>Original attachments</h3><ConversationFiles files={attachments} /></div>}
+    <form className="comment-form" onSubmit={submit}>
+      <textarea aria-label="Write an update" required maxLength={5000} rows={3} placeholder="Write a useful update…" value={body} disabled={busy} onChange={e => setBody(e.target.value)} />
+      {files.length > 0 && <ul className="chat-pending-files">{files.map((file, index) => <li key={`${file.name}-${index}`}>
+        {previews[index] && <img src={previews[index]} alt={`Preview of ${file.name}`} />}<span>{file.name}</span><button type="button" className="icon-button" aria-label={`Remove ${file.name}`} disabled={busy} onClick={() => { setFiles(current => current.filter((_, i) => i !== index)); if (fileInput.current) fileInput.current.value = ""; }}>×</button>
+      </li>)}</ul>}
+      <div><label className="checkbox"><input type="checkbox" checked={publicVisible} disabled={busy} onChange={e => setPublicVisible(e.target.checked)} />{t("publicUpdate")}</label>
+        <label className="chat-upload">Attach photos or PDF<input ref={fileInput} className="file-input" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple disabled={busy} onChange={e => { setFiles(Array.from(e.target.files ?? [])); setError(""); }} /><small>Up to 3 files, 5 MB each</small></label>
+        <button className="button button-primary" disabled={busy || !body.trim() || files.length > 3 || files.some(file => file.size > 5 * 1024 * 1024)}>{busy ? "Sending…" : "Send update"}</button>
+      </div>
+    </form>
   </section>;
 }
