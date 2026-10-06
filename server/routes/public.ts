@@ -353,9 +353,9 @@ publicRouter.post("/projects/:token/issues", publicLimiter, upload.array("attach
     const transaction = db.transaction(() => {
       const ticketNo = nextIdentifier("TKT");
       const result = db.prepare(`
-        INSERT INTO work_items(ticket_no, project_id, type, title, description, priority, status,
+        INSERT INTO work_items(ticket_no, project_id, type, completion_mode, title, description, priority, status,
           reporter_name, reporter_department, reporter_email, reporter_phone, source)
-        VALUES (?, ?, 'issue', ?, ?, ?, 'new', ?, ?, ?, ?, 'qr')
+        VALUES (?, ?, 'issue', 'group', ?, ?, ?, 'new', ?, ?, ?, ?, 'qr')
       `).run(ticketNo, project.id, cleanText(parsed.data.title, 200), cleanText(parsed.data.description), parsed.data.urgency,
         cleanText(parsed.data.reporterName, 120), cleanText(parsed.data.department, 150), parsed.data.email || null, cleanText(parsed.data.phone, 50));
       const workItemId = Number(result.lastInsertRowid);

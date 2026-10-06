@@ -52,7 +52,7 @@ export function TicketsPage() {
       <div className="table-head"><span>Reference</span><span>Work item</span><span>Project</span><span>{t("assignee")}</span><span>{t("dueDate")}</span><span>{t("status")}</span></div>
       {filtered.map(item => <Link to={`/tickets/${item.id}`} className="table-row" key={item.id}>
         <span><strong className="mono">{item.ticket_no}</strong><small><Badge value={item.priority} kind="priority" /></small></span>
-        <span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" />{item.type === "task" && item.assignee_total > 1 ? item.completion_mode === "group" ? " Group task" : ` ${item.assignee_completed}/${item.assignee_total} done` : ""}</small></span>
+        <span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" />{item.assignee_total > 1 ? item.completion_mode === "group" ? " Group completion" : ` ${item.assignee_completed}/${item.assignee_total} done` : ""}</small></span>
         <span>{item.project_name || "General"}</span><span>{item.assignee_name || "Unassigned"}</span>
         <span className={item.due_date && new Date(`${item.due_date}T23:59:00`) < new Date() && !["resolved","closed"].includes(item.status) ? "date-overdue" : ""}>{formatDate(item.due_date)}</span>
         <span><Badge value={item.status} /></span>
@@ -80,7 +80,7 @@ function CreateTicket({ projects, users, defaultProject, onClose, onCreated }: {
     </div>
     <label>{t("title")}<input required minLength={3} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
     <label>{t("description")}<textarea rows={5} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
-    {form.type === "task" && <label>Completion method<select value={form.completionMode} onChange={e => setForm({ ...form, completionMode: e.target.value })}><option value="individual">Individual — every assignee completes their part</option><option value="group">Group — one assignee completes for everyone</option></select><small>Choose whether each person submits evidence or the team submits once.</small></label>}
+    <label>Completion method<select value={form.completionMode} onChange={e => setForm({ ...form, completionMode: e.target.value })}><option value="individual">Individual — every assignee completes their part</option><option value="group">Group — one assignee completes for everyone</option></select><small>Choose whether each person submits evidence or the team submits once.</small></label>
     <div className="form-grid">
       <label>{t("priority")}<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
       <AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} />

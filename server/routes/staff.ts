@@ -1122,7 +1122,7 @@ staffRouter.post("/tickets", (req, res) => {
   const parsed = z.object({
     projectId: z.number().int().positive().nullable().optional(),
     type: z.enum(["task", "issue"]),
-    completionMode: z.enum(["individual", "group"]).default("individual"),
+    completionMode: z.enum(["individual", "group"]).optional(),
     title: z.string().trim().min(3).max(200),
     description: z.string().max(5000).default(""),
     priority: z.enum(priorities).default("medium"),
@@ -1134,14 +1134,14 @@ staffRouter.post("/tickets", (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Invalid work item", details: parsed.error.flatten() });
   const assigneeIds = parsed.data.assigneeIds ?? (parsed.data.assigneeId ? [parsed.data.assigneeId] : []);
   if (!validAssignees(assigneeIds)) return res.status(400).json({ error: "Choose distinct active assignees" });
-  if (parsed.data.type === "task" && assigneeIds.length && ["resolved", "closed"].includes(parsed.data.status))
+  if (assigneeIds.length && ["resolved", "closed"].includes(parsed.data.status))
     return res.status(400).json({ error: "Assigned tasks can be completed only after each assignee submits their work" });
   const ticketNo = nextIdentifier("TKT");
   const id = db.transaction(() => {
   const result = db.prepare(`
     INSERT INTO work_items(ticket_no, project_id, type, completion_mode, title, description, priority, status, assignee_id, due_date, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(ticketNo, parsed.data.projectId ?? null, parsed.data.type, parsed.data.type === "task" ? parsed.data.completionMode : "individual", cleanText(parsed.data.title, 200),
+  `).run(ticketNo, parsed.data.projectId ?? null, parsed.data.type, parsed.data.completionMode ?? (parsed.data.type === "issue" ? "group" : "individual"), cleanText(parsed.data.title, 200),
     cleanText(parsed.data.description), parsed.data.priority, parsed.data.status, assigneeIds[0] ?? null,
     parsed.data.dueDate || null, authReq.user.id);
   const createdId = Number(result.lastInsertRowid);
@@ -1186,25 +1186,25 @@ staffRouter.patch("/tickets/:id", (req, res) => {
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid work item update" });
   const d = parsed.data;
-  if (authReq.user.role === "member" && existing.type === "task") {
+  if (authReq.user.role === "member") {
     const assignment = assigneesFor(Number(req.params.id)).find(user => user.id === authReq.user.id);
     if (!assignment || assignment.completed_at || ["resolved", "closed"].includes(String(existing.status)) ||
         d.assigneeId !== undefined || d.assigneeIds !== undefined || d.title !== undefined ||
         d.description !== undefined || d.priority !== undefined || d.dueDate !== undefined || d.completionMode !== undefined ||
         (d.status !== undefined && !["in_progress", "waiting"].includes(d.status)))
-      return res.status(403).json({ error: "Only a lead or admin can change task settings or reopen completed work" });
+      return res.status(403).json({ error: "Only a lead or admin can change work settings or reopen completed work" });
   }
   const previousAssignees = assigneesFor(Number(req.params.id));
   const previousIds = previousAssignees.map(user => user.id);
   const assigneeIds = d.assigneeIds ?? (d.assigneeId === undefined ? previousIds : d.assigneeId ? [d.assigneeId] : []);
-  const modeChanged = existing.type === "task" && d.completionMode !== undefined && d.completionMode !== existing.completion_mode;
+  const modeChanged = d.completionMode !== undefined && d.completionMode !== existing.completion_mode;
   const completionMode = d.completionMode ?? existing.completion_mode;
   if (new Set(assigneeIds).size !== assigneeIds.length || !validAssignees(assigneeIds.filter(id => !previousIds.includes(id))))
     return res.status(400).json({ error: "Choose distinct active assignees" });
-  if (existing.type === "task" && assigneeIds.length && d.status && ["resolved", "closed"].includes(d.status) && !modeChanged
+  if (assigneeIds.length && d.status && ["resolved", "closed"].includes(d.status) && !modeChanged
       && ((completionMode === "group" && !["resolved", "closed"].includes(String(existing.status))) ||
         (completionMode !== "group" && !assigneeIds.every(id => previousAssignees.some(user => user.id === id && user.completed_at)))))
-    return res.status(409).json({ error: completionMode === "group" ? "Submit the group completion before closing this task" : "Each assignee must complete their part before this task can be closed" });
+    return res.status(409).json({ error: completionMode === "group" ? "Submit the group completion before closing this work item" : "Each assignee must complete their part before this work item can be closed" });
   const nextStatus = modeChanged ? (assigneeIds.length ? "in_progress" : "new") : d.status ?? existing.status;
   db.transaction(() => {
   db.prepare(`
@@ -1212,15 +1212,13 @@ staffRouter.patch("/tickets/:id", (req, res) => {
       resolved_at = CASE WHEN ? IN ('resolved','closed') THEN COALESCE(resolved_at, CURRENT_TIMESTAMP) ELSE NULL END,
       updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(d.title ?? existing.title, d.description ?? existing.description, d.priority ?? existing.priority,
-    nextStatus, existing.type === "task" ? completionMode : "individual", assigneeIds[0] ?? null,
+    nextStatus, completionMode, assigneeIds[0] ?? null,
     d.dueDate === undefined ? existing.due_date : d.dueDate, nextStatus, req.params.id);
   replaceAssignees(Number(req.params.id), assigneeIds);
-  if (existing.type === "task") {
-    if (modeChanged || (["resolved", "closed"].includes(String(existing.status)) && d.status && !["resolved", "closed"].includes(d.status))) {
-      db.prepare("UPDATE work_item_assignees SET completed_at = NULL, completion_comment_id = NULL WHERE work_item_id = ?").run(req.params.id);
-    }
-    reconcileTaskStatus(Number(req.params.id));
+  if (modeChanged || (["resolved", "closed"].includes(String(existing.status)) && d.status && !["resolved", "closed"].includes(d.status))) {
+    db.prepare("UPDATE work_item_assignees SET completed_at = NULL, completion_comment_id = NULL WHERE work_item_id = ?").run(req.params.id);
   }
+  reconcileTaskStatus(Number(req.params.id));
   })();
   for (const userId of assigneeIds.filter(id => !previousIds.includes(id))) notify(userId, "assignment", `${existing.ticket_no} assigned to you`, String(d.title ?? existing.title), `/tickets/${req.params.id}`);
   if (existing.reporter_email && d.status && d.status !== existing.status) {
@@ -1240,13 +1238,13 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
     } | undefined;
     if (!item) return res.status(404).json({ error: "Work item not found" });
     if (["resolved", "closed"].includes(item.status)) return res.status(409).json({ error: "This work item is already complete" });
-    const assignees = item.type === "task" ? assigneesFor(item.id) : [];
-    if (item.type === "task" && assignees.length && !assignees.some(user => user.id === authReq.user.id))
-      return res.status(403).json({ error: "Only an assigned person can complete their part of this task" });
-    if (item.type === "task" && !assignees.length && authReq.user.role === "member")
-      return res.status(403).json({ error: "This task must be assigned before you can complete it" });
+    const assignees = assigneesFor(item.id);
+    if (assignees.length && !assignees.some(user => user.id === authReq.user.id))
+      return res.status(403).json({ error: "Only an assigned person can complete their part of this work item" });
+    if (!assignees.length && authReq.user.role === "member")
+      return res.status(403).json({ error: "This work item must be assigned before you can complete it" });
     if (item.completion_mode !== "group" && assignees.some(user => user.id === authReq.user.id && user.completed_at))
-      return res.status(409).json({ error: "You have already completed your part of this task" });
+      return res.status(409).json({ error: "You have already completed your part of this work item" });
     const parsed = z.object({ note: z.string().trim().max(5000).default("") }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Completion note is too long" });
     const files = (req.files as Express.Multer.File[]) ?? [];
@@ -1284,7 +1282,7 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
     res.json({ ok: true, commentId, completed: item.completion_mode === "group" ? 1 : progress.completed, total: item.completion_mode === "group" ? 1 : progress.total, allComplete: item.completion_mode === "group" || !progress.total || progress.completed === progress.total });
   } catch (error) {
     await Promise.all(storedNames.map(name => fs.promises.rm(path.join(paths.uploads, name), { force: true })));
-    if (error instanceof Error && error.message === "ASSIGNEE_ALREADY_COMPLETE") return res.status(409).json({ error: "You have already completed your part of this task" });
+    if (error instanceof Error && error.message === "ASSIGNEE_ALREADY_COMPLETE") return res.status(409).json({ error: "You have already completed your part of this work item" });
     if (error instanceof Error && error.message === "TASK_ALREADY_COMPLETE") return res.status(409).json({ error: "This work item is already complete" });
     next(error);
   }

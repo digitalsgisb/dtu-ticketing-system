@@ -352,7 +352,7 @@ function WallTicket({ item, index, isNew, onSelect }: { item: any; index: number
     aria-label={clickable ? `Open details for ${item.ticket_no}: ${item.title}` : undefined} onClick={clickable ? () => onSelect(item.id) : undefined}
     onKeyDown={clickable ? event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(item.id); } } : undefined}>
     <div className="wall-rank">{String(index + 1).padStart(2, "0")}</div>
-    <div className="wall-ticket-copy"><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><h3>{item.title}</h3><p>{item.project_name || "General DTU work"}{item.type === "task" && item.assignee_total > 1 ? item.completion_mode === "group" ? " · Group task" : ` · ${item.assignee_completed}/${item.assignee_total} done` : ""}</p></div>
+    <div className="wall-ticket-copy"><div><span className="mono">{item.ticket_no}</span><Badge value={item.priority} kind="priority" /></div><h3>{item.title}</h3><p>{item.project_name || "General DTU work"}{item.assignee_total > 1 ? item.completion_mode === "group" ? " · Group completion" : ` · ${item.assignee_completed}/${item.assignee_total} done` : ""}</p></div>
     <div className="wall-ticket-meta"><Badge value={item.status} /><strong>{item.assignee_name || "Unassigned"}</strong><span>{formatDate(item.due_date)}</span></div>
   </article>;
 }
@@ -393,7 +393,7 @@ function WallWorkDetail({ id, onClose }: { id: number; onClose: () => void }) {
         <div className="wall-work-facts"><Badge value={item.status} /><Badge value={item.priority} kind="priority" /><span>Due {formatDate(item.due_date)}</span><span>{item.type === "task" ? item.completion_mode === "group" ? "Group completion" : "Individual completion" : "Issue"}</span></div>
         <section className="wall-work-brief"><h3>Task details</h3><p>{item.description || "No description was added."}</p></section>
         <section className="wall-work-submissions"><div className="wall-work-section-head"><h3>Submissions and evidence</h3><span>{submissions.length} {submissions.length === 1 ? "submission" : "submissions"}</span></div>
-          {item.type === "task" && item.completion_mode === "individual" && item.assignees.length > 0
+          {item.completion_mode === "individual" && item.assignees.length > 0
             ? <div className="wall-work-submission-list">{item.assignees.map((assignee: any) => {
               const submission = submissions.find(entry => entry.id === assignee.completion_comment_id);
               return <article key={assignee.id} className={submission ? "is-submitted" : "is-pending"}>

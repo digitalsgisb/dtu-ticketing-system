@@ -442,6 +442,16 @@ const needsAssigneeCompletionMigration = !(db.prepare("PRAGMA table_info(work_it
 ensureColumn("work_item_assignees", "completed_at", "TEXT");
 ensureColumn("work_item_assignees", "completion_comment_id", "INTEGER");
 ensureColumn("work_items", "completion_mode", "TEXT NOT NULL DEFAULT 'individual' CHECK(completion_mode IN ('individual','group'))");
+// Issues previously always completed once for the whole team. Preserve that
+// behavior when enabling configurable completion methods for existing records.
+db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)");
+db.transaction(() => {
+  const migration = "issue_completion_modes";
+  if (!db.prepare("SELECT name FROM schema_migrations WHERE name = ?").get(migration)) {
+    db.exec("UPDATE work_items SET completion_mode = 'group' WHERE type = 'issue'");
+    db.prepare("INSERT INTO schema_migrations(name) VALUES (?)").run(migration);
+  }
+})();
 ensureColumn("project_requests", "public_origin", "TEXT");
 ensureColumn("showcase_projects", "detail_overview", "TEXT");
 ensureColumn("showcase_projects", "category", "TEXT NOT NULL DEFAULT ''");

@@ -66,14 +66,16 @@ it("does not offer task editing to members", async () => {
   expect(host.textContent).not.toContain("Save changes");
 });
 
-it.each(["admin", "lead"])("allows %s to edit an issue without task completion controls", async role => {
+it.each(["admin", "lead"])("allows %s to edit an issue and choose group completion", async role => {
   session.role = role;
   itemType = "issue";
   await render();
   await act(async () => Array.from(host.querySelectorAll("button")).find(button => button.textContent === "Edit issue")!.click());
   const dialog = document.querySelector('[role="dialog"]')!;
-  expect(dialog.textContent).not.toContain("Completion method");
-  expect(dialog.textContent).not.toContain("Changing the completion method");
+  expect(dialog.textContent).toContain("Completion method");
+  const method = dialog.querySelector("select")!;
+  await act(async () => { method.value = "group"; method.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(dialog.textContent).toContain("Existing updates and evidence stay");
   const title = dialog.querySelector<HTMLInputElement>('input[minlength="3"]')!;
   const description = dialog.querySelector("textarea")!;
   await act(async () => {
@@ -86,7 +88,7 @@ it.each(["admin", "lead"])("allows %s to edit an issue without task completion c
   const patch = vi.mocked(api).mock.calls.find(([, options]) => options?.method === "PATCH");
   const payload = JSON.parse(patch?.[1]?.body as string);
   expect(payload).toMatchObject({ title: "Updated display issue", description: "Corrected issue details", priority: "high", assigneeIds: [], dueDate: null });
-  expect(payload).not.toHaveProperty("completionMode");
+  expect(payload.completionMode).toBe("group");
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 

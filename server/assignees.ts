@@ -44,7 +44,7 @@ export function taskAssigneeProgress(workItemId: number) {
 
 export function reconcileTaskStatus(workItemId: number) {
   const item = db.prepare("SELECT type, status, completion_mode FROM work_items WHERE id = ?").get(workItemId) as { type: string; status: string; completion_mode: string } | undefined;
-  if (item?.type !== "task" || item.completion_mode === "group") return;
+  if (!item || item.completion_mode === "group") return;
   const { total, completed } = taskAssigneeProgress(workItemId);
   if (!total) return;
   if (completed === total && !["resolved", "closed"].includes(item.status)) {
