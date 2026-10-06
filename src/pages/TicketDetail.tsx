@@ -24,8 +24,8 @@ export function TicketDetailPage() {
   const memberTask = user?.role === "member" && item.type === "task";
 
   return <>
-    <PageHeader eyebrow={`${item.ticket_no} · ${item.type}`} title={item.title} description={item.project_name ? `Part of ${item.project_name}` : "General DTU work"} actions={<div className="ticket-header-badges"><Badge value={item.priority} kind="priority" /><Badge value={item.status} />{item.type === "task" && (user?.role === "admin" || user?.role === "lead") && <button className="button button-secondary" onClick={() => setEditing(true)}>Edit task</button>}</div>} />
-    {editing && <EditTaskModal item={item} users={users} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
+    <PageHeader eyebrow={`${item.ticket_no} · ${item.type}`} title={item.title} description={item.project_name ? `Part of ${item.project_name}` : "General DTU work"} actions={<div className="ticket-header-badges"><Badge value={item.priority} kind="priority" /><Badge value={item.status} />{(user?.role === "admin" || user?.role === "lead") && <button className="button button-secondary" onClick={() => setEditing(true)}>{item.type === "task" ? "Edit task" : "Edit issue"}</button>}</div>} />
+    {editing && <EditWorkItemModal item={item} users={users} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}
     <div className={`detail-layout${memberTask ? " ticket-assignee-layout" : ""}`}>
       <div className="detail-main">
         <section className="panel">
@@ -45,7 +45,7 @@ export function TicketDetailPage() {
   </>;
 }
 
-function EditTaskModal({ item, users, onClose, onSaved }: { item: any; users: any[]; onClose: () => void; onSaved: () => void }) {
+function EditWorkItemModal({ item, users, onClose, onSaved }: { item: any; users: any[]; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ title: item.title as string, description: item.description || "", priority: item.priority,
     completionMode: item.completion_mode || "individual", assigneeIds: (item.assignees || []).map((assignee: { id: number }) => assignee.id) as number[], dueDate: item.due_date || "" });
   const [busy, setBusy] = useState(false);
@@ -54,16 +54,17 @@ function EditTaskModal({ item, users, onClose, onSaved }: { item: any; users: an
     event.preventDefault();
     if (busy) return;
     setBusy(true); setError("");
-    try { await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...form, dueDate: form.dueDate || null })); onSaved(); }
+    const { completionMode, ...details } = form;
+    try { await api(`/api/staff/tickets/${item.id}`, json("PATCH", { ...details, ...(item.type === "task" ? { completionMode } : {}), dueDate: form.dueDate || null })); onSaved(); }
     catch (failure) { setError((failure as Error).message); setBusy(false); }
   };
-  return <Modal title="Edit task" onClose={() => { if (!busy) onClose(); }}><form className="form-stack" onSubmit={submit}>
+  return <Modal title={item.type === "task" ? "Edit task" : "Edit issue"} onClose={() => { if (!busy) onClose(); }}><form className="form-stack" onSubmit={submit}>
     <ErrorNotice message={error} />
     <fieldset className="task-edit-fields" disabled={busy}>
       <label>Title<input required minLength={3} maxLength={200} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label>
       <label>Description<textarea rows={4} maxLength={5000} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label>
-      <label>Completion method<select value={form.completionMode} onChange={e => setForm({ ...form, completionMode: e.target.value })}><option value="individual">Individual — every assignee completes their part</option><option value="group">Group — one assignee completes for everyone</option></select></label>
-      {form.completionMode !== item.completion_mode && <p className="ticket-assignee-guidance" role="status">Changing the completion method reopens this task and resets completion checks. Existing updates and evidence stay in the history.</p>}
+      {item.type === "task" && <label>Completion method<select value={form.completionMode} onChange={e => setForm({ ...form, completionMode: e.target.value })}><option value="individual">Individual — every assignee completes their part</option><option value="group">Group — one assignee completes for everyone</option></select></label>}
+      {item.type === "task" && form.completionMode !== item.completion_mode && <p className="ticket-assignee-guidance" role="status">Changing the completion method reopens this task and resets completion checks. Existing updates and evidence stay in the history.</p>}
       <AssigneePicker users={users} value={form.assigneeIds} onChange={assigneeIds => setForm({ ...form, assigneeIds })} />
       <label>Priority<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
       <label>Due date<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>

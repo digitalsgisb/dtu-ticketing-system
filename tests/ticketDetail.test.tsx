@@ -14,13 +14,15 @@ vi.mock("../src/api", async importOriginal => ({ ...await importOriginal<typeof 
 
 let root: Root;
 let host: HTMLDivElement;
+let itemType: "task" | "issue";
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   session.role = "admin";
+  itemType = "task";
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation(async url => url.endsWith("/users") ? [] : {
-    item: { id: 42, title: "Fix retention", description: "One day", type: "task", completion_mode: "individual", status: "in_progress", priority: "high", source: "staff", assignees: [], assignee_total: 0 },
+    item: { id: 42, title: "Fix retention", description: "One day", type: itemType, completion_mode: "individual", status: "in_progress", priority: "high", source: "staff", assignees: [], assignee_total: 0 },
     comments: [
       { id: 10, author_name: "Admin", author_user_id: 1, body: "See this screenshot" },
       { id: 11, author_name: "Teammate", author_user_id: 2, body: "Another update" }
@@ -62,4 +64,35 @@ it("does not offer task editing to members", async () => {
   await render();
   expect(host.textContent).not.toContain("Edit task");
   expect(host.textContent).not.toContain("Save changes");
+});
+
+it.each(["admin", "lead"])("allows %s to edit an issue without task completion controls", async role => {
+  session.role = role;
+  itemType = "issue";
+  await render();
+  await act(async () => Array.from(host.querySelectorAll("button")).find(button => button.textContent === "Edit issue")!.click());
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).not.toContain("Completion method");
+  expect(dialog.textContent).not.toContain("Changing the completion method");
+  const title = dialog.querySelector<HTMLInputElement>('input[minlength="3"]')!;
+  const description = dialog.querySelector("textarea")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(title, "Updated display issue");
+    title.dispatchEvent(new Event("input", { bubbles: true }));
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(description, "Corrected issue details");
+    description.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  const patch = vi.mocked(api).mock.calls.find(([, options]) => options?.method === "PATCH");
+  const payload = JSON.parse(patch?.[1]?.body as string);
+  expect(payload).toMatchObject({ title: "Updated display issue", description: "Corrected issue details", priority: "high", assigneeIds: [], dueDate: null });
+  expect(payload).not.toHaveProperty("completionMode");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("does not offer issue editing to members", async () => {
+  session.role = "member";
+  itemType = "issue";
+  await render();
+  expect(host.textContent).not.toContain("Edit issue");
 });
