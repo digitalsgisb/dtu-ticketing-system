@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { api, formatDate, json } from "../api";
+import { useSearchParams } from "react-router-dom";
+import { api, json } from "../api";
 import { PlusIcon, SearchIcon } from "../components/Icons";
-import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
+import { Empty, ErrorNotice, Loading, Modal, PageHeader } from "../components/UI";
+import { WorkItems, workIsComplete } from "../components/WorkItems";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
 import { useAuth } from "../auth";
@@ -16,7 +17,7 @@ export function TicketsPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [queue, setQueue] = useState<"open" | "mine" | "all">("open");
+  const [queue, setQueue] = useState<"open" | "mine" | "all">(params.get("queue") === "mine" || user?.role === "member" ? "mine" : "open");
   const [type, setType] = useState<"" | "task" | "issue">("");
   const [showCreate, setShowCreate] = useState(false);
   const load = () => {
@@ -26,8 +27,8 @@ export function TicketsPage() {
   useEffect(() => { void load(); void api<any[]>("/api/staff/projects").then(setProjects); void api<any[]>("/api/staff/users").then(setUsers); }, [params]);
   useLiveRefresh(load);
   const filtered = useMemo(() => (tickets ?? []).filter(item =>
-    (queue === "all" || !["resolved", "closed"].includes(item.status)) &&
-    (queue !== "mine" || item.assignees?.some((assignee: { id: number; completed_at: string | null }) => assignee.id === user?.id && !assignee.completed_at)) &&
+    (queue !== "open" || !workIsComplete(item)) &&
+    (queue !== "mine" || item.assignees?.some((assignee: { id: number }) => assignee.id === user?.id)) &&
     (!type || item.type === type) &&
     `${item.ticket_no} ${item.title} ${item.project_name || ""}`.toLowerCase().includes(search.toLowerCase())
   ), [tickets, search, queue, type, user?.id]);
@@ -48,16 +49,7 @@ export function TicketsPage() {
         <button type="button" key={value || 'both'} className={type === value ? "active" : ""} onClick={() => setType(value)}><i />{label}</button>
       )}
     </div>
-    {filtered.length ? <section className="panel panel-flush"><div className="data-table tickets-table">
-      <div className="table-head"><span>Reference</span><span>Work item</span><span>Project</span><span>{t("assignee")}</span><span>{t("dueDate")}</span><span>{t("status")}</span></div>
-      {filtered.map(item => <Link to={`/tickets/${item.id}`} className="table-row" key={item.id}>
-        <span><strong className="mono">{item.ticket_no}</strong><small><Badge value={item.priority} kind="priority" /></small></span>
-        <span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" />{item.assignee_total > 1 ? item.completion_mode === "group" ? " Group completion" : ` ${item.assignee_completed}/${item.assignee_total} done` : ""}</small></span>
-        <span>{item.project_name || "General"}</span><span>{item.assignee_name || "Unassigned"}</span>
-        <span className={item.due_date && new Date(`${item.due_date}T23:59:00`) < new Date() && !["resolved","closed"].includes(item.status) ? "date-overdue" : ""}>{formatDate(item.due_date)}</span>
-        <span><Badge value={item.status} /></span>
-      </Link>)}
-    </div></section> : <Empty title="No matching work items" />}
+    {filtered.length ? <WorkItems items={filtered} user={user} personal={queue === "mine"} /> : <Empty title="No matching work items" />}
     {showCreate && <CreateTicket projects={projects} users={users} defaultProject={params.get("projectId") || ""} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
   </>;
 }

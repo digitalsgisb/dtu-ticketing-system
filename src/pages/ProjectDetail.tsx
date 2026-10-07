@@ -8,6 +8,7 @@ import { CompanyLogo } from "../components/CompanyLogo";
 import { compressProgressImage } from "../progressImages";
 import { TaskProgress } from "../components/TaskProgress";
 import { useLiveRefresh } from "../live";
+import { WorkItems } from "../components/WorkItems";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusOptions = [
@@ -169,10 +170,7 @@ export function ProjectDetailPage() {
     </section>
     <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">Delivery & support</span><h2>Project work</h2></div><Link className="button button-secondary" to={`/tickets?projectId=${project.id}`}>Open full queue</Link></div>
-      {workItems.length ? <div className="data-table">
-        <div className="table-head"><span>Reference</span><span>Work item</span><span>{t("assignee")}</span><span>{t("dueDate")}</span><span>{t("status")}</span></div>
-        {workItems.map((item: any) => <Link to={`/tickets/${item.id}`} className="table-row" key={item.id}><span className="mono">{item.ticket_no}</span><span><strong>{item.title}</strong><small><Badge value={item.type} kind="type" />{item.assignee_total > 1 ? item.completion_mode === "group" ? " Group completion" : ` ${item.assignee_completed}/${item.assignee_total} done` : ""}</small></span><span>{item.assignee_name || "Unassigned"}</span><span>{formatDate(item.due_date)}</span><span><Badge value={item.status} /></span></Link>)}
-      </div> : <Empty body="Create the first task or issue for this project." />}
+      {workItems.length ? <WorkItems items={workItems} user={user} /> : <Empty body="Create the first task or issue for this project." />}
     </section>
     </div>
     {editing && <EditProject project={project} users={users} links={links} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); void load(); }} />}

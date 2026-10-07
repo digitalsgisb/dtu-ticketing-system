@@ -6,6 +6,7 @@ import { AlertIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icon
 import { Badge, Empty, Loading, StatCard } from "../components/UI";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
+import { PendingWorkCards } from "../components/WorkItems";
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -34,7 +35,7 @@ export function DashboardPage() {
     member: {
       kicker: "My workday",
       intro: "Focus on what needs your attention today: assigned work, approaching deadlines, and the projects you own.",
-      primary: { to: "/tickets", label: "Open my work queue" },
+      primary: { to: "/tickets?queue=mine", label: "Open my work queue" },
       secondary: { to: "/my-projects", label: "View my projects", external: false }
     }
   }[role];
@@ -90,8 +91,8 @@ export function DashboardPage() {
       </section>
       <div className="dashboard-grid">
         <section className="panel panel-span-2">
-          <div className="panel-heading"><div><span className="eyebrow">Personal queue</span><h2>{t("myWork")}</h2></div><Link to="/tickets" className="text-link">View all →</Link></div>
-          {data.myWork.length ? <div className="work-list">{data.myWork.map((item: any) => <WorkRow key={item.id} item={item} />)}</div> : <Empty body="Assigned work will appear here." />}
+          <div className="panel-heading"><div><span className="eyebrow">Personal queue · Pending</span><h2>{t("myWork")}</h2></div><Link to="/tickets?queue=mine" className="text-link">View all & completed →</Link></div>
+          {data.myWork.length ? <PendingWorkCards items={data.myWork} user={user} /> : <Empty body="Assigned work will appear here." />}
         </section>
         {role !== "member" && <section className="panel">
           <div className="panel-heading"><div><span className="eyebrow">Capacity</span><h2>{t("workload")}</h2></div></div>
@@ -118,12 +119,4 @@ export function DashboardPage() {
       </div>
     </div>
   );
-}
-
-function WorkRow({ item }: { item: any }) {
-  return <Link to={`/tickets/${item.id}`} className="work-row">
-    <div className={`priority-stripe priority-${item.priority}`} />
-    <div className="work-main"><div><strong>{item.ticket_no}</strong><Badge value={item.type} kind="type" /></div><h3>{item.title}</h3><span>{item.project_name || "General DTU work"}</span></div>
-    <div className="work-meta"><Badge value={item.status} /><span>{formatDate(item.due_date)}</span></div>
-  </Link>;
 }

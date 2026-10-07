@@ -419,6 +419,50 @@ describe("DTU Control Centre API", () => {
     expect(blockedMember.status).toBe(403);
   });
 
+  it.each(["task", "issue"])("lets admin finish an individual %s for all remaining assignees and delete its evidence", async type => {
+    const created = await request(app).post("/api/staff/tickets")
+      .set("Cookie", cookie).set("x-csrf-token", csrf)
+      .send({ type, completionMode: "individual", title: "Administrator completion and deletion", assigneeIds: [adminUserId, managedUserId], status: "assigned" });
+    expect(created.status).toBe(201);
+    const id = created.body.id;
+    const partial = await request(app).post(`/api/staff/tickets/${id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("note", "Earlier personal submission");
+    expect(partial.body.allComplete).toBe(false);
+    const forbidden = await request(app).post(`/api/staff/tickets/${id}/complete`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf).field("completeAll", "true").field("note", "Attempt admin completion");
+    expect(forbidden.status).toBe(403);
+    const complete = await request(app).post(`/api/staff/tickets/${id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("completeAll", "true").field("note", "Admin verified all remaining delivery")
+      .attach("attachments", Buffer.from("Verified delivery"), { filename: "delivery.txt", contentType: "text/plain" });
+    expect(complete.status).toBe(200);
+    expect(complete.body.allComplete).toBe(true);
+    const detail = await request(app).get(`/api/staff/tickets/${id}`).set("Cookie", cookie);
+    expect(detail.body.item).toMatchObject({ status: "resolved", assignee_completed: 2 });
+    const ownAssignment = detail.body.item.assignees.find((person: { id: number }) => person.id === adminUserId);
+    expect(ownAssignment.completion_comment_id).toBe(partial.body.commentId);
+    expect(detail.body.comments).toHaveLength(2);
+    const repeated = await request(app).post(`/api/staff/tickets/${id}/complete`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).field("completeAll", "true").field("note", "Again");
+    expect(repeated.status).toBe(409);
+    const attachment = db.prepare("SELECT stored_name FROM attachments WHERE work_item_id = ?").get(id) as { stored_name: string };
+    expect(fs.existsSync(path.join(paths.uploads, attachment.stored_name))).toBe(true);
+    const denied = await request(app).delete(`/api/staff/tickets/${id}`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf);
+    expect(denied.status).toBe(403);
+    const missingCsrf = await request(app).delete(`/api/staff/tickets/${id}`).set("Cookie", cookie);
+    expect(missingCsrf.status).toBe(403);
+    const removed = await request(app).delete(`/api/staff/tickets/${id}`).set("Cookie", cookie).set("x-csrf-token", csrf);
+    expect(removed.status).toBe(204);
+    expect(db.prepare("SELECT id FROM work_items WHERE id = ?").get(id)).toBeUndefined();
+    expect(db.prepare("SELECT id FROM comments WHERE work_item_id = ?").all(id)).toHaveLength(0);
+    expect(db.prepare("SELECT id FROM attachments WHERE work_item_id = ?").all(id)).toHaveLength(0);
+    expect(db.prepare("SELECT user_id FROM work_item_assignees WHERE work_item_id = ?").all(id)).toHaveLength(0);
+    expect(fs.existsSync(path.join(paths.uploads, attachment.stored_name))).toBe(false);
+    expect(db.prepare("SELECT action FROM audit_events WHERE entity_type = 'work_item' AND entity_id = ? AND action = 'work_item_deleted'").get(id)).toBeDefined();
+    const missing = await request(app).delete(`/api/staff/tickets/${id}`).set("Cookie", cookie).set("x-csrf-token", csrf);
+    expect(missing.status).toBe(404);
+  });
+
   it("creates a project and accepts a QR issue report", async () => {
     const created = await request(app).post("/api/staff/projects")
       .set("Cookie", cookie).set("x-csrf-token", csrf)

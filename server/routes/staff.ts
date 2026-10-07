@@ -1229,6 +1229,30 @@ staffRouter.patch("/tickets/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+staffRouter.delete("/tickets/:id", requireRole("admin"), async (req, res, next) => {
+  try {
+    const authReq = req as AuthenticatedRequest;
+    const itemId = Number(req.params.id);
+    if (!Number.isInteger(itemId) || itemId <= 0) return res.status(400).json({ error: "Invalid work item" });
+    const item = db.prepare("SELECT id, ticket_no, title, project_id FROM work_items WHERE id = ?").get(itemId) as { id: number; ticket_no: string; title: string; project_id: number | null } | undefined;
+    if (!item) return res.status(404).json({ error: "Work item not found" });
+    const attachments = db.prepare(`SELECT DISTINCT a.stored_name FROM attachments a LEFT JOIN comments c ON c.id = a.comment_id
+      WHERE a.work_item_id = ? OR c.work_item_id = ?`).all(itemId, itemId) as { stored_name: string }[];
+    db.transaction(() => {
+      db.prepare("DELETE FROM notifications WHERE link = ?").run(`/tickets/${itemId}`);
+      db.prepare("DELETE FROM work_items WHERE id = ?").run(itemId);
+      audit(authReq.user, "work_item_deleted", "work_item", itemId, { ticketNo: item.ticket_no, title: item.title, projectId: item.project_id }, req.ip);
+    })();
+    await Promise.all(attachments.map(async attachment => {
+      const attachmentPath = path.resolve(paths.uploads, attachment.stored_name);
+      if (path.dirname(attachmentPath) !== path.resolve(paths.uploads)) return;
+      try { await fs.promises.unlink(attachmentPath); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.error("Could not remove deleted work attachment", error); }
+    }));
+    res.status(204).end();
+  } catch (error) { next(error); }
+});
+
 staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async (req, res, next) => {
   const storedNames: string[] = [];
   try {
@@ -1239,12 +1263,14 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
     if (!item) return res.status(404).json({ error: "Work item not found" });
     if (["resolved", "closed"].includes(item.status)) return res.status(409).json({ error: "This work item is already complete" });
     const assignees = assigneesFor(item.id);
+    const adminComplete = authReq.user.role === "admin" && req.body.completeAll === "true";
+    if (req.body.completeAll === "true" && !adminComplete) return res.status(403).json({ error: "Only an admin can complete work for all assignees" });
     const canCompleteForTeam = item.completion_mode === "group" && ["admin", "lead"].includes(authReq.user.role);
-    if (assignees.length && !assignees.some(user => user.id === authReq.user.id) && !canCompleteForTeam)
+    if (assignees.length && !assignees.some(user => user.id === authReq.user.id) && !canCompleteForTeam && !adminComplete)
       return res.status(403).json({ error: "Only an assigned person can complete their part of this work item" });
     if (!assignees.length && authReq.user.role === "member")
       return res.status(403).json({ error: "This work item must be assigned before you can complete it" });
-    if (item.completion_mode !== "group" && assignees.some(user => user.id === authReq.user.id && user.completed_at))
+    if (!adminComplete && item.completion_mode !== "group" && assignees.some(user => user.id === authReq.user.id && user.completed_at))
       return res.status(409).json({ error: "You have already completed your part of this work item" });
     const parsed = z.object({ note: z.string().trim().max(5000).default("") }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Completion note is too long" });
@@ -1261,7 +1287,12 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
       const result = db.prepare(`INSERT INTO comments(work_item_id, author_user_id, author_name, body, is_completion)
         VALUES (?, ?, ?, ?, 1)`).run(item.id, authReq.user.id, authReq.user.name, cleanText(parsed.data.note) || "Task completed");
       const id = Number(result.lastInsertRowid);
-      if (assignees.length && item.completion_mode !== "group") {
+      if (adminComplete && item.completion_mode !== "group") {
+        db.prepare(`UPDATE work_item_assignees SET completed_at = CURRENT_TIMESTAMP, completion_comment_id = ?
+          WHERE work_item_id = ? AND completed_at IS NULL`).run(id, item.id);
+        const completion = db.prepare("UPDATE work_items SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('resolved', 'closed')").run(item.id);
+        if (!completion.changes) throw new Error("TASK_ALREADY_COMPLETE");
+      } else if (assignees.length && item.completion_mode !== "group") {
         const completion = db.prepare(`UPDATE work_item_assignees SET completed_at = CURRENT_TIMESTAMP, completion_comment_id = ?
           WHERE work_item_id = ? AND user_id = ? AND completed_at IS NULL`).run(id, item.id, authReq.user.id);
         if (!completion.changes) throw new Error("ASSIGNEE_ALREADY_COMPLETE");
@@ -1276,7 +1307,7 @@ staffRouter.post("/tickets/:id/complete", upload.array("attachments", 3), async 
       const completionProgress = taskAssigneeProgress(item.id);
       audit(authReq.user, item.completion_mode !== "group" && completionProgress.total && completionProgress.completed < completionProgress.total ? "task_part_completed" : "work_item_completed",
         "work_item", item.id, { commentId: id, evidenceCount: files.length, projectId: item.project_id,
-          completed: completionProgress.completed, total: completionProgress.total }, req.ip);
+          completed: completionProgress.completed, total: completionProgress.total, completedByAdmin: adminComplete }, req.ip);
       return id;
     })();
     const progress = taskAssigneeProgress(item.id);
