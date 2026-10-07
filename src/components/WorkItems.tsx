@@ -30,7 +30,7 @@ export function PendingWorkCards({ items, user }: { items: any[]; user: WorkUser
     <Link className="pending-work-title" to={`/tickets/${item.id}`}><h3>{item.title}</h3></Link>
     <div className="pending-work-badges"><Badge value={item.status} /><Badge value={item.type} kind="type" /></div>
     <dl><div><dt>Project</dt><dd>{item.project_name || "General DTU work"}</dd></div><div><dt>Assignee</dt><dd>{item.assignee_name || "Unassigned"}</dd></div><div><dt>Due date</dt><dd className={overdue(item) ? "date-overdue" : ""}>{item.due_date ? formatDate(item.due_date) : "No due date"}{overdue(item) ? " · Overdue" : ""}</dd></div></dl>
-    {item.assignee_total > 0 && <p className="pending-work-progress">{item.completion_mode === "group" ? "One submission completes the team’s work" : `${item.assignee_completed ?? 0} of ${item.assignee_total} people finished`}</p>}
+    {item.assignee_total > 0 && <div className="pending-work-progress">{item.completion_mode === "group" ? "One submission completes the team’s work" : <>{`${item.assignee_completed ?? 0} of ${item.assignee_total} people finished`}<div className="pending-work-progress-track" role="progressbar" aria-label="Assignees finished" aria-valuemin={0} aria-valuemax={item.assignee_total} aria-valuenow={item.assignee_completed ?? 0}><i style={{ width: `${Math.min(100, (item.assignee_completed ?? 0) / item.assignee_total * 100)}%` }} /></div></>}</div>}
     <div className="pending-work-actions"><Link className="button button-secondary" to={`/tickets/${item.id}`}>View details</Link>{canCompleteWork(item, user) && <Link className="button button-primary" to={`/tickets/${item.id}?complete=1`}>{completionLabel(item, user)}</Link>}</div>
   </article>)}</div>;
 }
