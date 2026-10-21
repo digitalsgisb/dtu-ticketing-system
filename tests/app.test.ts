@@ -6,6 +6,7 @@ import { projectHandoverEmailContent, standardEmailHtml, submissionUpdateEmailCo
 import fs from "node:fs";
 import path from "node:path";
 import { paths } from "../server/config.js";
+import { tokenHash } from "../server/security.js";
 
 let cookie = "";
 let csrf = "";
@@ -36,6 +37,33 @@ describe("DTU Control Centre API", () => {
     csrf = response.body.csrfToken;
     adminUserId = response.body.user.id;
     expect(response.body.user.role).toBe("admin");
+    expect(response.headers["set-cookie"][0]).toContain("Max-Age=34560000");
+    expect(response.headers["set-cookie"][0]).toContain("HttpOnly");
+    expect(response.headers["set-cookie"][0]).toContain("SameSite=Lax");
+  });
+
+  it("keeps existing sessions valid beyond their former expiry and renews the browser cookie", async () => {
+    const hash = tokenHash(cookie.slice("dtu_session=".length));
+    db.prepare("UPDATE sessions SET expires_at = ? WHERE token_hash = ?").run("2000-01-01T00:00:00.000Z", hash);
+    const response = await request(app).get("/api/auth/me").set("Cookie", cookie);
+    expect(response.status).toBe(200);
+    expect(response.body.user.id).toBe(adminUserId);
+    expect(response.body.csrfToken).toBe(csrf);
+    expect(response.headers["set-cookie"][0]).toContain(cookie);
+    expect(response.headers["set-cookie"][0]).toContain("Max-Age=34560000");
+  });
+
+  it("revokes a persistent session on logout even if its cookie is reused", async () => {
+    const login = await request(app).post("/api/auth/login").send({ username: "admin", password: "ChangeMe123!" });
+    expect(login.status).toBe(200);
+    const logoutCookie = login.headers["set-cookie"][0].split(";")[0];
+    const logout = await request(app).post("/api/auth/logout")
+      .set("Cookie", logoutCookie).set("x-csrf-token", login.body.csrfToken);
+    expect(logout.status).toBe(200);
+    expect(logout.headers["set-cookie"].at(-1)).toContain("Expires=Thu, 01 Jan 1970");
+    const response = await request(app).get("/api/auth/me").set("Cookie", logoutCookie);
+    expect(response.status).toBe(401);
+    expect((await request(app).get("/api/auth/me").set("Cookie", cookie)).status).toBe(200);
   });
 
   it("rejects state changes without CSRF", async () => {
@@ -786,15 +814,28 @@ describe("DTU Control Centre API", () => {
     expect(image.headers["content-type"]).toContain("image/png");
   });
 
-  it("blocks members from publishing progress updates on projects they do not own", async () => {
+  it("lets members publish progress with evidence on projects they do not own", async () => {
     const project = db.prepare("SELECT id FROM projects WHERE owner_id IS NULL ORDER BY id LIMIT 1").get() as { id: number };
     const response = await request(app).patch(`/api/staff/projects/${project.id}/progress`)
       .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf)
       .field("status", "in_progress")
       .field("progress", "50")
+      .field("nextAction", "Review the installation with the team.")
       .field("currentUpdate", "Member added a field update with supporting evidence.")
       .attach("images", Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]), { filename: "member-field.jpg", contentType: "image/jpeg" });
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    const detail = await request(app).get(`/api/staff/projects/${project.id}`).set("Cookie", managedCookie);
+    expect(detail.body.project).toMatchObject({ progress: 50, status: "in_progress", progress_updated_by: managedUserId, owner_id: null });
+    expect(detail.body.updates[0]).toMatchObject({
+      author_user_id: managedUserId,
+      progress: 50,
+      body: "Member added a field update with supporting evidence.",
+      next_action: "Review the installation with the team."
+    });
+    expect(detail.body.updates[0].images).toHaveLength(1);
+    const edit = await request(app).patch(`/api/staff/projects/${project.id}`)
+      .set("Cookie", managedCookie).set("x-csrf-token", managedCsrf).send({ name: "Changed name" });
+    expect(edit.status).toBe(403);
   });
 
   it("limits the progress briefing to admins and leads", async () => {

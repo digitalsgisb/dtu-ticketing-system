@@ -67,7 +67,9 @@ export function ProgressBriefingPage() {
   }, [filter, progressFilter, deadlineFilter, freshnessFilter, sort, search]);
   useEffect(() => {
     if (!data) return;
-    const scroll = Number(sessionStorage.getItem(briefingScrollKey));
+    const savedScroll = sessionStorage.getItem(briefingScrollKey);
+    if (savedScroll === null) return;
+    const scroll = Number(savedScroll);
     if (!Number.isFinite(scroll)) return;
     sessionStorage.removeItem(briefingScrollKey);
     requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, scroll) }));

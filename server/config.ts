@@ -20,7 +20,6 @@ export const config = {
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "http://localhost:5173",
   showcaseBaseUrl: process.env.SHOWCASE_BASE_URL || "https://dtutracker.sugidigital.org",
   publicHostname: process.env.PUBLIC_HOSTNAME || "",
-  sessionDays: integer("SESSION_DAYS", 7),
   initialAdminUsername: process.env.INITIAL_ADMIN_USERNAME || "admin",
   initialAdminPassword: process.env.INITIAL_ADMIN_PASSWORD || "ChangeMe123!",
   turnstileSecret: process.env.TURNSTILE_SECRET || "",

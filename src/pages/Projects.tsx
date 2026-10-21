@@ -40,7 +40,9 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   }, [myProjectsOnly, search, filter, progressFilter, deadlineFilter, sort]);
   useEffect(() => {
     if (!projects) return;
-    const scroll = Number(sessionStorage.getItem(projectScrollKey));
+    const savedScroll = sessionStorage.getItem(projectScrollKey);
+    if (savedScroll === null) return;
+    const scroll = Number(savedScroll);
     if (!Number.isFinite(scroll)) return;
     sessionStorage.removeItem(projectScrollKey);
     requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, scroll) }));
@@ -138,7 +140,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       </div>
       {filtered.length ? <div className="project-grid">{filtered.map(project => {
         const displayedProgress = projectProgress(project);
-        const canUpdateProgress = project.status !== "cancelled" && (canCreateProject || isOwnedBy(project, user));
+        const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
         return <article className="project-card" key={project.id}>
           <Link to={`/projects/${project.id}`} className="project-card-main" onClick={rememberProjectContext}>
           <div className="project-card-image">{project.latest_image_id ? <img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} /> : <div><span>{project.project_no}</span><small>Add a photo with a progress update</small></div>}</div>

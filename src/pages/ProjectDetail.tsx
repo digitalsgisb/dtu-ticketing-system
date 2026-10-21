@@ -97,18 +97,14 @@ export function ProjectDetailPage() {
   useEffect(() => {
     if (!data?.project || new URLSearchParams(location.search).get("update") !== "1") return;
     const project = data.project;
-    const canManage = user?.role === "admin" || user?.role === "lead";
-    const owns = Number(project.owner_id) === user?.id || String(project.owner_name ?? "").trim().toLowerCase() === user?.name.trim().toLowerCase();
-    if (project.status !== "cancelled" && (canManage || owns)) setUpdatingProgress(true);
+    if (project.status !== "cancelled" && user) setUpdatingProgress(true);
     navigate(location.pathname, { replace: true });
   }, [data?.project, location.pathname, location.search, navigate, user]);
   if (error && !data) return <ErrorNotice message={error} />;
   if (!data) return <Loading />;
   const { project, workItems, links = [], updates = [] } = data;
   const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
-  const canManageProjects = user?.role === "admin" || user?.role === "lead";
-  const ownsProject = Number(project.owner_id) === user?.id || String(project.owner_name ?? "").trim().toLowerCase() === user?.name.trim().toLowerCase();
-  const canUpdateProgress = project.status !== "cancelled" && Boolean(user) && (canManageProjects || ownsProject);
+  const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
   const savedNavigation = savedProjectNavigation();
   const presentationOrder: ProjectNavigationItem[] = savedNavigation.projects.some(item => String(item.id) === String(project.id)) ? savedNavigation.projects : data.navigationProjects;
   const currentIndex = presentationOrder.findIndex(item => String(item.id) === String(project.id));
@@ -151,12 +147,12 @@ export function ProjectDetailPage() {
     <SystemLinks links={links} />
     <section className="project-update-panel">
       <div className="project-update-heading">
-        <div><span className="eyebrow">Owner update</span><h2>Current progress</h2></div>
+        <div><span className="eyebrow">Team update</span><h2>Current progress</h2></div>
         {project.progress_updated_at && <time>{formatDate(project.progress_updated_at, true)}</time>}
       </div>
       {project.current_update
         ? <><div className="project-update-content"><div><strong>What changed</strong><p>{project.current_update}</p></div><div><strong>Next planned action</strong><p className={!project.next_action ? "project-update-empty" : ""}>{project.next_action || "No next action was recorded for this update."}</p></div></div><small>Updated by {project.progress_updated_by_name || project.owner_name || "project owner"}</small></>
-        : <p className="project-update-empty">No progress note yet. The project owner can add the first delivery update here.</p>}
+        : <p className="project-update-empty">No progress note yet. A team member can add the first delivery update here.</p>}
     </section>
     <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">Progress evidence</span><h2>Progress history</h2></div><b>{updates.length} updates</b></div>
@@ -166,7 +162,7 @@ export function ProjectDetailPage() {
           {update.next_action && <div className="update-next-action"><strong>Next planned action</strong><p>{update.next_action}</p></div>}
           {update.images.length > 0 && <div className="briefing-inline-gallery">{update.images.map((image: any) => <button key={image.id} onClick={() => setSelectedImage({ ...image, update })}><img src={`/api/staff/projects/progress-images/${image.id}`} alt={image.original_name} /></button>)}</div>}
         </div>
-      </article>)}</div> : <Empty title="No progress history yet" body={canUpdateProgress ? "Publish the first project progress update with supporting photos." : "The project owner can publish the first progress update."} />}
+      </article>)}</div> : <Empty title="No progress history yet" body={canUpdateProgress ? "Publish the first project progress update with supporting photos." : "No progress updates have been published for this project."} />}
     </section>
     <section className="panel">
       <div className="panel-heading"><div><span className="eyebrow">Delivery & support</span><h2>Project work</h2></div><Link className="button button-secondary" to={`/tickets?projectId=${project.id}`}>Open full queue</Link></div>

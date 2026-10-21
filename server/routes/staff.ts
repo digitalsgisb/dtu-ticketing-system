@@ -793,16 +793,12 @@ staffRouter.patch("/projects/:id/progress", progressUpload.array("images", 4), a
   const storedNames: string[] = [];
   try {
     const authReq = req as unknown as AuthenticatedRequest;
-    const existing = db.prepare("SELECT id, owner_id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
+    const existing = db.prepare("SELECT id, status, progress FROM projects WHERE id = ?").get(req.params.id) as {
       id: number;
-      owner_id: number | null;
       status: string;
       progress: number;
     } | undefined;
     if (!existing) return res.status(404).json({ error: "Project not found" });
-    if (authReq.user.role === "member" && existing.owner_id !== authReq.user.id) {
-      return res.status(403).json({ error: "Members can update progress only for projects they own" });
-    }
     const parsed = z.object({
       status: z.enum(mutableProjectStatuses).optional(),
       progress: z.coerce.number().int().min(0).max(100).optional(),

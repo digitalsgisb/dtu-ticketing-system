@@ -17,11 +17,12 @@ For the AI PC, follow the [pull and deploy steps](#pull-and-deploy-the-update-on
 - Project request workflow: Submitted → Triage → Needs Information → Approved/Rejected.
 - Approval creates a linked project without losing the original request.
 - Project portfolio with owner, department, priority, status, deadline, progress, and permanent QR token.
+- All signed-in team members can publish project progress, notes, next actions, and supporting photos, including for projects owned by another person. Project setup and editing remain restricted to admins and leads.
 - Tasks and issues with assignment, priority, deadline, comments, attachments, audit history, and notifications.
 - Public bilingual project request and QR issue forms.
 - Private reporter tracking links with public-safe updates and replies.
 - Privacy-safe wallboard with a 30-second refresh.
-- Local Admin, Lead, and Member accounts using Argon2id passwords and server-side sessions.
+- Local Admin, Lead, and Member accounts using Argon2id passwords and server-side sessions. Sessions remain valid until logout or administrator revocation. Browser cookies persist across restarts and renew for 400 days on each authenticated request; clearing cookies or exceeding the browser's cookie lifetime requires signing in again. The former `SESSION_DAYS` setting is no longer used.
 - CSRF checks, login throttling, public rate limits, upload magic-byte checks, randomized filenames, free-space protection, Helmet headers, and public-host route isolation.
 - Preview-before-commit CSV imports for projects and unresolved tickets.
 - Optional SMTP notifications.

@@ -10,21 +10,26 @@ import type { AuthenticatedRequest, Role, SessionUser } from "./types.js";
 export const randomToken = (bytes = 32) => crypto.randomBytes(bytes).toString("base64url");
 export const tokenHash = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
 
-export async function createSession(req: Request, res: Response, userId: number) {
-  const token = randomToken();
-  const csrf = randomToken(24);
-  const expires = new Date(Date.now() + config.sessionDays * 86_400_000);
-  db.prepare(`
-    INSERT INTO sessions(user_id, token_hash, csrf_token, expires_at, ip_address, user_agent)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(userId, tokenHash(token), csrf, expires.toISOString(), req.ip, req.get("user-agent")?.slice(0, 500));
+function setSessionCookie(res: Response, token: string) {
   res.cookie("dtu_session", token, {
     httpOnly: true,
     secure: config.cookieSecure,
     sameSite: "lax",
-    maxAge: config.sessionDays * 86_400_000,
+    // Browsers cap persistent cookies at 400 days; renew on every authenticated request.
+    maxAge: 400 * 86_400_000,
     path: "/"
   });
+}
+
+export async function createSession(req: Request, res: Response, userId: number) {
+  const token = randomToken();
+  const csrf = randomToken(24);
+  // Keep expires_at populated for compatibility with existing databases and backups.
+  db.prepare(`
+    INSERT INTO sessions(user_id, token_hash, csrf_token, expires_at, ip_address, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(userId, tokenHash(token), csrf, "9999-12-31T23:59:59.999Z", req.ip, req.get("user-agent")?.slice(0, 500));
+  setSessionCookie(res, token);
   return csrf;
 }
 
@@ -38,16 +43,17 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.dtu_session;
   if (!token) return res.status(401).json({ error: "Authentication required" });
   const row = db.prepare(`
-    SELECT s.id AS session_id, s.csrf_token, s.expires_at,
+    SELECT s.id AS session_id, s.csrf_token,
            u.id, u.username, u.name, u.email, u.role, u.language, u.active
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ?
-  `).get(tokenHash(token)) as (SessionUser & { session_id: number; csrf_token: string; expires_at: string; active: number }) | undefined;
-  if (!row || !row.active || new Date(row.expires_at) <= new Date()) {
+  `).get(tokenHash(token)) as (SessionUser & { session_id: number; csrf_token: string; active: number }) | undefined;
+  if (!row || !row.active) {
     destroySession(req, res);
     return res.status(401).json({ error: "Session expired" });
   }
   db.prepare("UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(row.session_id);
+  setSessionCookie(res, token);
   const authReq = req as AuthenticatedRequest;
   authReq.user = {
     id: row.id,
