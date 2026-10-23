@@ -432,6 +432,8 @@ function ensureProjectStatusCheckAllowsMonitoring() {
 }
 
 ensureColumn("projects", "current_update", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("projects", "reporting_category", "TEXT NOT NULL DEFAULT 'Other'");
+ensureColumn("project_requests", "reporting_category", "TEXT NOT NULL DEFAULT 'Other'");
 ensureColumn("projects", "next_action", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("projects", "progress_updated_at", "TEXT");
 ensureColumn("projects", "progress_updated_by", "INTEGER REFERENCES users(id)");

@@ -100,6 +100,7 @@ export function Layout() {
     ["/tickets", t("tickets"), <TicketIcon key="ticket" />],
     ...(user?.role !== "member" ? [["/requests", t("requests"), <RequestIcon key="request" />] as NavItem] : []),
     ...(user?.role !== "member" ? [["/briefing", t("briefing"), <PresentationIcon key="briefing" />] as NavItem] : []),
+    ...(user?.role !== "member" ? [["/monthly-review", "Monthly Review", <PresentationIcon key="monthly-review" />] as NavItem] : []),
     ...(user?.role !== "member" ? [["/showcase", "Guest showcase", <ScreenIcon key="showcase" />] as NavItem] : []),
     ["/links", t("systemLinks"), <LinkIcon key="links" />],
     ...(user?.role === "admin" ? [["/admin", t("admin"), <SettingsIcon key="settings" />] as NavItem] : [])

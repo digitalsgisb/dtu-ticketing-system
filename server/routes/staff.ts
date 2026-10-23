@@ -17,8 +17,10 @@ import { addLiveClient } from "../liveUpdates.js";
 import { assigneesFor, reconcileTaskStatus, replaceAssignees, taskAssigneeProgress, validAssignees, withAssignees } from "../assignees.js";
 import { pushConfigured, pushSubscriptionCount, sendTestPush } from "../push.js";
 import { withTaskProgress } from "../projectTasks.js";
+import { monthlyReviewRouter } from "../monthlyReview.js";
 
 export const staffRouter = Router();
+staffRouter.use("/monthly-review", monthlyReviewRouter);
 staffRouter.get("/live", (_req, res) => addLiveClient(res));
 staffRouter.get("/push/config", (_req, res) => res.json({ publicKey: pushConfigured ? config.vapid.publicKey : null }));
 staffRouter.post("/push/subscriptions", (req, res) => {
@@ -1629,6 +1631,7 @@ staffRouter.patch("/requests/:id", requireRole("admin", "lead"), (req, res) => {
       `).run(projectNo, request.title, request.desired_outcome, request.department_name, parsed.data.ownerId ?? null,
         request.urgency, parsed.data.dueDate || request.target_date || null, crypto.randomBytes(18).toString("base64url"), request.id);
       projectId = Number(project.lastInsertRowid);
+      db.prepare("UPDATE projects SET reporting_category = ? WHERE id = ?").run(request.reporting_category || "Other", projectId);
     }
     db.prepare(`
       UPDATE project_requests SET status = ?, triage_notes = ?, created_project_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?

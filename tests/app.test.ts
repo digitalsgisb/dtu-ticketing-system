@@ -847,6 +847,34 @@ describe("DTU Control Centre API", () => {
     expect(adminView.body.projects.some((project: { id: number }) => project.id === briefingProjectId)).toBe(true);
   });
 
+  it("builds monthly snapshots at Malaysian month boundaries without leaking later progress", async () => {
+    const result = db.prepare(`INSERT INTO projects(project_no, name, department_name, qr_token, created_at, progress)
+      VALUES ('PRJ-MONTH-TEST', 'Monthly boundary test', 'DTU', 'monthly-boundary-test', '2026-09-01 00:00:00', 95)`).run();
+    const id = Number(result.lastInsertRowid);
+    const update = db.prepare(`INSERT INTO project_updates(project_id, author_name, body, status, progress, created_at)
+      VALUES (?, 'Test', ?, 'in_progress', ?, ?)`);
+    update.run(id, 'September baseline', 20, '2026-09-30 15:59:59');
+    update.run(id, 'October opening update', 40, '2026-09-30 16:00:00');
+    update.run(id, 'October final update', 70, '2026-10-31 15:59:59');
+    update.run(id, 'November update must stay out', 95, '2026-10-31 16:00:00');
+    try {
+      const report = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
+      expect(report.status).toBe(200);
+      expect(report.body.projects.find((p: { id: number }) => p.id === id)).toMatchObject({
+        progress: 70, baseline_progress: 20, month_updates: 2, current_update: 'October final update', reporting_category: 'Other'
+      });
+      const category = await request(app).patch('/api/staff/monthly-review/category').set('Cookie', cookie)
+        .set('x-csrf-token', csrf).send({ kind: 'project', id, category: 'IoT' });
+      expect(category.status).toBe(200);
+      const saved = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
+      expect(saved.body.projects.find((p: { id: number }) => p.id === id).reporting_category).toBe('IoT');
+      expect((await request(app).get('/api/staff/monthly-review?month=2026-13').set('Cookie', cookie)).status).toBe(400);
+      expect((await request(app).get('/api/staff/monthly-review').set('Cookie', managedCookie)).status).toBe(403);
+      expect((await request(app).patch('/api/staff/monthly-review/category').set('Cookie', managedCookie)
+        .set('x-csrf-token', managedCsrf).send({ kind: 'project', id, category: 'AI' })).status).toBe(403);
+    } finally { db.prepare('DELETE FROM projects WHERE id = ?').run(id); }
+  });
+
   it("keeps project request triage in lead and administrator workspaces", async () => {
     const memberView = await request(app).get("/api/staff/requests").set("Cookie", managedCookie);
     expect(memberView.status).toBe(403);

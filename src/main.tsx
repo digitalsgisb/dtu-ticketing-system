@@ -22,6 +22,7 @@ import { PublicShowcaseDetailPage, PublicShowcasePage, ShowcasePage } from "./pa
 import { LinksPage } from "./pages/Links";
 import { ProfilePage } from "./pages/Profile";
 import "./styles.css";
+const MonthlyReviewPage = React.lazy(() => import("./pages/MonthlyReview").then(module => ({ default: module.MonthlyReviewPage })));
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -64,6 +65,7 @@ function App() {
       <Route path="tickets" element={<TicketsPage />} />
       <Route path="tickets/:id" element={<TicketDetailPage />} />
       <Route element={<LeadProtected />}>
+        <Route path="monthly-review" element={<React.Suspense fallback={<Loading />}><MonthlyReviewPage /></React.Suspense>} />
         <Route path="requests" element={<RequestsPage />} />
         <Route path="requests/:id" element={<RequestDetailPage />} />
         <Route path="briefing" element={<ProgressBriefingPage />} />
