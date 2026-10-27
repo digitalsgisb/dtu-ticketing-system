@@ -38,9 +38,13 @@ monthlyReviewRouter.get("/", (req, res) => {
   `).all(bounds);
   const plans = db.prepare(`SELECT p.*, owner.name AS owner_name FROM projects p
     LEFT JOIN users owner ON owner.id = p.owner_id WHERE p.status = 'planned' ORDER BY p.start_date, p.name`).all();
+  const currentProjects = db.prepare(`SELECT p.*, owner.name AS owner_name FROM projects p
+    LEFT JOIN users owner ON owner.id = p.owner_id
+    WHERE p.status IN ('in_progress', 'on_hold', 'complete_monitoring')
+    ORDER BY CASE p.status WHEN 'on_hold' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, p.name`).all();
   const requests = db.prepare(`SELECT * FROM project_requests WHERE status IN ('submitted','triage','needs_information')
     ORDER BY created_at DESC`).all();
-  res.json({ month, projects, plans, requests });
+  res.json({ month, projects, currentProjects, plans, requests });
 });
 
 monthlyReviewRouter.patch("/category", (req, res) => {

@@ -54,6 +54,11 @@ export function ReviewAnalysis({ items, tab, compact = false, onCategory }: { it
     [awaitingInfo, "Need information", "Waiting for requester input"],
     [items.filter(item => item.status === "submitted").length, "Awaiting review", "Submitted requests"],
     [items.filter(item => item.status === "triage").length, "Under review", "Requests in triage"]
+  ] : tab === "current" ? [
+    [average == null ? "—" : `${average}%`, "Average delivery", `${recorded.length} of ${items.length} current projects have recorded progress`],
+    [items.filter(item => item.status === "in_progress").length, "In progress", "Currently in delivery"],
+    [items.filter(item => item.status === "complete_monitoring").length, "Monitoring", "Complete and under observation"],
+    [held, "On hold", "Current status · needs discussion"]
   ] : [
     [average == null ? "—" : `${average}%`, "Average delivery", `${recorded.length} of ${items.length} projects have recorded progress`],
     [tab === "progress" ? gain == null ? "—" : `${gain > 0 ? "+" : ""}${gain} pp` : items.length, tab === "progress" ? "Average monthly gain" : "Planned projects", tab === "progress" ? `${comparable.length} projects with a prior-month baseline` : "Current planning pipeline"],
@@ -61,21 +66,25 @@ export function ReviewAnalysis({ items, tab, compact = false, onCategory }: { it
     [tab === "progress" ? held : items.filter(item => !item.start_date).length, tab === "progress" ? "On hold" : "Start date unset", tab === "progress" ? "Recorded status · needs discussion" : "Scheduling still to be confirmed"]
   ];
   return <section className={`mr-analysis${compact ? " is-compact" : ""}`} aria-label="Progress analysis">
-    {!compact && <><span className="mr-kicker">THE MANAGEMENT PICTURE</span><h2>From activity to outcomes.</h2><p className="mr-analysis-intro">{items.length} {tab === "requests" ? "requests in the current pipeline" : `projects in this ${tab === "progress" ? "reporting" : "planning"} view`}. {tab === "progress" ? "Analysis uses recorded updates, with missing history kept visible." : "This pipeline reflects current status, independent of the reporting month."}</p></>}
+    {!compact && <><span className="mr-kicker">THE MANAGEMENT PICTURE</span><h2>{tab === "current" ? "The projects moving today." : tab === "plans" ? "The next chapter of delivery." : "From activity to outcomes."}</h2><p className="mr-analysis-intro">{items.length} {tab === "requests" ? "requests in the current pipeline" : `projects in this ${tab === "progress" ? "reporting" : tab === "current" ? "current portfolio" : "planning"} view`}. {tab === "progress" ? "Analysis uses recorded updates, with missing history kept visible." : "This view reflects current status, independent of the reporting month."}</p></>}
     <div className="mr-analysis-metrics">{metrics.map(([value, title, note]) => <article key={title}><strong>{value}</strong><h3>{title}</h3><small>{note}</small></article>)}</div>
     {!compact && <div className="mr-analysis-detail"><div className="mr-category-breakdown"><h3>Where the work sits</h3><p>Choose a category to start its project walkthrough.</p>{reviewCategories.map(category => {
       const count = items.filter(item => item.reporting_category === category).length;
       return <button key={category} disabled={!count} onClick={() => onCategory?.(category)}><span>{category}</span><i><b style={{ width: `${items.length ? count / items.length * 100 : 0}%` }} /></i><strong>{count}</strong></button>;
-    })}</div><aside className="mr-discussion"><span className="mr-kicker">DISCUSSION POINTS</span><h3>What needs a conversation?</h3>{!items.length ? <p>No items in this view yet.</p> : tab === "progress" ? <>
+    })}</div><aside className="mr-discussion"><span className="mr-kicker">DISCUSSION POINTS</span><h3>What needs a conversation?</h3>{!items.length ? <p>No items in this view yet.</p> : tab === "progress" || tab === "current" ? <>
       <p><strong>{held}</strong> {held === 1 ? "project is" : "projects are"} recorded as on hold.</p>
       <p><strong>{missing}</strong> {missing === 1 ? "project has" : "projects have"} no recorded delivery percentage.</p>
       <p><strong>{items.filter(item => !item.next_action).length}</strong> projects have no next action recorded.</p>
-      <small>Progress gain is an average of comparable projects, not a total portfolio increase.</small>
+      <small>{tab === "progress" ? "Progress gain is an average of comparable projects, not a total portfolio increase." : "Includes active delivery, projects on hold, and monitoring, even without an update this month."}</small>
     </> : tab === "requests" ? <><p><strong>{awaitingInfo}</strong> requests need more information before the next decision.</p><p>Use the category rail to review demand and agree the next step.</p></> : <><p><strong>{items.filter(item => !item.start_date).length}</strong> planned projects have no start date.</p><p>Use the walkthrough to agree priorities, owners, and next actions.</p></>}</aside></div>}
   </section>;
 }
 
-export function ReviewPresentation({ pool, tab, label, initialCategory, onClose, renderItem }: { pool: Item[]; tab: string; label: string; initialCategory: string; onClose: () => void; renderItem: (item: Item, number: number) => ReactNode }) {
+export function ReviewPresentation({ sections, initialTab, label, initialCategory, onClose, renderItem }: { sections: Record<string, Item[]>; initialTab: string; label: string; initialCategory: string; onClose: () => void; renderItem: (item: Item, number: number, section: string) => ReactNode }) {
+  const [tab, setTab] = useState(initialTab);
+  const pool = sections[tab] ?? [];
+  const sectionLabels = [["progress", "Monthly progress"], ["current", "Current projects"], ["plans", "Future plans"], ["requests", "Requests"]];
+  const title = sectionLabels.find(([key]) => key === tab)?.[1] ?? "Monthly progress";
   const [selected, setSelected] = useState("overview");
   const [slide, setSlide] = useState(0);
   const rail = useRef<HTMLElement>(null);
@@ -83,7 +92,7 @@ export function ReviewPresentation({ pool, tab, label, initialCategory, onClose,
   const items = pool.filter(item => selected === "all" || item.reporting_category === selected);
   const index = Math.max(0, Math.min(slide, items.length - 1));
   const select = (category: string) => { setSelected(category); setSlide(0); };
-  const start = () => select(initialCategory !== "all" && pool.some(item => item.reporting_category === initialCategory) ? initialCategory : "all");
+  const start = () => select(tab === initialTab && initialCategory !== "all" && pool.some(item => item.reporting_category === initialCategory) ? initialCategory : "all");
   const allLabel = tab === "requests" ? "All requests" : "All projects";
   useEffect(() => {
     const nav = rail.current;
@@ -114,16 +123,18 @@ export function ReviewPresentation({ pool, tab, label, initialCategory, onClose,
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [selected, items.length, index, onClose, initialCategory]);
+  }, [selected, items.length, index, onClose, initialCategory, tab, initialTab]);
   const activeIndex = options.indexOf(selected);
-  return <section className="mr-presentation" role="dialog" aria-modal="true" aria-label="Monthly review presentation"><header><div><span className="mr-kicker">DTU · {label}</span><h2>{tab === "progress" ? "Monthly progress" : tab === "plans" ? "What’s next" : "Request pipeline"}</h2></div><button autoFocus className="button button-secondary" onClick={onClose}>Exit presentation ×</button></header>
+  return <section className="mr-presentation" role="dialog" aria-modal="true" aria-label="Monthly review presentation"><header><div><span className="mr-kicker">DTU · {label}</span><h2>{title}</h2></div><button autoFocus className="button button-secondary" onClick={onClose}>Exit presentation ×</button></header>
+    <nav className="mr-presentation-sections" aria-label="Presentation sections">{sectionLabels.map(([key, name]) => <button key={key} aria-pressed={tab === key} onClick={() => { setTab(key); select("overview"); }}>{name}<small>{sections[key]?.length ?? 0}</small></button>)}</nav>
+    <p className="mr-presentation-context">{tab === "progress" ? "Reporting month · progress from dated updates" : tab === "current" ? "Live portfolio · in progress, on hold, and monitoring" : tab === "plans" ? "Live roadmap · planned projects awaiting delivery" : "Live intake · requests awaiting a decision"}</p>
     <div className="mr-presentation-layout"><aside className="mr-presentation-rail"><nav ref={rail} aria-label="Presentation categories" style={{ "--rail-index": activeIndex } as CSSProperties}><i className="mr-rail-indicator" aria-hidden="true" />{options.map(category => {
       const count = category === "overview" || category === "all" ? pool.length : pool.filter(item => item.reporting_category === category).length;
       return <button key={category} aria-pressed={selected === category} disabled={category !== "overview" && !count} onClick={() => select(category)}><span>{category === "overview" ? "Overview" : category === "all" ? allLabel : category}</span></button>;
     })}</nav></aside>
-      <div className="mr-presentation-main" role="region" aria-label="Presentation content"><div className="mr-stage-caption"><span>{selected === "overview" ? "Overview & analysis" : selected === "all" ? allLabel : selected}</span><small>{selected === "overview" ? `${pool.length} items in this review` : `${items.length ? index + 1 : 0} of ${items.length}`}</small></div>
-        <ReviewMotion viewKey={`${selected}-${items[index]?.id ?? "overview"}`} className="mr-stage-transition"><div className="mr-slide">{selected === "overview" ? <ReviewAnalysis items={pool} tab={tab} onCategory={select} /> : items[index] ? renderItem(items[index], index + 1) : <Empty title="No projects in this category" />}</div></ReviewMotion>
+      <div className="mr-presentation-main" role="region" aria-label="Presentation content"><div className="mr-stage-caption"><span>{selected === "overview" ? "Overview & analysis" : selected === "all" ? allLabel : selected}</span><small>{selected === "overview" ? `${pool.length} ${pool.length === 1 ? "item" : "items"} in this review` : `${items.length ? index + 1 : 0} of ${items.length}`}</small></div>
+        <ReviewMotion viewKey={`${tab}-${selected}-${items[index]?.id ?? "overview"}`} className="mr-stage-transition"><div className="mr-slide">{selected === "overview" ? <ReviewAnalysis items={pool} tab={tab} onCategory={select} /> : items[index] ? renderItem(items[index], index + 1, tab) : <Empty title="No projects in this category" />}</div></ReviewMotion>
       </div></div>
-    <footer><button className="button button-secondary" disabled={selected === "overview"} onClick={() => index === 0 ? select("overview") : setSlide(index - 1)}>← {index === 0 ? "Overview" : "Previous"}</button><span aria-live="polite">{selected === "overview" ? "Meeting overview" : `${selected === "all" ? allLabel : selected} · ${index + 1} / ${items.length}`}<small> · ← → to navigate · Esc to exit</small></span><button className="button button-primary" disabled={selected !== "overview" && index >= items.length - 1} onClick={() => selected === "overview" ? start() : setSlide(index + 1)}>{selected === "overview" ? "Start projects →" : "Next project →"}</button></footer>
+    <footer><button className="button button-secondary" disabled={selected === "overview"} onClick={() => index === 0 ? select("overview") : setSlide(index - 1)}>← {index === 0 ? "Overview" : "Previous"}</button><span aria-live="polite">{selected === "overview" ? "Meeting overview" : `${selected === "all" ? allLabel : selected} · ${items.length ? index + 1 : 0} / ${items.length}`}<small> · ← → to navigate · Esc to exit</small></span><button className="button button-primary" disabled={!pool.length || (selected !== "overview" && index >= items.length - 1)} onClick={() => selected === "overview" ? start() : setSlide(index + 1)}>{selected === "overview" ? "Start projects →" : "Next project →"}</button></footer>
   </section>;
 }

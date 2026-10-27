@@ -25,8 +25,8 @@
 .mr-metrics strong { display: block; font-size: 35px; letter-spacing: -.05em; font-weight: 550; }
 .mr-metrics h3 { margin: 10px 0 6px; font-size: 12px; }
 .mr-metrics small { color: var(--mr-muted); font-size: 10px; }
-.mr-tabs { display: flex; gap: 25px; border-bottom: 1px solid #d6e3dc; margin-bottom: 30px; }
-.mr-tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 0 3px 16px; font-size: 13px; color: #69817e; cursor: pointer; }
+.mr-tabs { display: flex; gap: 25px; border-bottom: 1px solid #d6e3dc; margin-bottom: 30px; overflow-x: auto; }
+.mr-tabs button { flex-shrink: 0; border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 0 3px 16px; font-size: 13px; color: #69817e; cursor: pointer; }
 .mr-tabs button.active { color: #176d5b; border-bottom-color: #176d5b; font-weight: 700; }
 .mr-tabs button > span { margin-left: 10px; font-size: 10px; padding: 3px 7px; border-radius: 5px; background: #e3ece7; }
 .mr-section-heading h2 { font-size: 23px; letter-spacing: -.03em; margin: 8px 0; }
@@ -78,6 +78,13 @@
 .mr-presentation { position: fixed; inset: 0; z-index: 1100; background: #edf3ee; display: flex; flex-direction: column; overflow: auto; padding: 30px 5vw; }
 .mr-presentation > header, .mr-presentation > footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-shrink: 0; }
 .mr-presentation h2 { font-size: 24px; margin: 8px 0; }
+.mr-presentation-sections { display: flex; flex: 0 0 auto; min-height: 42px; gap: 26px; margin-top: 18px; border-bottom: 1px solid #d1e0d9; overflow-x: auto; scrollbar-width: thin; scrollbar-color: #62bcb080 transparent; }
+.mr-presentation-sections::-webkit-scrollbar { height: 4px; }
+.mr-presentation-sections::-webkit-scrollbar-thumb { background: #62bcb080; border-radius: 4px; }
+.mr-presentation-sections button { flex-shrink: 0; padding: 12px 1px; border: 0; border-bottom: 2px solid transparent; background: none; color: #71877d; font-size: 12px; cursor: pointer; transition: color 220ms ease, border-color 220ms ease; }
+.mr-presentation-sections button[aria-pressed="true"] { color: #126b66; border-bottom-color: #199f90; font-weight: 700; }
+.mr-presentation-sections small { margin-left: 9px; font-size: 10px; opacity: .7; }
+.mr-presentation-context { flex: 0 0 auto; margin: 12px 0 0; color: #748b80; font-size: 10px; }
 .mr-slide { flex: 1; display: grid; place-items: center; padding: 24px 0; }
 .mr-slide .mr-card { display: grid; grid-template-columns: .85fr 1.15fr; width: min(1200px, 100%); min-height: 480px; }
 .mr-slide .mr-card-visual { height: 100%; min-height: 280px; }

@@ -12,7 +12,7 @@ let root: Root;
 const report = { month: "2026-10", projects: [
   { id: 1, name: "AI inspection", project_no: "PRJ-01", reporting_category: "AI", department_name: "DTU", progress: 70, baseline_progress: 30, month_updates: 2, current_update: "Pilot validated", status: "in_progress" },
   { id: 2, name: "Energy sensors", project_no: "PRJ-02", reporting_category: "IoT", department_name: "DTU", progress: null, is_new: 1, month_updates: 0, status: null }
-], plans: [{ id: 3, name: "Future portal", reporting_category: "Software", department_name: "DTU", progress: 0, status: "planned" }], requests: [] };
+], currentProjects: [{ id: 4, name: "Current delivery", reporting_category: "IoT", department_name: "DTU", progress: 35, status: "in_progress", current_update: "Current field work" }, { id: 5, name: "Monitoring rollout", reporting_category: "AI", department_name: "DTU", progress: 100, status: "complete_monitoring" }], plans: [{ id: 3, name: "Future portal", reporting_category: "Software", department_name: "DTU", progress: 0, status: "planned" }], requests: [] };
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
@@ -104,9 +104,48 @@ it("skips transition delays when reduced motion is enabled", async () => {
 });
 
 it("separates the live plan pipeline from the monthly activity", async () => {
-  await render(); await click("What’s next");
+  await render(); await click("Future plans");
   expect(host.querySelector(".mr-context")?.textContent).toContain("independent of the reporting month");
   expect(host.querySelectorAll(".mr-grid .mr-card")).toHaveLength(1);
   expect(host.querySelector(".mr-grid")?.textContent).toContain("Future portal");
   expect(host.querySelector(".mr-grid")?.textContent).not.toContain("AI inspection");
+});
+
+it("includes current work with no monthly activity in its own live portfolio view", async () => {
+  await render(); await click("Current projects");
+  expect(host.querySelector(".mr-context")?.textContent).toContain("including projects without an update this month");
+  expect(host.querySelector(".mr-grid")?.textContent).toContain("Current delivery");
+  expect(host.querySelector(".mr-grid")?.textContent).toContain("Monitoring rollout");
+  expect(host.querySelector(".mr-grid")?.textContent).not.toContain("AI inspection");
+});
+
+it("presents current projects and future plans without leaving the presentation", async () => {
+  await render(); await click("Present review");
+  const section = async (label: string) => {
+    const button = [...host.querySelectorAll<HTMLButtonElement>(".mr-presentation-sections button")].find(item => item.textContent?.startsWith(label))!;
+    await act(async () => button.click()); await settle();
+  };
+  await section("Current projects");
+  expect(host.querySelector(".mr-slide")?.textContent).toContain("The projects moving today.");
+  expect(host.querySelector(".mr-slide")?.textContent).toContain("Monitoring");
+  expect(host.querySelector(".mr-slide")?.textContent).not.toContain("Average monthly gain");
+  await click("Start projects");
+  expect(host.querySelector(".mr-slide")?.textContent).toContain("Current delivery");
+  expect(host.querySelector(".mr-slide")?.textContent).toContain("Current field work");
+  await section("Future plans");
+  expect(host.querySelector(".mr-slide")?.textContent).toContain("The next chapter of delivery.");
+  await click("Start projects");
+  expect(host.querySelector(".mr-slide")?.textContent).toContain("Future portal");
+  expect(host.querySelector(".mr-slide .mr-card h3")?.textContent).toBe("Future portal");
+  await click("Exit presentation");
+  expect(host.querySelector(".mr-grid")?.textContent).toContain("AI inspection");
+});
+
+it("keeps the whole presentation available when the reporting month has no activity", async () => {
+  vi.mocked(api).mockResolvedValue({ ...report, projects: [] });
+  await render(); await click("Present review");
+  const current = [...host.querySelectorAll<HTMLButtonElement>(".mr-presentation-sections button")].find(button => button.textContent?.startsWith("Current projects"))!;
+  await act(async () => current.click()); await settle();
+  await click("Start projects");
+  expect(host.querySelector(".mr-slide")?.textContent).toContain("Current delivery");
 });

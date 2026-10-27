@@ -857,12 +857,22 @@ describe("DTU Control Centre API", () => {
     update.run(id, 'October opening update', 40, '2026-09-30 16:00:00');
     update.run(id, 'October final update', 70, '2026-10-31 15:59:59');
     update.run(id, 'November update must stay out', 95, '2026-10-31 16:00:00');
+    db.prepare("UPDATE projects SET status = 'in_progress', current_update = 'Live delivery position' WHERE id = ?").run(id);
+    const planned = Number(db.prepare(`INSERT INTO projects(project_no, name, department_name, qr_token, status, created_at)
+      VALUES ('PRJ-FUTURE-TEST', 'Future plan', 'DTU', 'future-plan-test', 'planned', '2027-01-01 00:00:00')`).run().lastInsertRowid);
+    const quiet = Number(db.prepare(`INSERT INTO projects(project_no, name, department_name, qr_token, status, progress, created_at)
+      VALUES ('PRJ-QUIET-TEST', 'Current without updates', 'DTU', 'quiet-current-test', 'on_hold', 10, '2026-01-01 00:00:00')`).run().lastInsertRowid);
     try {
       const report = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
       expect(report.status).toBe(200);
       expect(report.body.projects.find((p: { id: number }) => p.id === id)).toMatchObject({
         progress: 70, baseline_progress: 20, month_updates: 2, current_update: 'October final update', reporting_category: 'Other'
       });
+      expect(report.body.currentProjects.find((p: { id: number }) => p.id === id)).toMatchObject({ progress: 95, current_update: 'Live delivery position' });
+      expect(report.body.currentProjects.find((p: { id: number }) => p.id === quiet)).toMatchObject({ progress: 10, status: 'on_hold' });
+      expect(report.body.currentProjects.some((p: { id: number }) => p.id === planned)).toBe(false);
+      expect(report.body.plans.some((p: { id: number }) => p.id === planned)).toBe(true);
+      expect(report.body.projects.some((p: { id: number }) => p.id === planned)).toBe(false);
       const category = await request(app).patch('/api/staff/monthly-review/category').set('Cookie', cookie)
         .set('x-csrf-token', csrf).send({ kind: 'project', id, category: 'IoT' });
       expect(category.status).toBe(200);
@@ -872,7 +882,7 @@ describe("DTU Control Centre API", () => {
       expect((await request(app).get('/api/staff/monthly-review').set('Cookie', managedCookie)).status).toBe(403);
       expect((await request(app).patch('/api/staff/monthly-review/category').set('Cookie', managedCookie)
         .set('x-csrf-token', managedCsrf).send({ kind: 'project', id, category: 'AI' })).status).toBe(403);
-    } finally { db.prepare('DELETE FROM projects WHERE id = ?').run(id); }
+    } finally { db.prepare('DELETE FROM projects WHERE id IN (?, ?, ?)').run(id, planned, quiet); }
   });
 
   it("keeps project request triage in lead and administrator workspaces", async () => {
