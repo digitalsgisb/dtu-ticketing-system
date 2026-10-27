@@ -1,3 +1,5 @@
+import { flattenProjectGroups, type GroupableProject } from "../projectGroups";
+import { ProjectGroupContext } from "../components/ProjectGroups";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
@@ -21,14 +23,14 @@ const projectStatusOptions = [
 const projectLinkSlotCount = 4;
 const projectNavigationKey = "dtu-project-presentation";
 
-type ProjectNavigationItem = { id: number; project_no: string; name: string };
+type ProjectNavigationItem = GroupableProject & { id: number; project_no: string; name: string };
 
 function savedProjectNavigation(): { projects: ProjectNavigationItem[]; returnTo: string } {
   try {
     const saved = JSON.parse(sessionStorage.getItem(projectNavigationKey) || "{}");
     return {
       projects: Array.isArray(saved.projects) ? saved.projects : [],
-      returnTo: saved.returnTo === "/my-projects" ? "/my-projects" : "/projects"
+      returnTo: typeof saved.returnTo === "string" && /^\/(?:my-projects|projects)(?:\?|$)/.test(saved.returnTo) ? saved.returnTo : "/projects"
     };
   } catch { return { projects: [], returnTo: "/projects" }; }
 }
@@ -106,7 +108,7 @@ export function ProjectDetailPage() {
   const displayedProgress = completeLikeProjectStatuses.has(project.status) ? 100 : project.progress;
   const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
   const savedNavigation = savedProjectNavigation();
-  const presentationOrder: ProjectNavigationItem[] = savedNavigation.projects.some(item => String(item.id) === String(project.id)) ? savedNavigation.projects : data.navigationProjects;
+  const presentationOrder: ProjectNavigationItem[] = savedNavigation.projects.some(item => String(item.id) === String(project.id)) ? savedNavigation.projects : flattenProjectGroups(data.navigationProjects as ProjectNavigationItem[]);
   const currentIndex = presentationOrder.findIndex(item => String(item.id) === String(project.id));
   const previousProject = currentIndex > 0 ? presentationOrder[currentIndex - 1] : null;
   const nextProject = currentIndex >= 0 && currentIndex < presentationOrder.length - 1 ? presentationOrder[currentIndex + 1] : null;
@@ -125,6 +127,7 @@ export function ProjectDetailPage() {
       {canUpdateProgress && <button className="button button-secondary" onClick={() => setUpdatingProgress(true)}>Update progress</button>}
       {user?.role !== "member" && <button className="button button-primary" onClick={() => setEditing(true)}>Edit project</button>}
     </>} />
+    <ProjectGroupContext project={project} members={data.groupProjects} />
     <div className={`project-overview${project.latest_image_id ? " has-photo" : ""}`}>
     {project.latest_image_id ? <figure className="project-detail-cover">
       <img className="project-detail-cover-backdrop" src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt="" aria-hidden="true" />

@@ -8,6 +8,9 @@ import { useLiveRefresh } from "../live";
 import { AssigneePicker } from "../components/AssigneePicker";
 import { TaskProgress } from "../components/TaskProgress";
 
+import { GroupedProjectCollection, ProjectGroupControls, ProjectGroupContext } from "../components/ProjectGroups";
+import { flattenProjectGroups, type GroupableProject } from "../projectGroups";
+
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusOptions = [
   ["planned", "Planned"],
@@ -22,7 +25,7 @@ const briefingPreferenceKey = "dtu-briefing-preferences";
 const briefingOrderKey = "dtu-briefing-presentation-order";
 const briefingScrollKey = "dtu-briefing-return-scroll";
 
-type PresentationProject = { id: number; project_no: string; name: string };
+type PresentationProject = GroupableProject & { id: number; project_no: string; name: string };
 
 function savedBriefingPreferences() {
   try { return JSON.parse(sessionStorage.getItem(briefingPreferenceKey) || "{}"); }
@@ -46,6 +49,7 @@ function shortUrl(value: string) {
 }
 
 export function ProgressBriefingPage() {
+  const [grouped, setGrouped] = useState(true);
   const saved = useMemo(savedBriefingPreferences, []);
   const [data, setData] = useState<any>(null);
   const [filter, setFilter] = useState(saved.filter || "all");
@@ -96,7 +100,7 @@ export function ProgressBriefingPage() {
         || (freshnessFilter === "stale14" && (updateAge === null || updateAge > 14))
         || (freshnessFilter === "no_update" && !project.current_update);
       const linkText = (project.links ?? []).map((link: any) => `${link.title} ${link.url}`).join(" ");
-      const haystack = `${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.department_name ?? ""} ${project.current_update ?? ""} ${project.next_action ?? ""} ${linkText}`.toLowerCase();
+      const haystack = `${project.group_name ?? ""} ${project.project_no} ${project.name} ${project.owner_name ?? ""} ${project.department_name ?? ""} ${project.current_update ?? ""} ${project.next_action ?? ""} ${linkText}`.toLowerCase();
       return matchesStatus && matchesProgress && matchesDeadline && matchesFreshness && haystack.includes(query);
     }).sort((left: any, right: any) => compareProjects(left, right, sort));
   }, [data, filter, progressFilter, deadlineFilter, freshnessFilter, sort, search]);
@@ -104,7 +108,7 @@ export function ProgressBriefingPage() {
   if (!data) return <Loading />;
 
   return <>
-    <PageHeader eyebrow="Executive reporting" title="Progress Briefing" description="A presentation-ready view of every DTU project, its latest progress, evidence, and delivery position." />
+    <PageHeader eyebrow="Executive reporting" title="Progress Briefing" description="A presentation-ready view of every DTU project, its latest progress, evidence, and delivery position." actions={<ProjectGroupControls onChanged={load} />} />
     <section className="briefing-hero">
       <div><span>Portfolio pulse</span><h2>{data.stats.active} projects actively moving</h2><p>Select any project to present its update history, progress photos, and current work.</p></div>
       <div className="briefing-storage"><small>Progress photo storage</small><strong>{formatBytes(data.stats.imageBytes)}</strong><span>{data.stats.imageCount} progress images · {formatBytes(data.stats.freeBytes)} free locally</span></div>
@@ -137,7 +141,7 @@ export function ProgressBriefingPage() {
       <div className="briefing-result-summary"><strong>{projects.length}</strong> of {data.stats.total} projects shown</div>
       <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search projects or updates…" />
     </div>
-    {projects.length ? <div className="briefing-project-grid">{projects.map((project: any) => <BriefingProjectCard project={project} presentationOrder={projects} key={project.id} />)}</div> : <Empty title="No projects match this view" />}
+    {projects.length ? <GroupedProjectCollection projects={projects as any[]} grouped={grouped} onGroupingChange={setGrouped} gridClassName="briefing-project-grid" renderProject={(project: any) => <BriefingProjectCard project={project} presentationOrder={flattenProjectGroups(projects as any[], grouped)} />} /> : <Empty title="No projects match this view" />}
   </>;
 }
 
@@ -211,7 +215,7 @@ export function BriefingProjectPage() {
   const allImages = updates.flatMap((update: any) => update.images.map((image: any) => ({ ...image, update })));
   const openWork = workItems.filter((item: any) => !["resolved", "closed"].includes(item.status));
   const savedOrder = savedPresentationOrder();
-  const presentationOrder: PresentationProject[] = savedOrder.some(item => String(item.id) === String(project.id)) ? savedOrder : data.navigationProjects;
+  const presentationOrder: PresentationProject[] = savedOrder.some(item => String(item.id) === String(project.id)) ? savedOrder : flattenProjectGroups(data.navigationProjects as PresentationProject[]);
   const currentIndex = presentationOrder.findIndex(item => String(item.id) === String(project.id));
   const previousProject = currentIndex > 0 ? presentationOrder[currentIndex - 1] : null;
   const nextProject = currentIndex >= 0 && currentIndex < presentationOrder.length - 1 ? presentationOrder[currentIndex + 1] : null;
@@ -225,6 +229,7 @@ export function BriefingProjectPage() {
       <button type="button" disabled={transitioning || !nextProject} onClick={() => nextProject && goToProject(nextProject.id)}><span>Next →</span><small>{nextProject?.project_no || "End of list"}</small></button>
     </nav>
     <div className={`briefing-project-stage${transitioning ? " is-switching" : ""}`} key={project.id} aria-busy={transitioning}>
+      <ProjectGroupContext project={project} members={data.groupProjects} briefing />
     <section className={`briefing-detail-hero${project.latest_image_id ? " has-progress-image" : ""}`}>
       {project.latest_image_id ? <img className="briefing-detail-cover" src={`/api/staff/briefing/images/${project.latest_image_id}`} alt="" /> : null}
       <div className="briefing-detail-copy"><span className="mono">{project.project_no}</span><div><Badge value={project.status} /><Badge value={project.priority} kind="priority" /></div><h1>{project.name}</h1><p>{project.description || "No project description has been added."}</p></div>

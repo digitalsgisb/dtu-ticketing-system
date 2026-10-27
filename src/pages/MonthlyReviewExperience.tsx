@@ -1,3 +1,5 @@
+import { groupProjectItems, type GroupDefinition } from "../projectGroups";
+import { ProjectGroupSummary } from "../components/ProjectGroups";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Item } from "./MonthlyReview";
 import { Empty } from "../components/UI";
@@ -85,7 +87,7 @@ export function ReviewAnalysis({ items, tab, compact = false, onCategory }: { it
   </section>;
 }
 
-export function ReviewPresentation({ sections, initialTab, label, initialCategory, onClose, renderItem, renderTable, blocked = false }: { sections: Record<string, Item[]>; initialTab: string; label: string; initialCategory: string; onClose: () => void; renderItem: (item: Item, number: number, section: string) => ReactNode; renderTable: (items: Item[]) => ReactNode; blocked?: boolean }) {
+export function ReviewPresentation({ sections, initialTab, label, initialCategory, onClose, renderItem, renderTable, groups = [], blocked = false }: { sections: Record<string, Item[]>; initialTab: string; label: string; initialCategory: string; onClose: () => void; renderItem: (item: Item, number: number, section: string) => ReactNode; renderTable: (items: Item[]) => ReactNode; groups?: GroupDefinition[]; blocked?: boolean }) {
   const [tab, setTab] = useState(initialTab);
   const pool = sections[tab] ?? [];
   const sectionLabels = [["portfolio", "Project overview"], ["progress", "Monthly progress"], ["current", "Current projects"], ["plans", "Future plans"], ["requests", "Requests"]];
@@ -95,7 +97,8 @@ export function ReviewPresentation({ sections, initialTab, label, initialCategor
   const rail = useRef<HTMLElement>(null);
   const options = ["overview", "all", ...reviewCategories];
   const items = pool.filter(item => selected === "all" || item.reporting_category === selected);
-  const index = Math.max(0, Math.min(slide, items.length - 1));
+  const slides = groupProjectItems(items, tab === "requests" ? [] : groups, tab !== "requests");
+  const index = Math.max(0, Math.min(slide, slides.length - 1));
   const select = (category: string) => { setSelected(category); setSlide(0); };
   const start = () => select(tab === initialTab && initialCategory !== "all" && pool.some(item => item.reporting_category === initialCategory) ? initialCategory : "all");
   const allLabel = tab === "requests" ? "All requests" : "All projects";
@@ -124,12 +127,12 @@ export function ReviewPresentation({ sections, initialTab, label, initialCategor
       if (event.target instanceof Element && event.target.matches("input,select,textarea")) return;
       if (["Escape", "ArrowRight", "ArrowLeft"].includes(event.key)) event.preventDefault();
       if (event.key === "Escape") onClose();
-      if (event.key === "ArrowRight" && tab !== "portfolio") { if (selected === "overview") start(); else setSlide(i => Math.min(i + 1, Math.max(0, items.length - 1))); }
+      if (event.key === "ArrowRight" && tab !== "portfolio") { if (selected === "overview") start(); else setSlide(i => Math.min(i + 1, Math.max(0, slides.length - 1))); }
       if (event.key === "ArrowLeft") { if (index === 0) select("overview"); else setSlide(i => Math.max(0, i - 1)); }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [selected, items.length, index, onClose, initialCategory, tab, initialTab]);
+  }, [selected, slides.length, index, onClose, initialCategory, tab, initialTab]);
   const activeIndex = options.indexOf(selected);
   return <section className="mr-presentation" role="dialog" aria-modal="true" aria-label="Monthly review presentation" inert={blocked}><header><div><span className="mr-kicker">DTU · {label}</span><h2>{title}</h2></div><button autoFocus className="button button-secondary" onClick={onClose}>Exit presentation ×</button></header>
     <nav className="mr-presentation-sections" aria-label="Presentation sections">{sectionLabels.map(([key, name]) => <button key={key} aria-pressed={tab === key} onClick={() => { setTab(key); select("overview"); }}>{name}<small>{sections[key]?.length ?? 0}</small></button>)}</nav>
@@ -138,9 +141,9 @@ export function ReviewPresentation({ sections, initialTab, label, initialCategor
       const count = category === "overview" || category === "all" ? pool.length : pool.filter(item => item.reporting_category === category).length;
       return <button key={category} aria-pressed={selected === category} disabled={category !== "overview" && !count} onClick={() => select(category)}><span>{category === "overview" ? "Overview" : category === "all" ? allLabel : category}</span></button>;
     })}</nav></aside>
-      <div className="mr-presentation-main" role="region" aria-label="Presentation content"><div className="mr-stage-caption"><span>{selected === "overview" ? "Overview & analysis" : selected === "all" ? allLabel : selected}</span><small>{selected === "overview" ? `${pool.length} ${pool.length === 1 ? "item" : "items"} in this review` : `${items.length ? index + 1 : 0} of ${items.length}`}</small></div>
-        <ReviewMotion viewKey={`${tab}-${selected}-${items[index]?.id ?? "overview"}`} className="mr-stage-transition"><div className={`mr-slide${tab === "portfolio" ? " mr-table-slide" : ""}`}>{tab === "portfolio" ? <div className="mr-presentation-portfolio"><ReviewAnalysis items={selected === "overview" ? pool : items} tab={tab} compact />{renderTable(selected === "overview" ? pool : items)}</div> : selected === "overview" ? <ReviewAnalysis items={pool} tab={tab} onCategory={select} /> : items[index] ? renderItem(items[index], index + 1, tab) : <Empty title="No projects in this category" />}</div></ReviewMotion>
+      <div className="mr-presentation-main" role="region" aria-label="Presentation content"><div className="mr-stage-caption"><span>{selected === "overview" ? "Overview & analysis" : selected === "all" ? allLabel : selected}</span><small>{selected === "overview" ? `${pool.length} ${pool.length === 1 ? "item" : "items"} in this review` : `${slides.length ? index + 1 : 0} of ${slides.length}`}</small></div>
+        <ReviewMotion viewKey={`${tab}-${selected}-${slides[index]?.key ?? "overview"}`} className="mr-stage-transition"><div className={`mr-slide${tab === "portfolio" ? " mr-table-slide" : ""}`}>{tab === "portfolio" ? <div className="mr-presentation-portfolio"><ReviewAnalysis items={selected === "overview" ? pool : items} tab={tab} compact />{renderTable(selected === "overview" ? pool : items)}</div> : selected === "overview" ? <ReviewAnalysis items={pool} tab={tab} onCategory={select} /> : slides[index] ? <div className="pg-group-slide">{slides[index].group && <ProjectGroupSummary entry={slides[index]} />}<div className={slides[index].group ? "pg-presentation-members" : undefined}>{slides[index].projects.map(item => <div key={item.id}>{renderItem(item, items.indexOf(item) + 1, tab)}</div>)}</div></div> : <Empty title="No projects in this category" />}</div></ReviewMotion>
       </div></div>
-    <footer><button className="button button-secondary" disabled={selected === "overview"} onClick={() => index === 0 ? select("overview") : setSlide(index - 1)}>← {index === 0 ? "Overview" : "Previous"}</button><span aria-live="polite">{tab === "portfolio" ? "Select a project name for details" : selected === "overview" ? "Meeting overview" : `${selected === "all" ? allLabel : selected} · ${items.length ? index + 1 : 0} / ${items.length}`}<small> · ← → to navigate · Esc to exit</small></span><button className="button button-primary" disabled={tab === "portfolio" || !pool.length || (selected !== "overview" && index >= items.length - 1)} onClick={() => selected === "overview" ? start() : setSlide(index + 1)}>{tab === "portfolio" ? "Project overview" : selected === "overview" ? "Start projects →" : "Next project →"}</button></footer>
+    <footer><button className="button button-secondary" disabled={selected === "overview"} onClick={() => index === 0 ? select("overview") : setSlide(index - 1)}>← {index === 0 ? "Overview" : "Previous"}</button><span aria-live="polite">{tab === "portfolio" ? "Select a project name for details" : selected === "overview" ? "Meeting overview" : `${selected === "all" ? allLabel : selected} · ${slides.length ? index + 1 : 0} / ${slides.length}`}<small> · ← → to navigate · Esc to exit</small></span><button className="button button-primary" disabled={tab === "portfolio" || !pool.length || (selected !== "overview" && index >= slides.length - 1)} onClick={() => selected === "overview" ? start() : setSlide(index + 1)}>{tab === "portfolio" ? "Project overview" : selected === "overview" ? "Start projects →" : "Next project →"}</button></footer>
   </section>;
 }

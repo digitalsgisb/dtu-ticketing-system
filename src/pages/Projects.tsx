@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { useAuth } from "../auth";
 import { PlusIcon, SearchIcon } from "../components/Icons";
@@ -7,6 +7,9 @@ import { Badge, Empty, ErrorNotice, Loading, Modal, PageHeader } from "../compon
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
 import { TaskProgress } from "../components/TaskProgress";
+
+import { GroupedProjectCollection, ProjectGroupControls } from "../components/ProjectGroups";
+import { flattenProjectGroups } from "../projectGroups";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"], ["cancelled", "Cancelled"]] as const;
@@ -21,10 +24,13 @@ function savedProjectPreferences(myProjectsOnly: boolean) {
 export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: boolean }) {
   const { t } = useI18n();
   const { user } = useAuth();
+  const [params] = useSearchParams();
+  const groupFilter = params.get("group");
+  const [grouped, setGrouped] = useState(true);
   const saved = useMemo(() => savedProjectPreferences(myProjectsOnly), [myProjectsOnly]);
   const [projects, setProjects] = useState<any[] | null>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [search, setSearch] = useState(saved.search || "");
+  const [search, setSearch] = useState(params.get("search") ?? saved.search ?? "");
   const [filter, setFilter] = useState(saved.filter || "all");
   const [progressFilter, setProgressFilter] = useState(saved.progressFilter || "all");
   const [deadlineFilter, setDeadlineFilter] = useState(saved.deadlineFilter || "all");
@@ -35,6 +41,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
 
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, []);
   useLiveRefresh(load);
+  useEffect(() => { if (params.has("search")) { setSearch(params.get("search") || ""); setFilter("all"); setProgressFilter("all"); setDeadlineFilter("all"); setSort("updated_desc"); } }, [params]);
   useEffect(() => {
     sessionStorage.setItem(`dtu-project-preferences-${myProjectsOnly ? "mine" : "all"}`, JSON.stringify({ search, filter, progressFilter, deadlineFilter, sort }));
   }, [myProjectsOnly, search, filter, progressFilter, deadlineFilter, sort]);
@@ -74,10 +81,10 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
         || (deadlineFilter === "next14" && dueDays !== null && dueDays >= 0 && dueDays <= 14)
         || (deadlineFilter === "next30" && dueDays !== null && dueDays >= 0 && dueDays <= 30)
         || (deadlineFilter === "none" && dueDays === null);
-      const haystack = `${project.name} ${project.project_no} ${project.department_name} ${project.owner_name ?? ""} ${project.current_update ?? ""} ${project.next_action ?? ""}`.toLowerCase();
-      return matchesStatus && matchesScope && matchesProgress && matchesDeadline && haystack.includes(query);
+      const haystack = `${project.group_name ?? ""} ${project.name} ${project.project_no} ${project.department_name} ${project.owner_name ?? ""} ${project.current_update ?? ""} ${project.next_action ?? ""}`.toLowerCase();
+      return (!groupFilter || String(project.group_id) === groupFilter) && matchesStatus && matchesScope && matchesProgress && matchesDeadline && query.split(/\s+/).every((word: string) => haystack.includes(word));
     }).sort((left, right) => compareProjects(left, right, sort));
-  }, [projects, search, filter, myProjectsOnly, user, progressFilter, deadlineFilter, sort]);
+  }, [projects, search, groupFilter, filter, myProjectsOnly, user, progressFilter, deadlineFilter, sort]);
 
   if (!projects) return <Loading />;
 
@@ -88,8 +95,8 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
     : "Plan, deliver, and support every DTU digitalization project.";
   const rememberProjectContext = () => {
     sessionStorage.setItem(projectNavigationKey, JSON.stringify({
-      projects: filtered.map(item => ({ id: item.id, project_no: item.project_no, name: item.name })),
-      returnTo: myProjectsOnly ? "/my-projects" : "/projects"
+      projects: flattenProjectGroups(filtered, grouped).map(item => ({ id: item.id, project_no: item.project_no, name: item.name })),
+      returnTo: `${myProjectsOnly ? "/my-projects" : "/projects"}${params.size ? `?${params}` : ""}`
     }));
     sessionStorage.setItem(projectScrollKey, String(window.scrollY));
   };
@@ -100,7 +107,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
         eyebrow={myProjectsOnly ? "Owned portfolio" : "Portfolio"}
         title={title}
         description={description}
-        actions={canCreateProject && !myProjectsOnly ? <button className="button button-primary" onClick={() => setShowCreate(true)}><PlusIcon />{t("newProject")}</button> : undefined}
+        actions={<><ProjectGroupControls onChanged={load} />{canCreateProject && !myProjectsOnly ? <button className="button button-primary" onClick={() => setShowCreate(true)}><PlusIcon />{t("newProject")}</button> : null}</>}
       />
       <div className="project-toolbar">
         <div className="project-toolbar-heading">
@@ -138,7 +145,8 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
         </div>
         <div className="project-result-summary" aria-live="polite"><strong>Showing {filtered.length}</strong> of {projects.length} projects{hasActiveFilters ? " with the selected filters" : ""}</div>
       </div>
-      {filtered.length ? <div className="project-grid">{filtered.map(project => {
+      {groupFilter && <Link className="text-link" to="/projects">← All project groups</Link>}
+      {filtered.length ? <GroupedProjectCollection projects={filtered} grouped={grouped} onGroupingChange={setGrouped} gridClassName="project-grid" renderProject={project => {
         const displayedProgress = projectProgress(project);
         const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
         return <article className="project-card" key={project.id}>
@@ -153,7 +161,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
           </Link>
           {canUpdateProgress && <Link to={`/projects/${project.id}?update=1`} className="project-card-quick-update" onClick={rememberProjectContext}><span>Quick update</span><strong>{displayedProgress}% <i>→</i></strong></Link>}
         </article>;
-      })}</div> : <Empty title={myProjectsOnly ? "No owned projects match this view" : "No matching projects"} />}
+      }} /> : <Empty title={myProjectsOnly ? "No owned projects match this view" : "No matching projects"} />}
       {showCreate && <ProjectCreateModal users={users} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
     </div>
   );

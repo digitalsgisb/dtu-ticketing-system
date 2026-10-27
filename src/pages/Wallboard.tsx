@@ -1,3 +1,4 @@
+import { GroupedProjectCollection } from "../components/ProjectGroups";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -288,7 +289,7 @@ function WallboardFullView({ view, data, t, newTicketIds, onBack, onSelectWork }
       </div>
       {projects
         ? data.projects.length
-          ? <div className="wallboard-group-list">{projectGroups.map(group => {
+          ? data.projects.some((project: any) => project.group_name) ? <GroupedProjectCollection projects={data.projects as any[]} controls={false} gridClassName="wallboard-all-projects" renderProject={(project: any) => <WallProject project={project} expanded />} /> : <div className="wallboard-group-list">{projectGroups.map(group => {
             const items = data.projects.filter((project: any) => group.statuses.includes(project.status));
             return items.length ? <section className="wallboard-group" key={group.title}><h3>{group.title}<span>{items.length}</span></h3><div className="wallboard-all-projects">{items.map((project: any) => <WallProject key={project.id} project={project} expanded />)}</div></section> : null;
           })}</div>
@@ -329,7 +330,7 @@ function WallProject({ project, expanded = false, showcase = false }: { project:
     </div>
     <div className="wall-project-showcase-copy">
       <header><span className="mono">{project.project_no}</span><Badge value={project.status} /></header>
-      <h3>{project.name}</h3>
+      {project.group_name && <small className="pg-wall-label">{project.group_name}</small>}<h3>{project.name}</h3>
       {project.current_update && <p>{project.current_update}</p>}
       <div className="wall-progress"><i style={{ width: `${displayedProgress}%` }} /></div>
       <TaskProgress project={project} compact />

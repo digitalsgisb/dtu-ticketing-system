@@ -1,3 +1,4 @@
+import { DashboardProjectSearch } from "../components/DashboardProjectSearch";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatDate } from "../api";
@@ -76,6 +77,7 @@ export function DashboardPage() {
           </div>
         </aside>
       </section>
+      <DashboardProjectSearch />
       <section className="stat-grid dashboard-stat-grid">
         {role === "member" ? <>
           <StatCard label="My open work" value={data.stats.personalOpen} tone="blue" note="Assigned to you" index={0} icon={<CheckIcon />} />

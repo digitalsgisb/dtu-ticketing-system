@@ -1,0 +1,41 @@
+.pg-collection { min-width: 0; display: grid; gap: 28px; }
+.pg-view-controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; color: #7a9087; font-size: 11px; }
+.pg-view-controls label { display: flex; align-items: center; gap: 10px; }
+.pg-view-controls select { width: auto; padding: 8px 11px; border: 1px solid #d5e4de; border-radius: 7px; background: white; color: #34675f; font-size: 11px; }
+.pg-group { min-width: 0; padding: 24px; border: 1px solid #cddfd9; border-radius: 17px; background: linear-gradient(135deg, #eff8f4, #f5f9fa); }
+.pg-group-top { display: flex; align-items: flex-start; gap: 20px; }
+.pg-group-heading { flex: 1; min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.pg-eyebrow { display: block; color: #6f9f91; font-size: 9px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.pg-group-heading h2 { margin: 8px 0; font-size: 25px; letter-spacing: -.035em; color: #164d4e; overflow-wrap: anywhere; }
+.pg-group-heading p { color: #6c887d; margin: 6px 0 10px; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
+.pg-group-heading small { font-size: 10px; color: #81998e; }
+.pg-group-position { display: grid; justify-items: end; gap: 9px; padding-top: 2px; flex-shrink: 0; }
+.pg-group-position > strong { font-size: 28px; font-weight: 600; letter-spacing: -.04em; color: #16847b; }
+.pg-collapse { flex-shrink: 0; border: 1px solid #bed7cc; border-radius: 7px; background: white; color: #378573; font-size: 19px; line-height: 1; width: 30px; height: 30px; cursor: pointer; }
+.pg-group-body { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 320ms cubic-bezier(.22,1,.36,1), opacity 220ms ease; }
+.pg-group-body > div { min-height: 0; overflow: hidden; }
+.pg-group-body.is-collapsed { grid-template-rows: 0fr; opacity: 0; }
+.pg-group-body .project-grid, .pg-group-body .briefing-project-grid, .pg-group-body .mr-grid, .pg-group-body .links-project-list { margin-top: 22px; padding: 3px; }
+.pg-project-slot { min-width: 0; display: flex; flex-direction: column; }
+.pg-project-slot > .project-card, .pg-project-slot > .briefing-project-card, .pg-project-slot > .mr-card { height: 100%; flex: 1; }
+.pg-individual-heading { font-size: 12px; font-weight: 700; color: #557d6e; margin-bottom: 17px; }
+.pg-individual-heading small { margin-left: 10px; font-weight: 400; color: #92a297; }
+.pg-context { border: 1px solid #cfe1d9; border-radius: 12px; padding: 20px 23px; background: #eff7f3; margin: 0 0 24px; color: #396b5c; }
+.pg-context > div > a { display: inline-block; margin-top: 7px; font-size: 18px; }
+.pg-context p { margin: 9px 0 0; color: #7c9386; font-size: 12px; line-height: 1.7; }
+.pg-context nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.pg-context nav a { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border: 1px solid #cddfd5; border-radius: 7px; background: #fff; font-size: 11px; }
+.pg-context nav a[aria-current="page"] { background: #0c6b69; border-color: #0c6b69; color: white; }
+.pg-context nav small { opacity: .7; }
+.pg-group-slide { width: 100%; min-width: 0; }
+.pg-group-slide > .pg-group-heading { margin-bottom: 22px; padding: 22px 25px; background: #e3f0e9; border: 1px solid #cfe1d7; border-radius: 13px; }
+.pg-presentation-members { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+.pg-presentation-members .mr-card { display: flex !important; min-height: 0 !important; }
+.pg-presentation-members .mr-card-visual { height: 130px !important; min-height: 0 !important; }
+.pg-presentation-members .mr-card-content { padding: 24px !important; }
+.pg-presentation-members .mr-card h3 { font-size: 24px !important; }
+.pg-presentation-members .mr-narrative p, .pg-presentation-members .mr-next p { font-size: 13px !important; }
+@media (max-width: 650px) { .pg-group { padding: 17px; } .pg-group-heading { gap: 12px; } .pg-group-heading h2 { font-size: 21px; } .pg-group-position > strong { font-size: 23px; } .pg-presentation-members { grid-template-columns: 1fr; } .pg-group-slide > .pg-group-heading { padding: 18px; } }
+@media (prefers-reduced-motion: reduce) { .pg-group-body { transition: none; } }
+
+.pg-wall-label{color:#54d8cb}.wallboard-full-panel .pg-group{background:#12383f;color:#e0f7f3;border-color:#2a6268}.wallboard-full-panel .pg-group-heading p,.wallboard-full-panel .pg-group-heading small{color:#a6cbcb}

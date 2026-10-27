@@ -1,3 +1,5 @@
+import { GroupedProjectCollection } from "../components/ProjectGroups";
+import type { GroupableProject } from "../projectGroups";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -12,7 +14,7 @@ type SystemLink = {
   sort_order: number;
 };
 
-type LinkProject = {
+type LinkProject = GroupableProject & {
   id: number;
   project_no: string;
   name: string;
@@ -58,7 +60,7 @@ export function LinksPage() {
     const query = search.trim().toLowerCase();
     const projects = (data?.projects ?? []).flatMap(project => {
       if (projectId !== "all" && String(project.id) !== projectId) return [];
-      const projectMatches = `${project.project_no} ${project.name} ${project.department_name}`.toLowerCase().includes(query);
+      const projectMatches = `${project.group_name ?? ""} ${project.project_no} ${project.name} ${project.department_name}`.toLowerCase().includes(query);
       const links = query && !projectMatches
         ? project.links.filter(link => `${link.title} ${link.url}`.toLowerCase().includes(query))
         : project.links;
@@ -92,8 +94,7 @@ export function LinksPage() {
         <span className="links-result-count"><strong>{visibleLinkCount}</strong> of {data.linkCount} links - <strong>{visibleProjects.length}</strong> projects</span>
       </section>
 
-      {visibleProjects.length ? <div className="links-project-list">
-        {visibleProjects.map(project => <section className="links-project-group" key={project.id}>
+      {visibleProjects.length ? <GroupedProjectCollection projects={visibleProjects} gridClassName="links-project-list" renderProject={project => <section className="links-project-group" key={project.id}>
           <header className="links-project-summary">
             <Link className={`links-project-image${project.latest_image_id ? " has-image" : ""}`} to={`/projects/${project.id}`} aria-label={`Open ${project.name}`}>
               {project.latest_image_id
@@ -114,8 +115,7 @@ export function LinksPage() {
               <span className="links-directory-open" aria-hidden="true"><ArrowIcon /></span>
             </a>)}
           </div>
-        </section>)}
-      </div> : <section className="panel"><Empty title="No links found" body={data.linkCount ? "Try another project or search term." : "System links added to projects will appear here."} /></section>}
+        </section>} /> : <section className="panel"><Empty title="No links found" body={data.linkCount ? "Try another project or search term." : "System links added to projects will appear here."} /></section>}
     </>}
   </>;
 }

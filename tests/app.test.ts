@@ -897,6 +897,25 @@ describe("DTU Control Centre API", () => {
       const create = await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
         .send({ name: 'Safety Digital Test', summary: 'Safety tools together', projectIds: [first, second] });
       expect(create.status).toBe(201); groupId = create.body.id;
+      for (const endpoint of ['/api/staff/projects', '/api/staff/briefing', '/api/staff/project-links']) {
+        const response = await request(app).get(endpoint).set('Cookie', cookie);
+        expect(response.status).toBe(200);
+        const projects = Array.isArray(response.body) ? response.body : response.body.projects;
+        expect(projects.find((project: any) => project.id === second)).toMatchObject({ group_id: groupId, group_name: 'Safety Digital Test', group_total: 2, progress: 40 });
+      }
+      for (const endpoint of [`/api/staff/projects/${first}`, `/api/staff/briefing/projects/${first}`]) {
+        const response = await request(app).get(endpoint).set('Cookie', cookie);
+        expect(response.status).toBe(200);
+        expect(response.body.project.group_name).toBe('Safety Digital Test');
+        expect(response.body.groupProjects.map((project: any) => project.id).sort()).toEqual([first, second].sort());
+      }
+      db.prepare("UPDATE projects SET status = 'cancelled' WHERE id = ?").run(second);
+      const wallboard = await request(app).get('/api/wallboard');
+      const visibleChild = wallboard.body.projects.find((project: any) => project.id === first);
+      expect(visibleChild).toMatchObject({ group_name: 'Safety Digital Test', group_total: 1 });
+      expect(visibleChild).not.toHaveProperty('group_summary');
+      expect(wallboard.body.projects.some((project: any) => project.id === second)).toBe(false);
+      db.prepare("UPDATE projects SET status = 'in_progress' WHERE id = ?").run(second);
       const report = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
       expect(report.body.groups.find((group: { id: number }) => group.id === groupId)).toMatchObject({ name: 'Safety Digital Test', project_ids: [first, second] });
       expect(report.body.portfolio.find((project: { id: number }) => project.id === second)).toMatchObject({ group_id: groupId, progress: 40, links: [expect.objectContaining({ url: 'https://example.com/red-tag' })] });

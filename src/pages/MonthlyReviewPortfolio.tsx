@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { Badge, Empty, ErrorNotice } from "../components/UI";
 import type { Item } from "./MonthlyReview";
+import "./monthly-review.css";
 
 export type ProjectGroup = { id: number; name: string; summary: string; project_ids: number[] };
 export type PortfolioSelection = { kind: "project" | "group"; id: number };

@@ -17,6 +17,7 @@ import { addLiveClient } from "../liveUpdates.js";
 import { assigneesFor, reconcileTaskStatus, replaceAssignees, taskAssigneeProgress, validAssignees, withAssignees } from "../assignees.js";
 import { pushConfigured, pushSubscriptionCount, sendTestPush } from "../push.js";
 import { withTaskProgress } from "../projectTasks.js";
+import { withProjectGroups, projectGroupMembers } from "../projectGroups.js";
 import { monthlyReviewRouter } from "../monthlyReview.js";
 
 export const staffRouter = Router();
@@ -665,7 +666,7 @@ staffRouter.get("/dashboard", (req, res) => {
 });
 
 staffRouter.get("/projects", (_req, res) => {
-  res.json(withTaskProgress(db.prepare(`
+  res.json(withProjectGroups(withTaskProgress(db.prepare(`
     SELECT p.*, u.name AS owner_name,
       (SELECT pui.id FROM project_update_images pui
         JOIN project_updates pu ON pu.id = pui.project_update_id
@@ -674,13 +675,13 @@ staffRouter.get("/projects", (_req, res) => {
       SUM(CASE WHEN w.status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS open_count
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id LEFT JOIN work_items w ON w.project_id = p.id
     GROUP BY p.id ORDER BY p.updated_at DESC
-  `).all() as Array<{ id: number }>));
+  `).all() as Array<{ id: number }>)));
 });
 
 staffRouter.get("/project-links", (_req, res) => {
   const rows = db.prepare(`
     SELECT p.id AS project_id, p.project_no, p.name AS project_name,
-      p.department_name, p.status, p.updated_at AS project_updated_at,
+      p.department_name, p.status, p.progress, p.updated_at AS project_updated_at,
       (SELECT pui.id FROM project_update_images pui
         JOIN project_updates pu ON pu.id = pui.project_update_id
         WHERE pu.project_id = p.id ORDER BY pui.created_at DESC, pui.id DESC LIMIT 1) AS latest_image_id,
@@ -700,6 +701,7 @@ staffRouter.get("/project-links", (_req, res) => {
         name: row.project_name,
         department_name: row.department_name,
         status: row.status,
+        progress: row.progress,
         updated_at: row.project_updated_at,
         latest_image_id: row.latest_image_id,
         links: []
@@ -713,7 +715,7 @@ staffRouter.get("/project-links", (_req, res) => {
     });
   }
 
-  res.json({ projects: [...projects.values()], linkCount: rows.length });
+  res.json({ projects: withProjectGroups([...projects.values()].map(project => ({ ...project, id: Number(project.id) }))), linkCount: rows.length });
 });
 
 staffRouter.post("/projects", requireRole("admin", "lead"), (req, res) => {
@@ -783,11 +785,12 @@ staffRouter.get("/projects/:id", (req, res) => {
     ORDER BY updated_at DESC, id DESC
   `).all();
   res.json({
-    project: withTaskProgress([project as { id: number }])[0],
+    project: withProjectGroups(withTaskProgress([project as { id: number }]))[0],
+    groupProjects: projectGroupMembers(String(req.params.id)),
     links: projectLinks(String(req.params.id)),
     workItems,
     updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
-    navigationProjects
+    navigationProjects: withProjectGroups(navigationProjects as Array<{ id: number }>)
   });
 });
 
@@ -893,7 +896,7 @@ staffRouter.get("/briefing", requireRole("admin", "lead"), async (_req, res) => 
       CASE p.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
       p.updated_at DESC
   `).all() as any[]).map(project => ({ ...project, links: projectLinks(project.id) }));
-  const projectsWithTaskProgress = withTaskProgress(projects);
+  const projectsWithTaskProgress = withProjectGroups(withTaskProgress(projects));
   const storage = await fs.promises.statfs(paths.uploads);
   const imageStats = db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes FROM project_update_images").get() as { count: number; bytes: number };
   res.json({
@@ -954,11 +957,12 @@ staffRouter.get("/briefing/projects/:id", requireRole("admin", "lead"), (req, re
       updated_at DESC
   `).all();
   res.json({
-    project: withTaskProgress([project as { id: number }])[0],
+    project: withProjectGroups(withTaskProgress([project as { id: number }]))[0],
+    groupProjects: projectGroupMembers(String(req.params.id)),
     updates: updates.map(update => ({ ...update, images: images.filter((image: any) => image.project_update_id === update.id) })),
     links: projectLinks(String(req.params.id)),
     workItems,
-    navigationProjects
+    navigationProjects: withProjectGroups(navigationProjects as Array<{ id: number }>)
   });
 });
 

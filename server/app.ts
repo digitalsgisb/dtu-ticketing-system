@@ -14,6 +14,7 @@ import { malaysiaDate, malaysiaMonthStartUtc } from "./time.js";
 import { addLiveClient, publishLiveUpdate } from "./liveUpdates.js";
 import { assigneesFor, withAssignees } from "./assignees.js";
 import { withTaskProgress } from "./projectTasks.js";
+import { withProjectGroups } from "./projectGroups.js";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -94,7 +95,7 @@ app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
     ORDER BY CASE WHEN w.due_date < ? THEN 0 ELSE 1 END,
       CASE w.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, w.due_date
   `).all(today) as Array<{ id: number }>);
-  res.json({ stats, projects, tickets, generatedAt: new Date().toISOString() });
+  res.json({ stats, projects: withProjectGroups(projects, true), tickets, generatedAt: new Date().toISOString() });
 });
 
 app.get("/api/wallboard/work/:id", blockStaffOnPublicHost, (req, res) => {
