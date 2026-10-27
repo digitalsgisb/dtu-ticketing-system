@@ -11,6 +11,7 @@ export type PortfolioSelection = { kind: "project" | "group"; id: number };
 type PortfolioRow = { key: string; name: string; summary: string; category: string; department: string; progress: number | null; status: string | null; members: Item[]; group?: ProjectGroup };
 
 export function portfolioRows(items: Item[], groups: ProjectGroup[], grouped: boolean): PortfolioRow[] {
+  items = [...items].sort((a, b) => (b.project_no || "").localeCompare(a.project_no || "", undefined, { numeric: true, sensitivity: "base" }) || b.id - a.id);
   const single = (item: Item): PortfolioRow => ({ key: `p-${item.id}`, name: item.name || "Untitled project", summary: item.description || item.current_update || "", category: item.reporting_category || "Other", department: item.department_name, progress: item.progress, status: item.status, members: [item] });
   if (!grouped) return items.map(single);
   const groupMap = new Map(groups.map(group => [group.id, group]));
@@ -48,7 +49,7 @@ export function ProjectOverviewTable({ items, groups, onOpen }: { items: Item[];
   return <section className="mr-overview-table" aria-label="Project overview">
     <div className="mr-table-tools"><span>{items.length} projects · {rows.length} {grouped ? "overview rows" : "individual rows"}</span><label>Display<select aria-label="Overview grouping" value={grouped ? "grouped" : "individual"} onChange={event => setGrouped(event.target.value === "grouped")}><option value="grouped">Combine project groups</option><option value="individual">Individual projects</option></select></label></div>
     {items.length ? <div className="mr-table-scroll"><table aria-label="Project overview table"><thead><tr>{["No.", "Project name", "Category", "Department", "Summary", "Progress", "Status"].map(title => <th key={title} scope="col">{title}</th>)}</tr></thead><tbody>{rows.flatMap((entry, index) => [row(entry, String(index + 1)), ...(entry.group && expanded.has(entry.group.id) ? portfolioRows(entry.members, [], false).map((member, childIndex) => row(member, `${index + 1}.${childIndex + 1}`, true)) : [])])}</tbody></table></div> : <Empty title="No projects match this overview" />}
-    <p className="mr-table-note">Select a project name for its details and links. Group progress is the equal-weight average of recorded progress for the projects shown; mixed statuses are labeled Mixed.</p>
+    <p className="mr-table-note">Newest project numbers first. Groups take the position of their newest child. Select a project name for details, photos, and links. Group progress is the equal-weight average of recorded progress for the projects shown; mixed statuses are labeled Mixed.</p>
   </section>;
 }
 
@@ -76,6 +77,11 @@ function PortfolioDialog({ title, children, onClose }: { title: string; children
   return createPortal(<div className="mr-portfolio-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="mr-portfolio-dialog" data-review-dialog ref={dialog} role="dialog" aria-modal="true" aria-labelledby={headingId}><header><div><span className="mr-kicker">DTU · PROJECT PORTFOLIO</span><h2 id={headingId}>{title}</h2></div><button ref={closeButton} className="icon-button" onClick={onClose} aria-label="Close project dialog">×</button></header><div className="mr-dialog-body">{children}</div></section></div>, document.body);
 }
 
+function ProjectPhotos({ projects }: { projects: Item[] }) {
+  const photos = projects.flatMap(project => (project.photos ?? []).map(photo => ({ ...photo, name: project.name })));
+  return <section className="mr-detail-section"><h3>Progress photos</h3>{photos.length ? <div className="mr-detail-photos">{photos.map(photo => <figure key={photo.id}><a href={`/api/staff/projects/progress-images/${photo.id}`} target="_blank" rel="noreferrer"><img src={`/api/staff/projects/progress-images/${photo.id}`} alt={`Progress photo for ${photo.name}`} loading="lazy" /></a><figcaption>{projects.length > 1 && <strong>{photo.name} · </strong>}{formatDate(photo.created_at)}{photo.body && <p>{photo.body}</p>}</figcaption></figure>)}</div> : <p className="muted">No progress photos have been added yet. Add pictures with a project progress update.</p>}</section>;
+}
+
 function ProjectLinks({ projects }: { projects: Item[] }) {
   const links = projects.flatMap(project => (project.links ?? []).flatMap(link => {
     try { if (!["http:", "https:"].includes(new URL(link.url).protocol)) return []; } catch { return []; }
@@ -98,13 +104,13 @@ export function ProjectDetailsDialog({ selection, portfolio, groups, onSelect, o
       <section className="mr-detail-section"><h3>Project summary</h3><p>{project.description || "No project description has been added."}</p></section>
       <section className="mr-detail-section"><h3>Latest progress</h3><p>{project.current_update || "No progress update has been published yet."}</p></section>
       <section className="mr-detail-section"><h3>Next action</h3><p>{project.next_action || "No next action recorded."}</p></section>
-      <ProjectLinks projects={[project]} /><Link className="button button-secondary" to={`/projects/${project.id}`}>Open full project record ↗</Link>
+      <ProjectPhotos projects={[project]} /><ProjectLinks projects={[project]} /><Link className="button button-secondary" to={`/projects/${project.id}`}>Open full project record ↗</Link>
     </> : <>
       <div className="mr-detail-position"><span>Project group · {members.length} projects</span>{aggregate?.status && <Badge value={aggregate.status} />}</div>
       <p className="mr-group-description">{group!.summary || "Related projects presented together."}</p>
       <section className="mr-detail-section"><h3>Combined progress</h3><ProgressValue value={aggregate?.progress ?? null} /><p className="mr-table-note">Equal-weight average of current recorded progress across all child projects. Each project keeps its own status and history.</p></section>
       <section className="mr-detail-section"><h3>Projects inside {group!.name}</h3><div className="mr-group-children">{members.map(item => <button key={item.id} onClick={() => onSelect({ kind: "project", id: item.id })}><span><strong>{item.name}</strong><small>{item.department_name} · {item.reporting_category}</small></span><ProgressValue value={item.progress} /><Badge value={item.status} /><span>↗</span></button>)}</div></section>
-      <ProjectLinks projects={members} />
+      <ProjectPhotos projects={members} /><ProjectLinks projects={members} />
     </>}
   </PortfolioDialog>;
 }

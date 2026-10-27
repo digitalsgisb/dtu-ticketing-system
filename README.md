@@ -305,3 +305,7 @@ The API tests cover health, administrator login, CSRF rejection, project creatio
 8. Configure SMTP once IT supplies an approved relay.
 9. Disable a test staff account and confirm it can no longer sign in.
 10. Reset a test staff password and confirm the forced password-change flow.
+
+Project requests are separated into Pending review, Under review, Needs information, Approved, and Rejected sections with stage counts and filters. Approval requires an AI, IoT, Software, Automation, Infrastructure, or Other category, which is saved on the request and approved project. Monthly Review’s Request pipeline includes all stages, acceptance (approved / all requests), delivery (completed or monitoring / approved requests), and pending counts; these metrics reflect the live pipeline independently of the selected reporting month.
+
+Project overview tables sort by newest project number first, with groups positioned by their newest child. Detail popups include up to four latest progress photos per project, alongside their details and system links.

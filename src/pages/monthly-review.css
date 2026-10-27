@@ -283,3 +283,6 @@
   .mr-card-bottom a { display: none; } .mr-tabs button:not(.active) { display: none; }
   .monthly-presenting .sidebar, .monthly-presenting .topbar { display: none !important; }
 }
+
+.mr-detail-photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.mr-detail-photos figure{margin:0;min-width:0}.mr-detail-photos img{width:100%;height:190px;object-fit:contain;background:#edf3f0;border-radius:10px;display:block}.mr-detail-photos figcaption{font-size:10px;color:#698779;line-height:1.7;margin-top:7px}.mr-detail-photos figcaption p{font-size:11px!important;margin-top:4px!important}
+@media(max-width:650px){.mr-detail-photos{grid-template-columns:1fr}}

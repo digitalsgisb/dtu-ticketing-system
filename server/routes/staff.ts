@@ -1620,9 +1620,10 @@ staffRouter.patch("/requests/:id", requireRole("admin", "lead"), (req, res) => {
     status: z.enum(["submitted", "triage", "needs_information", "approved", "rejected"]),
     triageNotes: z.string().max(5000).optional().default(""),
     ownerId: z.number().int().positive().nullable().optional(),
-    dueDate: z.string().nullable().optional()
-  }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Invalid request update" });
+    dueDate: z.string().nullable().optional(),
+    reportingCategory: z.enum(["AI", "IoT", "Software", "Automation", "Infrastructure", "Other"]).optional()
+  }).refine(value => value.status !== "approved" || Boolean(value.reportingCategory), "Choose a project category before approving").safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose a valid category before approving, and check the request details" });
   const request = db.prepare("SELECT * FROM project_requests WHERE id = ?").get(req.params.id) as Record<string, unknown> | undefined;
   if (!request) return res.status(404).json({ error: "Request not found" });
   let projectId = request.created_project_id as number | null;
@@ -1635,11 +1636,11 @@ staffRouter.patch("/requests/:id", requireRole("admin", "lead"), (req, res) => {
       `).run(projectNo, request.title, request.desired_outcome, request.department_name, parsed.data.ownerId ?? null,
         request.urgency, parsed.data.dueDate || request.target_date || null, crypto.randomBytes(18).toString("base64url"), request.id);
       projectId = Number(project.lastInsertRowid);
-      db.prepare("UPDATE projects SET reporting_category = ? WHERE id = ?").run(request.reporting_category || "Other", projectId);
     }
+    if (parsed.data.status === "approved" && projectId) db.prepare("UPDATE projects SET reporting_category = ? WHERE id = ?").run(parsed.data.reportingCategory!, projectId);
     db.prepare(`
-      UPDATE project_requests SET status = ?, triage_notes = ?, created_project_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `).run(parsed.data.status, cleanText(parsed.data.triageNotes), projectId, req.params.id);
+      UPDATE project_requests SET status = ?, triage_notes = ?, created_project_id = ?, reporting_category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(parsed.data.status, cleanText(parsed.data.triageNotes), projectId, parsed.data.reportingCategory ?? request.reporting_category ?? "Other", req.params.id);
   });
   operation();
   if (parsed.data.status !== request.status) {

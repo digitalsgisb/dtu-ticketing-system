@@ -44,13 +44,21 @@ monthlyReviewRouter.get("/", (req, res) => {
     ORDER BY CASE p.status WHEN 'on_hold' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, p.name`).all();
   const requests = db.prepare(`SELECT * FROM project_requests WHERE status IN ('submitted','triage','needs_information')
     ORDER BY created_at DESC`).all();
+  const requestPortfolio = db.prepare(`SELECT r.*, p.project_no, p.status AS project_status, p.progress AS project_progress
+    FROM project_requests r LEFT JOIN projects p ON p.id = r.created_project_id
+    ORDER BY r.created_at DESC, r.id DESC`).all();
+  const photos = db.prepare(`SELECT id, project_id, created_at, body FROM (
+    SELECT i.id, u.project_id, i.created_at, u.body,
+      ROW_NUMBER() OVER (PARTITION BY u.project_id ORDER BY i.created_at DESC, i.id DESC) AS position
+    FROM project_update_images i JOIN project_updates u ON u.id = i.project_update_id
+  ) WHERE position <= 4 ORDER BY created_at DESC, id DESC`).all() as { id: number; project_id: number }[];
   const links = db.prepare("SELECT id, project_id, title, url FROM project_links ORDER BY sort_order, id").all() as { project_id: number }[];
   const portfolio = (db.prepare(`SELECT p.*, owner.name AS owner_name FROM projects p
     LEFT JOIN users owner ON owner.id = p.owner_id ORDER BY p.name COLLATE NOCASE, p.id`).all() as { id: number; group_id: number | null }[])
-    .map(project => ({ ...project, links: links.filter(link => link.project_id === project.id) }));
+    .map(project => ({ ...project, links: links.filter(link => link.project_id === project.id), photos: photos.filter(photo => photo.project_id === project.id) }));
   const groups = (db.prepare("SELECT id, name, summary FROM project_groups ORDER BY name COLLATE NOCASE, id").all() as { id: number }[])
     .map(group => ({ ...group, project_ids: portfolio.filter(project => project.group_id === group.id).map(project => project.id) }));
-  res.json({ month, projects, currentProjects, plans, requests, portfolio, groups });
+  res.json({ month, projects, currentProjects, plans, requests, requestPortfolio, portfolio, groups });
 });
 
 const groupSchema = z.object({ name: z.string().trim().min(1).max(120), summary: z.string().trim().max(3000).default(""),

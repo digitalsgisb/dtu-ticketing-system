@@ -1021,7 +1021,7 @@ describe("DTU Control Centre API", () => {
   it("deletes a project request while retaining its approved project", async () => {
     const approved = await request(app).patch(`/api/staff/requests/${deletableRequestId}`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)
-      .send({ status: "approved", triageNotes: "Approved for delivery", ownerId: null, dueDate: null });
+      .send({ status: "approved", reportingCategory: "Automation", triageNotes: "Approved for delivery", ownerId: null, dueDate: null });
     expect(approved.status).toBe(200);
     const projectId = approved.body.projectId as number;
     expect(projectId).toBeGreaterThan(0);
@@ -1054,11 +1054,23 @@ describe("DTU Control Centre API", () => {
     expect(submitted.status).toBe(201);
     const trackingToken = submitted.body.trackingUrl.split("/track/")[1];
     const requestRow = db.prepare("SELECT id FROM project_requests WHERE request_no = ?").get(submitted.body.requestNo) as { id: number };
+    const withoutCategory = await request(app).patch(`/api/staff/requests/${requestRow.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ status: "approved" });
+    expect(withoutCategory.status).toBe(400);
+    const invalidCategory = await request(app).patch(`/api/staff/requests/${requestRow.id}`)
+      .set("Cookie", cookie).set("x-csrf-token", csrf).send({ status: "approved", reportingCategory: "Bad category" });
+    expect(invalidCategory.status).toBe(400);
+    expect((db.prepare("SELECT created_project_id FROM project_requests WHERE id = ?").get(requestRow.id) as any).created_project_id).toBeNull();
     const approved = await request(app).patch(`/api/staff/requests/${requestRow.id}`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)
-      .send({ status: "approved", triageNotes: "Approved for delivery", ownerId: null, dueDate: null });
+      .send({ status: "approved", reportingCategory: "Automation", triageNotes: "Approved for delivery", ownerId: null, dueDate: null });
     expect(approved.status).toBe(200);
     const projectId = approved.body.projectId as number;
+    expect((db.prepare("SELECT reporting_category FROM projects WHERE id = ?").get(projectId) as any).reporting_category).toBe("Automation");
+    expect((db.prepare("SELECT reporting_category FROM project_requests WHERE id = ?").get(requestRow.id) as any).reporting_category).toBe("Automation");
+    const report = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
+    expect(report.body.requestPortfolio.find((item: any) => item.id === requestRow.id)).toMatchObject({ status: "approved", created_project_id: projectId, project_status: "planned", reporting_category: "Automation" });
+    expect(report.body.requests.some((item: any) => item.id === requestRow.id)).toBe(false);
 
     const tooEarly = await request(app).post(`/api/staff/requests/${requestRow.id}/handover`)
       .set("Cookie", cookie).set("x-csrf-token", csrf)
@@ -1166,6 +1178,12 @@ describe("DTU Control Centre API", () => {
     expect(response.status).toBe(201);
 
     const detail = await request(app).get(`/api/staff/briefing/projects/${briefingProjectId}`).set("Cookie", cookie);
+    const monthly = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
+    const photos = monthly.body.portfolio.find((project: any) => project.id === briefingProjectId).photos;
+    expect(photos.length).toBeGreaterThan(0);
+    expect(photos.length).toBeLessThanOrEqual(4);
+    expect(photos[0]).toHaveProperty('id');
+    expect(photos[0]).not.toHaveProperty('stored_name');
     expect(detail.status).toBe(200);
     expect(detail.body.project.progress).toBe(60);
     expect(detail.body.updates[0].body).toContain("rollout preparation");

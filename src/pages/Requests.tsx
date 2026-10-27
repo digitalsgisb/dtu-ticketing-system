@@ -1,3 +1,4 @@
+import { RequestStageFilter, RequestStageSections, requestStages } from "../components/RequestDashboard";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
@@ -7,6 +8,7 @@ import { useLiveRefresh } from "../live";
 import { compressProgressImage } from "../progressImages";
 import { ProgressUpdate } from "./ProjectDetail";
 
+const projectCategories = ["AI", "IoT", "Software", "Automation", "Infrastructure", "Other"];
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 
 export function RequestsPage() {
@@ -28,11 +30,12 @@ export function RequestsPage() {
   return <>
     <PageHeader eyebrow="Demand intake" title={t("requests")} description="Triage new digitalization opportunities before they enter the active portfolio." actions={<button className="button button-primary" onClick={() => void showQr()}>Show employee request QR</button>} />
     <ErrorNotice message={qrError} />
-    <div className="toolbar"><select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}><option value="">All stages</option>{["submitted","triage","needs_information","approved","rejected"].map(s => <option value={s} key={s}>{s.replaceAll("_"," ")}</option>)}</select><div className="result-count">{filtered.length} requests</div></div>
-    {filtered.length ? <div className="request-list">{filtered.map(item => <Link to={`/requests/${item.id}`} className="request-card" key={item.id}>
+    <RequestStageFilter items={items} value={status} onChange={setStatus} />
+    <div className="toolbar"><select aria-label="Request stage" className="filter-select" value={status} onChange={e => setStatus(e.target.value)}><option value="">All stages</option>{requestStages.map(stage => <option value={stage.status} key={stage.status}>{stage.name}</option>)}</select><div className="result-count">{filtered.length} requests</div></div>
+    <RequestStageSections items={filtered} selected={status} renderItem={item => <Link to={`/requests/${item.id}`} className="request-card" key={item.id}>
       <div><span className="mono">{item.request_no}</span><Badge value={item.status} /></div><h2>{item.title}</h2><p>{item.current_problem}</p>
       <footer><span><small>{t("department")}</small>{item.department_name}</span><span><small>Requested by</small>{item.requester_name}</span><span><small>{t("submitted")}</small>{formatDate(item.created_at)}</span>{item.created_project_id && <span className="request-linked-progress"><small>{item.project_no} progress</small><strong>{completeLikeProjectStatuses.has(item.project_status) ? 100 : item.project_progress}%</strong></span>}<Badge value={item.urgency} kind="priority" /></footer>
-    </Link>)}</div> : <Empty title="No project requests in this stage" />}
+    </Link>} />
     {qr && <EmployeeRequestQrModal qr={qr} onClose={() => setQr(null)} />}
   </>;
 }
@@ -68,7 +71,7 @@ export function RequestDetailPage() {
   const { t } = useI18n();
   const [data, setData] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [form, setForm] = useState({ status: "triage", triageNotes: "", ownerId: "", dueDate: "" });
+  const [form, setForm] = useState({ status: "triage", triageNotes: "", ownerId: "", dueDate: "", reportingCategory: "" });
   const [comment, setComment] = useState("");
   const [publicVisible, setPublicVisible] = useState(true);
   const [error, setError] = useState("");
@@ -89,7 +92,7 @@ export function RequestDetailPage() {
   const [handoverNotice, setHandoverNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const load = (syncForm = true) => api(`/api/staff/requests/${id}`).then((d: any) => {
     setData(d);
-    if (syncForm) setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "" }));
+    if (syncForm) setForm(f => ({ ...f, status: d.item.status, triageNotes: d.item.triage_notes || "", reportingCategory: d.item.reporting_category && d.item.reporting_category !== "Other" ? d.item.reporting_category : "" }));
     setPublicBaseUrl(current => current || d.item.public_origin || window.location.origin);
   });
   useEffect(() => { void load(); void api<any[]>("/api/staff/users").then(setUsers); }, [id]);
@@ -101,9 +104,10 @@ export function RequestDetailPage() {
   const handoverReady = Boolean(project && project.status !== "cancelled" && displayedProgress === 100);
   const update = async (status: string) => {
     setError("");
+    if (status === "approved" && !form.reportingCategory) { setError("Choose a project category before approving this request."); document.getElementById("request-project-category")?.focus(); return; }
     setDecisionBusy(status);
     try {
-      const result = await api<{ ok: true; projectId: number | null }>(`/api/staff/requests/${id}`, json("PATCH", { ...form, status, ownerId: form.ownerId ? Number(form.ownerId) : null, dueDate: form.dueDate || null }));
+      const result = await api<{ ok: true; projectId: number | null }>(`/api/staff/requests/${id}`, json("PATCH", { ...form, reportingCategory: form.reportingCategory || undefined, status, ownerId: form.ownerId ? Number(form.ownerId) : null, dueDate: form.dueDate || null }));
       if (status === "approved" && result.projectId) {
         navigate(`/projects/${result.projectId}`);
         return;
@@ -229,6 +233,7 @@ export function RequestDetailPage() {
         </section>
         <div className="panel-heading"><div><span className="eyebrow">Triage</span><h2>Decision</h2></div></div>
         <label>Internal triage notes<textarea rows={5} value={form.triageNotes} onChange={e => setForm({ ...form, triageNotes: e.target.value })} /></label>
+        {!item.created_project_id && <label>Project category <span className="muted">· Required for approval</span><select id="request-project-category" value={form.reportingCategory} onChange={event => setForm({ ...form, reportingCategory: event.target.value })}><option value="">Choose category…</option>{projectCategories.map(category => <option key={category}>{category}</option>)}</select><small>The approved project will use this category.</small></label>}
         <label>Project owner<select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })}><option value="">Unassigned</option>{users.filter(u => u.active).map(u => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
         <label>Proposed deadline<input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></label>
         {!['approved', 'rejected'].includes(item.status) && <>
