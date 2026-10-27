@@ -472,6 +472,15 @@ ensureColumn("showcase_projects", "impact_statement", "TEXT");
 ensureColumn("showcase_projects", "contribution", "TEXT");
 ensureColumn("showcase_projects", "technologies_text", "TEXT");
 ensureProjectStatusCheckAllowsMonitoring();
+db.exec(`CREATE TABLE IF NOT EXISTS project_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  summary TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`);
+ensureColumn("projects", "group_id", "INTEGER REFERENCES project_groups(id) ON DELETE SET NULL");
+db.exec("CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(group_id)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_work_item_assignees_user ON work_item_assignees(user_id, work_item_id)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)");
 db.exec("INSERT OR IGNORE INTO work_item_assignees(work_item_id, user_id) SELECT id, assignee_id FROM work_items WHERE assignee_id IS NOT NULL");
@@ -539,7 +548,7 @@ export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== "test") return;
   for (const table of [
     "showcase_story_images", "showcase_project_gallery", "showcase_projects", "showcase_settings", "project_handovers", "project_update_images", "project_updates", "project_links", "attachments", "comments", "notifications", "audit_events", "public_tracking_tokens",
-    "push_subscriptions", "work_item_assignees", "work_items", "projects", "project_requests", "sessions", "login_attempts",
+    "push_subscriptions", "work_item_assignees", "work_items", "projects", "project_groups", "project_requests", "sessions", "login_attempts",
     "import_batches", "users", "departments", "counters"
   ]) {
     db.prepare(`DELETE FROM ${table}`).run();

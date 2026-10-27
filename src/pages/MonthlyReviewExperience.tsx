@@ -54,6 +54,11 @@ export function ReviewAnalysis({ items, tab, compact = false, onCategory }: { it
     [awaitingInfo, "Need information", "Waiting for requester input"],
     [items.filter(item => item.status === "submitted").length, "Awaiting review", "Submitted requests"],
     [items.filter(item => item.status === "triage").length, "Under review", "Requests in triage"]
+  ] : tab === "portfolio" ? [
+    [items.length, "Portfolio projects", "All current project records"],
+    [average == null ? "—" : `${average}%`, "Average delivery", `${recorded.length} projects with recorded progress`],
+    [items.filter(item => ["completed", "complete_monitoring"].includes(item.status || "")).length, "Delivered / monitoring", "Current project status"],
+    [held, "On hold", "Current status · needs discussion"]
   ] : tab === "current" ? [
     [average == null ? "—" : `${average}%`, "Average delivery", `${recorded.length} of ${items.length} current projects have recorded progress`],
     [items.filter(item => item.status === "in_progress").length, "In progress", "Currently in delivery"],
@@ -80,10 +85,10 @@ export function ReviewAnalysis({ items, tab, compact = false, onCategory }: { it
   </section>;
 }
 
-export function ReviewPresentation({ sections, initialTab, label, initialCategory, onClose, renderItem }: { sections: Record<string, Item[]>; initialTab: string; label: string; initialCategory: string; onClose: () => void; renderItem: (item: Item, number: number, section: string) => ReactNode }) {
+export function ReviewPresentation({ sections, initialTab, label, initialCategory, onClose, renderItem, renderTable, blocked = false }: { sections: Record<string, Item[]>; initialTab: string; label: string; initialCategory: string; onClose: () => void; renderItem: (item: Item, number: number, section: string) => ReactNode; renderTable: (items: Item[]) => ReactNode; blocked?: boolean }) {
   const [tab, setTab] = useState(initialTab);
   const pool = sections[tab] ?? [];
-  const sectionLabels = [["progress", "Monthly progress"], ["current", "Current projects"], ["plans", "Future plans"], ["requests", "Requests"]];
+  const sectionLabels = [["portfolio", "Project overview"], ["progress", "Monthly progress"], ["current", "Current projects"], ["plans", "Future plans"], ["requests", "Requests"]];
   const title = sectionLabels.find(([key]) => key === tab)?.[1] ?? "Monthly progress";
   const [selected, setSelected] = useState("overview");
   const [slide, setSlide] = useState(0);
@@ -109,6 +114,7 @@ export function ReviewPresentation({ sections, initialTab, label, initialCategor
   }, [selected]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (document.querySelector("[data-review-dialog]")) return;
       if (event.key === "Tab") {
         const buttons = Array.from(document.querySelectorAll<HTMLElement>('.mr-presentation button:not(:disabled), .mr-presentation a[href]')).filter(button => !button.closest("[inert]"));
         const first = buttons[0], last = buttons[buttons.length - 1];
@@ -118,23 +124,23 @@ export function ReviewPresentation({ sections, initialTab, label, initialCategor
       if (event.target instanceof Element && event.target.matches("input,select,textarea")) return;
       if (["Escape", "ArrowRight", "ArrowLeft"].includes(event.key)) event.preventDefault();
       if (event.key === "Escape") onClose();
-      if (event.key === "ArrowRight") { if (selected === "overview") start(); else setSlide(i => Math.min(i + 1, Math.max(0, items.length - 1))); }
+      if (event.key === "ArrowRight" && tab !== "portfolio") { if (selected === "overview") start(); else setSlide(i => Math.min(i + 1, Math.max(0, items.length - 1))); }
       if (event.key === "ArrowLeft") { if (index === 0) select("overview"); else setSlide(i => Math.max(0, i - 1)); }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [selected, items.length, index, onClose, initialCategory, tab, initialTab]);
   const activeIndex = options.indexOf(selected);
-  return <section className="mr-presentation" role="dialog" aria-modal="true" aria-label="Monthly review presentation"><header><div><span className="mr-kicker">DTU · {label}</span><h2>{title}</h2></div><button autoFocus className="button button-secondary" onClick={onClose}>Exit presentation ×</button></header>
+  return <section className="mr-presentation" role="dialog" aria-modal="true" aria-label="Monthly review presentation" inert={blocked}><header><div><span className="mr-kicker">DTU · {label}</span><h2>{title}</h2></div><button autoFocus className="button button-secondary" onClick={onClose}>Exit presentation ×</button></header>
     <nav className="mr-presentation-sections" aria-label="Presentation sections">{sectionLabels.map(([key, name]) => <button key={key} aria-pressed={tab === key} onClick={() => { setTab(key); select("overview"); }}>{name}<small>{sections[key]?.length ?? 0}</small></button>)}</nav>
-    <p className="mr-presentation-context">{tab === "progress" ? "Reporting month · progress from dated updates" : tab === "current" ? "Live portfolio · in progress, on hold, and monitoring" : tab === "plans" ? "Live roadmap · planned projects awaiting delivery" : "Live intake · requests awaiting a decision"}</p>
+    <p className="mr-presentation-context">{tab === "portfolio" ? "Live portfolio table · select a project or group for details and links" : tab === "progress" ? "Reporting month · progress from dated updates" : tab === "current" ? "Live portfolio · in progress, on hold, and monitoring" : tab === "plans" ? "Live roadmap · planned projects awaiting delivery" : "Live intake · requests awaiting a decision"}</p>
     <div className="mr-presentation-layout"><aside className="mr-presentation-rail"><nav ref={rail} aria-label="Presentation categories" style={{ "--rail-index": activeIndex } as CSSProperties}><i className="mr-rail-indicator" aria-hidden="true" />{options.map(category => {
       const count = category === "overview" || category === "all" ? pool.length : pool.filter(item => item.reporting_category === category).length;
       return <button key={category} aria-pressed={selected === category} disabled={category !== "overview" && !count} onClick={() => select(category)}><span>{category === "overview" ? "Overview" : category === "all" ? allLabel : category}</span></button>;
     })}</nav></aside>
       <div className="mr-presentation-main" role="region" aria-label="Presentation content"><div className="mr-stage-caption"><span>{selected === "overview" ? "Overview & analysis" : selected === "all" ? allLabel : selected}</span><small>{selected === "overview" ? `${pool.length} ${pool.length === 1 ? "item" : "items"} in this review` : `${items.length ? index + 1 : 0} of ${items.length}`}</small></div>
-        <ReviewMotion viewKey={`${tab}-${selected}-${items[index]?.id ?? "overview"}`} className="mr-stage-transition"><div className="mr-slide">{selected === "overview" ? <ReviewAnalysis items={pool} tab={tab} onCategory={select} /> : items[index] ? renderItem(items[index], index + 1, tab) : <Empty title="No projects in this category" />}</div></ReviewMotion>
+        <ReviewMotion viewKey={`${tab}-${selected}-${items[index]?.id ?? "overview"}`} className="mr-stage-transition"><div className={`mr-slide${tab === "portfolio" ? " mr-table-slide" : ""}`}>{tab === "portfolio" ? <div className="mr-presentation-portfolio"><ReviewAnalysis items={selected === "overview" ? pool : items} tab={tab} compact />{renderTable(selected === "overview" ? pool : items)}</div> : selected === "overview" ? <ReviewAnalysis items={pool} tab={tab} onCategory={select} /> : items[index] ? renderItem(items[index], index + 1, tab) : <Empty title="No projects in this category" />}</div></ReviewMotion>
       </div></div>
-    <footer><button className="button button-secondary" disabled={selected === "overview"} onClick={() => index === 0 ? select("overview") : setSlide(index - 1)}>← {index === 0 ? "Overview" : "Previous"}</button><span aria-live="polite">{selected === "overview" ? "Meeting overview" : `${selected === "all" ? allLabel : selected} · ${items.length ? index + 1 : 0} / ${items.length}`}<small> · ← → to navigate · Esc to exit</small></span><button className="button button-primary" disabled={!pool.length || (selected !== "overview" && index >= items.length - 1)} onClick={() => selected === "overview" ? start() : setSlide(index + 1)}>{selected === "overview" ? "Start projects →" : "Next project →"}</button></footer>
+    <footer><button className="button button-secondary" disabled={selected === "overview"} onClick={() => index === 0 ? select("overview") : setSlide(index - 1)}>← {index === 0 ? "Overview" : "Previous"}</button><span aria-live="polite">{tab === "portfolio" ? "Select a project name for details" : selected === "overview" ? "Meeting overview" : `${selected === "all" ? allLabel : selected} · ${items.length ? index + 1 : 0} / ${items.length}`}<small> · ← → to navigate · Esc to exit</small></span><button className="button button-primary" disabled={tab === "portfolio" || !pool.length || (selected !== "overview" && index >= items.length - 1)} onClick={() => selected === "overview" ? start() : setSlide(index + 1)}>{tab === "portfolio" ? "Project overview" : selected === "overview" ? "Start projects →" : "Next project →"}</button></footer>
   </section>;
 }

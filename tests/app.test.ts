@@ -885,6 +885,53 @@ describe("DTU Control Centre API", () => {
     } finally { db.prepare('DELETE FROM projects WHERE id IN (?, ?, ?)').run(id, planned, quiet); }
   });
 
+  it("groups related projects without merging their data, and safely edits or ungroups them", async () => {
+    const projectIds = [1, 2, 3].map(number => Number(db.prepare(`INSERT INTO projects(project_no, name, department_name, qr_token, progress, status)
+      VALUES (?, ?, 'Safety', ?, ?, 'in_progress')`).run(`PRJ-GROUP-TEST-${number}`, `Safety child ${number}`, `group-test-token-${number}`, number * 20).lastInsertRowid));
+    const [first, second, third] = projectIds;
+    db.prepare("INSERT INTO project_links(project_id, title, url) VALUES (?, 'Red Tag system', 'https://example.com/red-tag')").run(second);
+    db.prepare("INSERT INTO project_updates(project_id, author_name, body, status, progress) VALUES (?, 'Test', 'Original project evidence', 'in_progress', 20)").run(first);
+    const task = Number(db.prepare("INSERT INTO work_items(ticket_no, project_id, type, title) VALUES ('TKT-GROUP-TEST', ?, 'task', 'Existing task')").run(first).lastInsertRowid);
+    let groupId = 0;
+    try {
+      const create = await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'Safety Digital Test', summary: 'Safety tools together', projectIds: [first, second] });
+      expect(create.status).toBe(201); groupId = create.body.id;
+      const report = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
+      expect(report.body.groups.find((group: { id: number }) => group.id === groupId)).toMatchObject({ name: 'Safety Digital Test', project_ids: [first, second] });
+      expect(report.body.portfolio.find((project: { id: number }) => project.id === second)).toMatchObject({ group_id: groupId, progress: 40, links: [expect.objectContaining({ url: 'https://example.com/red-tag' })] });
+      expect((await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'safety digital test', projectIds: [third] })).status).toBe(409);
+      expect((await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'Invalid duplicate membership', projectIds: [second, third] })).status).toBe(409);
+      expect((await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'Missing project', projectIds: [99999999] })).status).toBe(400);
+      expect((await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'Repeated project', projectIds: [third, third] })).status).toBe(400);
+      const edited = await request(app).patch(`/api/staff/monthly-review/groups/${groupId}`).set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'Safety Digital Updated', summary: 'Updated umbrella', projectIds: [first, third] });
+      expect(edited.status).toBe(200);
+      expect(db.prepare('SELECT group_id FROM projects WHERE id = ?').get(second)).toEqual({ group_id: null });
+      expect(db.prepare('SELECT group_id FROM projects WHERE id = ?').get(third)).toEqual({ group_id: groupId });
+      expect((await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).send({ name: 'No CSRF', projectIds: [second] })).status).toBe(403);
+      expect((await request(app).post('/api/staff/monthly-review/groups').set('Cookie', managedCookie).set('x-csrf-token', managedCsrf)
+        .send({ name: 'Member attempt', projectIds: [second] })).status).toBe(403);
+      expect((await request(app).patch(`/api/staff/monthly-review/groups/${groupId}`).set('Cookie', managedCookie).set('x-csrf-token', managedCsrf)
+        .send({ name: 'Member edit', projectIds: [first] })).status).toBe(403);
+      expect((await request(app).delete(`/api/staff/monthly-review/groups/${groupId}`).set('Cookie', managedCookie).set('x-csrf-token', managedCsrf)).status).toBe(403);
+      const ungrouped = await request(app).delete(`/api/staff/monthly-review/groups/${groupId}`).set('Cookie', cookie).set('x-csrf-token', csrf);
+      expect(ungrouped.status).toBe(200);
+      expect(db.prepare('SELECT id, group_id, progress FROM projects WHERE id = ?').get(first)).toEqual({ id: first, group_id: null, progress: 20 });
+      expect(db.prepare('SELECT body FROM project_updates WHERE project_id = ?').get(first)).toEqual({ body: 'Original project evidence' });
+      expect(db.prepare('SELECT project_id FROM work_items WHERE id = ?').get(task)).toEqual({ project_id: first });
+      expect(db.prepare('SELECT url FROM project_links WHERE project_id = ?').get(second)).toEqual({ url: 'https://example.com/red-tag' });
+    } finally {
+      db.prepare('DELETE FROM work_items WHERE id = ?').run(task);
+      db.prepare('DELETE FROM projects WHERE id IN (?, ?, ?)').run(...projectIds);
+      if (groupId) db.prepare('DELETE FROM project_groups WHERE id = ?').run(groupId);
+    }
+  });
+
   it("keeps project request triage in lead and administrator workspaces", async () => {
     const memberView = await request(app).get("/api/staff/requests").set("Cookie", managedCookie);
     expect(memberView.status).toBe(403);
