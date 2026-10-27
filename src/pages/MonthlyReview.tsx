@@ -93,7 +93,6 @@ export function MonthlyReviewPage() {
     </header>
     <ErrorNotice message={error} />
     <section className="mr-hero"><div><span className="mr-kicker">THE MONTH IN MOTION</span><h2>{label}</h2><p>A clear view of delivery, new demand, and the road ahead.</p><label className="mr-month">Reporting month <input aria-label="Reporting month" type="month" min="2000-01" max="2099-12" value={month} onChange={e => e.target.value && change("month", e.target.value)} /></label></div>
-      <div className="mr-hero-art" aria-hidden="true"><div /><div /><div /><span>IDEA<br />INTO<br /><b>IMPACT.</b></span></div>
     </section>
     {!ready ? <Loading /> : <>
     <section className="mr-metrics" aria-label="Review summary">
