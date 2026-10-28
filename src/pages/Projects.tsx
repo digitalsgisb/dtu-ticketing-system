@@ -102,7 +102,9 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   return (
     <div className="projects-page">
       <PageHeader
+        eyebrow={myProjectsOnly ? "Owned portfolio" : "Portfolio"}
         title={title}
+        description={myProjectsOnly ? `Projects owned by ${user?.name ?? "you"}.` : "Plan, deliver, and support every DTU digitalization project."}
         actions={<><ProjectGroupControls onChanged={load} />{canCreateProject && !myProjectsOnly ? <button className="button button-primary" onClick={() => setShowCreate(true)}><PlusIcon />{t("newProject")}</button> : null}</>}
       />
       <div className="project-toolbar">
