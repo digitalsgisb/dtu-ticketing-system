@@ -54,7 +54,7 @@ export function ProjectOverviewTable({ items, groups, onOpen }: { items: Item[];
   </section>;
 }
 
-function PortfolioDialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function PortfolioDialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   const headingId = useId();
   const dialog = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -78,12 +78,12 @@ function PortfolioDialog({ title, children, onClose }: { title: string; children
   return createPortal(<div className="mr-portfolio-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="mr-portfolio-dialog" data-review-dialog ref={dialog} role="dialog" aria-modal="true" aria-labelledby={headingId}><header><div><span className="mr-kicker">DTU · PROJECT PORTFOLIO</span><h2 id={headingId}>{title}</h2></div><button ref={closeButton} className="icon-button" onClick={onClose} aria-label="Close project dialog">×</button></header><div className="mr-dialog-body">{children}</div></section></div>, document.body);
 }
 
-function ProjectPhotos({ projects }: { projects: Item[] }) {
+export function ProjectPhotos({ projects }: { projects: Item[] }) {
   const photos = projects.flatMap(project => (project.photos ?? []).map(photo => ({ ...photo, name: project.name })));
   return <section className="mr-detail-section"><h3>Progress photos</h3>{photos.length ? <div className="mr-detail-photos">{photos.map(photo => <figure key={photo.id}><a href={`/api/staff/projects/progress-images/${photo.id}`} target="_blank" rel="noreferrer"><img src={`/api/staff/projects/progress-images/${photo.id}`} alt={`Progress photo for ${photo.name}`} loading="lazy" /></a><figcaption>{projects.length > 1 && <strong>{photo.name} · </strong>}{formatDate(photo.created_at)}{photo.body && <p>{photo.body}</p>}</figcaption></figure>)}</div> : <p className="muted">No progress photos have been added yet. Add pictures with a project progress update.</p>}</section>;
 }
 
-function ProjectLinks({ projects }: { projects: Item[] }) {
+export function ProjectLinks({ projects }: { projects: Item[] }) {
   const links = projects.flatMap(project => (project.links ?? []).flatMap(link => {
     try { if (!["http:", "https:"].includes(new URL(link.url).protocol)) return []; } catch { return []; }
     return [{ ...link, projectName: project.name }];
