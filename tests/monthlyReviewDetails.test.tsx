@@ -63,6 +63,20 @@ it("counts individual projects by category and status without duplicating groups
   expect(stats).toMatchObject({ groups: 1, departments: 2, unassigned: 1 });
   expect(portfolioStatistics([]).categories.every(item => item.count === 0)).toBe(true);
 });
+
+it("shows overall totals and counts every project below 100% regardless of status", async () => {
+  const portfolio = [...projects,
+    { ...projects[0], id: 4, progress: 80, status: "on_hold" },
+    { ...projects[0], id: 5, progress: 20, status: "cancelled" }
+  ];
+  const pending = { ...request, id: 43, status: "submitted" };
+  vi.mocked(api).mockResolvedValue({ month: "2026-10", portfolio, projects: [], currentProjects: [], plans: [], requests: [pending], requestPortfolio: [request, pending, { ...request, id: 44, status: "rejected" }], groups: [] });
+  await render();
+  const cards = [...host.querySelectorAll('.mr-metrics article')];
+  expect(cards.map(card => card.querySelector('strong')?.textContent)).toEqual(["5", "1", "3", "4"]);
+  expect(cards.map(card => card.querySelector('h3')?.textContent)).toEqual(["Total projects", "Projects at 100%", "Total requests", "Projects in progress"]);
+  expect(cards[3].textContent).toContain("all statuses");
+});
 it("shows category statistics and filters the overview table when a category is selected", async () => {
   await render("portfolio");
   expect(host.querySelector('[aria-label="Portfolio statistics"]')?.textContent).toContain("1 group");

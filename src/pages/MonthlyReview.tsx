@@ -74,7 +74,9 @@ export function MonthlyReviewPage() {
   };
   const label = new Intl.DateTimeFormat("en-MY", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00+08:00`));
   const ready = data?.month === month;
-  const delivered = monthProjects.filter(p => p.progress === 100 && p.month_updates && p.baseline_progress !== 100).length;
+  const overallProjects = data?.portfolio ?? [];
+  const completedProjects = overallProjects.filter(project => project.progress === 100).length;
+  const overallRequests = data?.requestPortfolio ?? data?.requests ?? [];
 
   return <div className={`monthly-review${presenting ? " is-presenting" : ""}`}><div inert={presenting || showGroups || selection !== null}>
     <header className="mr-heading"><div><span className="mr-kicker">DTU / MANAGEMENT MEETING</span><h1>Monthly Review<span>.</span></h1><p>The work behind the progress. The plan for what’s next.</p></div>
@@ -85,7 +87,7 @@ export function MonthlyReviewPage() {
     </section>
     <ReviewMotion viewKey={`${month}-${ready ? "ready" : error ? "error" : "loading"}`} className="mr-report-content" measure={false}>{!ready ? error ? <div className="mr-load-error"><Empty title="The review could not be loaded" body="Your reporting month is still selected. Retry to load its progress." /><button className="button button-secondary" onClick={() => void load()}>Retry loading review</button></div> : <ReviewSkeleton /> : <>
     <section className="mr-metrics" aria-label="Review summary">
-      {[["01", monthProjects.length, "Projects with activity", "Created or updated this month"], ["02", delivered, "Reached 100%", "Recorded in progress updates"], ["03", data!.requests.length, "Open requests", "Current intake · live"], ["04", data!.plans.length, "Planned projects", "Current roadmap · live"]].map(([number, value, title, note]) => <article key={number}><span>{number} /</span><strong>{value}</strong><h3>{title}</h3><small>{note}</small></article>)}
+      {[["01", overallProjects.length, "Total projects", "Overall portfolio"], ["02", completedProjects, "Projects at 100%", "Current recorded progress"], ["03", overallRequests.length, "Total requests", "All request stages"], ["04", overallProjects.length - completedProjects, "Projects in progress", "Below 100% · all statuses"]].map(([number, value, title, note]) => <article key={number}><span>{number} /</span><strong>{value}</strong><h3>{title}</h3><small>{note}</small></article>)}
     </section>
     <nav className="mr-tabs" aria-label="Review sections">{[["portfolio", "Project overview", data!.portfolio?.length ?? 0], ["progress", "Monthly progress", monthProjects.length], ["current", "Current projects", data!.currentProjects?.length ?? 0], ["requests", "Request pipeline", (data!.requestPortfolio ?? data!.requests).length], ["plans", "Future plans", data!.plans.length]].map(([value, title, count]) => <button key={value} aria-pressed={tab === value} className={tab === value ? "active" : ""} onClick={() => change("view", String(value))}>{title}<span>{count}</span></button>)}</nav>
     <div className="mr-section-heading"><div><span className="mr-kicker">{tab === "portfolio" ? "THE COMPLETE PORTFOLIO" : tab === "progress" ? "DELIVERY JOURNAL" : tab === "current" ? "IN DELIVERY TODAY" : tab === "requests" ? "DEMAND & DECISIONS" : "THE ROAD AHEAD"}</span><h2>{tab === "portfolio" ? "All projects at a glance" : tab === "progress" ? "Progress, project by project" : tab === "current" ? "Everything currently in motion" : tab === "requests" ? "From requests to delivery" : "From today’s plans to tomorrow’s progress"}</h2></div><span>{items.length} {items.length === 1 ? "item" : "items"}</span></div>
