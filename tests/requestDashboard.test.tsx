@@ -28,6 +28,7 @@ it("calculates acceptance and delivery with explicit denominators", () => {
 });
 it("separates requests into clear stages and filters to approved work", async () => {
   await act(async () => root.render(<MemoryRouter><RequestsPage /></MemoryRouter>));
+  await act(async () => ([...host.querySelectorAll(".request-view-switch button")].find(button => button.textContent === "Cards")! as HTMLButtonElement).click());
   expect(host.querySelectorAll('.request-stage-section')).toHaveLength(5);
   expect(host.querySelector('[aria-label="Pending review requests"]')?.textContent).toContain('New safety request');
   expect(host.querySelector('[aria-label="Approved requests"]')?.textContent).toContain('Approved safety request');
@@ -50,4 +51,17 @@ it("requires a category during approval and sends the chosen category", async ()
   const call = vi.mocked(api).mock.calls.find(([,options]) => options?.method === 'PATCH')!;
   expect(JSON.parse(String(call[1]?.body))).toMatchObject({ status: 'approved', reportingCategory: 'AI' });
   expect(host.textContent).toContain('Approved project opened');
+});
+
+it("shows a newest-first request table with status filters and linked project progress", async () => {
+  await act(async () => root.render(<MemoryRouter><RequestsPage /></MemoryRouter>));
+  expect([...host.querySelectorAll('thead th')].map(cell => cell.textContent)).toEqual(['No.', 'Request name', 'Category', 'Department', 'Summary', 'Progress', 'Status']);
+  const rows = [...host.querySelectorAll('tbody tr')];
+  expect(rows[0].textContent).toContain('REQ-4');
+  expect(rows[2].textContent).toContain('100%');
+  expect(rows[2].querySelector('a[href="/projects/7"]')).not.toBeNull();
+  expect(rows[3].textContent).toContain('Awaiting approval');
+  await act(async () => ([...host.querySelectorAll('.request-stage-filter button')].find(button => button.textContent?.includes('Approved'))! as HTMLButtonElement).click());
+  expect(host.querySelectorAll('tbody tr')).toHaveLength(1);
+  expect(host.querySelector('tbody tr a')?.getAttribute('href')).toBe('/requests/2');
 });

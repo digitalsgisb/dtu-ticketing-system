@@ -1,4 +1,4 @@
-import { RequestStageFilter, RequestStageSections, requestStages } from "../components/RequestDashboard";
+import { RequestStageFilter, RequestStageSections, requestStages, RequestOverviewTable, RequestViewSwitch } from "../components/RequestDashboard";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
@@ -15,6 +15,7 @@ export function RequestsPage() {
   const { t } = useI18n();
   const [items, setItems] = useState<any[] | null>(null);
   const [status, setStatus] = useState("");
+  const [layout, setLayout] = useState("table");
   const [qr, setQr] = useState<any>(null);
   const [qrError, setQrError] = useState("");
   const load = () => api<any[]>("/api/staff/requests").then(setItems);
@@ -32,10 +33,11 @@ export function RequestsPage() {
     <ErrorNotice message={qrError} />
     <RequestStageFilter items={items} value={status} onChange={setStatus} />
     <div className="toolbar"><select aria-label="Request stage" className="filter-select" value={status} onChange={e => setStatus(e.target.value)}><option value="">All stages</option>{requestStages.map(stage => <option value={stage.status} key={stage.status}>{stage.name}</option>)}</select><div className="result-count">{filtered.length} requests</div></div>
-    <RequestStageSections items={filtered} selected={status} renderItem={item => <Link to={`/requests/${item.id}`} className="request-card" key={item.id}>
+    <RequestViewSwitch value={layout} onChange={setLayout} />
+    {layout === "table" ? <RequestOverviewTable items={filtered} /> : <RequestStageSections items={filtered} selected={status} renderItem={item => <Link to={`/requests/${item.id}`} className="request-card" key={item.id}>
       <div><span className="mono">{item.request_no}</span><Badge value={item.status} /></div><h2>{item.title}</h2><p>{item.current_problem}</p>
       <footer><span><small>{t("department")}</small>{item.department_name}</span><span><small>Requested by</small>{item.requester_name}</span><span><small>{t("submitted")}</small>{formatDate(item.created_at)}</span>{item.created_project_id && <span className="request-linked-progress"><small>{item.project_no} progress</small><strong>{completeLikeProjectStatuses.has(item.project_status) ? 100 : item.project_progress}%</strong></span>}<Badge value={item.urgency} kind="priority" /></footer>
-    </Link>} />
+    </Link>} />}
     {qr && <EmployeeRequestQrModal qr={qr} onClose={() => setQr(null)} />}
   </>;
 }
