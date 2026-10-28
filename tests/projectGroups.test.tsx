@@ -53,6 +53,12 @@ it("keeps My Projects scoped before grouping and supports collapsing", async () 
   await act(async () => (host.querySelector('[aria-label="Collapse Safety Digital"]') as HTMLButtonElement).click());
   expect(host.querySelector('.pg-group-body')?.hasAttribute("inert")).toBe(true);
 });
+
+it("shows Quick update for members on projects owned by other people", async () => {
+  await act(async () => root.render(<MemoryRouter><ProjectsPage /></MemoryRouter>));
+  expect(host.querySelectorAll(".project-card-quick-update")).toHaveLength(3);
+  expect(host.querySelector('a.project-card-quick-update[href="/projects/2?update=1"]')).not.toBeNull();
+});
 it("opens group and search links as filtered project lists", async () => {
   await act(async () => root.render(<MemoryRouter initialEntries={["/projects?group=10&search=red"]}><ProjectsPage /></MemoryRouter>));
   expect(host.querySelectorAll(".project-card")).toHaveLength(1);

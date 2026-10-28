@@ -44,6 +44,7 @@ export function DashboardPage() {
 
   return (
     <div className="dashboard-page">
+      <DashboardProjectSearch />
       <section className="dashboard-hero">
         <div className="hero-grid-lines" />
         <div className="dashboard-hero-copy">
@@ -77,7 +78,6 @@ export function DashboardPage() {
           </div>
         </aside>
       </section>
-      <DashboardProjectSearch />
       <section className="stat-grid dashboard-stat-grid">
         {role === "member" ? <>
           <StatCard label="My open work" value={data.stats.personalOpen} tone="blue" note="Assigned to you" index={0} icon={<CheckIcon />} />

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { requestMetrics } from "../src/components/RequestDashboard";
 import { RequestsPage, RequestDetailPage } from "../src/pages/Requests";
 import { api } from "../src/api";
+vi.mock("../src/auth", () => ({ useAuth: () => ({ user: { id: 1, role: "admin" } }) }));
 vi.mock("../src/i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("../src/api", async original => ({ ...await original<typeof import("../src/api")>(), api: vi.fn() }));
 const items = [

@@ -27,8 +27,7 @@ export function DashboardProjectSearch() {
   const destination = `/projects?search=${encodeURIComponent(query.trim())}`;
   const submit = (event: FormEvent) => { event.preventDefault(); if (query.trim()) navigate(destination); };
   return <section className="dashboard-project-search" aria-label="Find a project">
-    <div className="dps-heading"><div><span className="eyebrow">Your project directory</span><h2>Find a project</h2><p>Search by project name, ID, department, owner, or project group.</p></div><Link to="/projects" className="text-link">Browse all projects →</Link></div>
-    <form role="search" onSubmit={submit}><label className="dps-input"><SearchIcon /><input aria-label="Search dashboard projects" type="search" placeholder="What project are you looking for?" value={query} onChange={event => setQuery(event.target.value)} aria-controls="dashboard-project-results" /></label><button className="button button-primary" disabled={!query.trim()}>Search projects →</button></form>
+    <form role="search" onSubmit={submit}><label className="dps-input"><SearchIcon /><input aria-label="Search dashboard projects" type="search" placeholder="Search projects by name, ID, department, owner, or group…" value={query} onChange={event => setQuery(event.target.value)} aria-controls="dashboard-project-results" /></label></form>
     <div id="dashboard-project-results" aria-live="polite">
       {error ? <p role="alert">Projects could not be loaded. <button className="text-link" onClick={() => void load()}>Try again</button></p> : query.trim() && (projects === null ? <p>Loading projects…</p> : <>
         <div className="dps-count">{results.length} {results.length === 1 ? "project" : "projects"} found{results.length > 6 && " · Showing the first 6"}</div>

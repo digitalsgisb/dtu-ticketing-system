@@ -7,6 +7,7 @@ import { MonthlyReviewPage, type Item } from "../src/pages/MonthlyReview";
 import { portfolioRows, type ProjectGroup } from "../src/pages/MonthlyReviewPortfolio";
 import { api } from "../src/api";
 
+vi.mock("../src/auth", () => ({ useAuth: () => ({ user: { id: 1, role: "admin" } }) }));
 vi.mock("../src/api", async original => ({ ...await original<typeof import("../src/api")>(), api: vi.fn() }));
 const children: Item[] = [
   { id: 1, name: "Hayari Hattoo", project_no: "PRJ-1", description: "Report safety observations", current_update: "Pilot running", next_action: "Review feedback", progress: 40, status: "in_progress", department_name: "Safety", reporting_category: "Software", group_id: 10, created_at: "2026-10-01", links: [] },

@@ -124,8 +124,8 @@ export function ProjectDetailPage() {
     <div className={`project-detail-stage${transitioning ? " is-switching" : ""}`} key={project.id} aria-busy={transitioning}>
     <PageHeader eyebrow={project.project_no} title={project.name} description={project.description || "No description has been added."} actions={<>
       <button className="button button-secondary" onClick={() => void api(`/api/staff/projects/${id}/qr`).then(setQr)}>QR label</button>
-      {canUpdateProgress && <button className="button button-secondary" onClick={() => setUpdatingProgress(true)}>Update progress</button>}
-      {user?.role !== "member" && <button className="button button-primary" onClick={() => setEditing(true)}>Edit project</button>}
+      {canUpdateProgress && <button className="button button-primary" onClick={() => setUpdatingProgress(true)}>Quick update</button>}
+      {user?.role !== "member" && <button className="button button-secondary" onClick={() => setEditing(true)}>Edit project</button>}
     </>} />
     <ProjectGroupContext project={project} members={data.groupProjects} />
     <div className={`project-overview${project.latest_image_id ? " has-photo" : ""}`}>

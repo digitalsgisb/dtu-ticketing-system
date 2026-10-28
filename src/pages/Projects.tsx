@@ -1,3 +1,4 @@
+import { CategoryBox } from "../components/CategoryBox";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
@@ -90,9 +91,6 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
 
   const canCreateProject = user?.role === "admin" || user?.role === "lead";
   const title = myProjectsOnly ? "My Projects" : t("projects");
-  const description = myProjectsOnly
-    ? `Projects owned by ${user?.name ?? "you"}. Use Quick update to post progress and photos without hunting through the project page.`
-    : "Plan, deliver, and support every DTU digitalization project.";
   const rememberProjectContext = () => {
     sessionStorage.setItem(projectNavigationKey, JSON.stringify({
       projects: flattenProjectGroups(filtered, grouped).map(item => ({ id: item.id, project_no: item.project_no, name: item.name })),
@@ -104,14 +102,11 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
   return (
     <div className="projects-page">
       <PageHeader
-        eyebrow={myProjectsOnly ? "Owned portfolio" : "Portfolio"}
         title={title}
-        description={description}
         actions={<><ProjectGroupControls onChanged={load} />{canCreateProject && !myProjectsOnly ? <button className="button button-primary" onClick={() => setShowCreate(true)}><PlusIcon />{t("newProject")}</button> : null}</>}
       />
       <div className="project-toolbar">
         <div className="project-toolbar-heading">
-          <div><span className="eyebrow">Find projects</span><h2>Choose what you want to see</h2><p>Search first, then narrow the results only if needed.</p></div>
           <div className="project-toolbar-actions">
             <nav className="project-scope-switch" aria-label="Choose project ownership">
               <Link to="/projects" aria-current={!myProjectsOnly ? "page" : undefined} className={!myProjectsOnly ? "active" : ""}>All projects</Link>
@@ -120,30 +115,30 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
             {hasActiveFilters && <button type="button" className="project-filter-reset" onClick={resetFilters}>Clear filters</button>}
           </div>
         </div>
-        <div className="search-box project-search-box"><SearchIcon /><input aria-label="Search projects" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by project name, ID, owner, department, or update…" /></div>
+        <div className="search-box project-search-box"><SearchIcon /><input aria-label="Search projects" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects…" /></div>
         <button type="button" className="project-mobile-filter-trigger" aria-expanded={mobileFiltersOpen} aria-controls="project-filter-controls" onClick={() => setMobileFiltersOpen(open => !open)}>
           <span>Filters{filterCount > 0 ? ` · ${filterCount} selected` : ""}</span><i aria-hidden="true">{mobileFiltersOpen ? "−" : "+"}</i>
         </button>
         <div id="project-filter-controls" className={`project-filter-controls ${mobileFiltersOpen ? "is-open" : ""}`}>
           <div className="project-filter-section">
-            <div className="project-filter-label"><strong>Project status</strong><small>Select a delivery stage</small></div>
+            <div className="project-filter-label"><strong>Status</strong></div>
             <div className="project-filter-tabs" role="group" aria-label="Filter projects by status">
-              {projectStatusFilters.map(([value, label]) => <button type="button" aria-pressed={filter === value} key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value === "all" ? "All statuses" : label}</button>)}
+              {projectStatusFilters.map(([value, label]) => <button type="button" aria-pressed={filter === value} key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>)}
             </div>
           </div>
           <div className="project-advanced-filters">
-            <label>Completion<select value={progressFilter} onChange={event => setProgressFilter(event.target.value)}>
-              <option value="all">Any completion level</option><option value="early">Getting started (0–34%)</option><option value="mid">In delivery (35–74%)</option><option value="late">Nearly done (75–99%)</option><option value="done">Complete (100%)</option>
+            <label>Progress<select value={progressFilter} onChange={event => setProgressFilter(event.target.value)}>
+              <option value="all">Any progress</option><option value="early">0–34%</option><option value="mid">35–74%</option><option value="late">75–99%</option><option value="done">100%</option>
             </select></label>
             <label>Due date<select value={deadlineFilter} onChange={event => setDeadlineFilter(event.target.value)}>
-              <option value="all">Any due date</option><option value="overdue">Already overdue</option><option value="next14">Due within 14 days</option><option value="next30">Due within 30 days</option><option value="none">No due date set</option>
+              <option value="all">Any date</option><option value="overdue">Overdue</option><option value="next14">Next 14 days</option><option value="next30">Next 30 days</option><option value="none">No date</option>
             </select></label>
-            <label>Order results by<select value={sort} onChange={event => setSort(event.target.value)}>
+            <label>Sort<select value={sort} onChange={event => setSort(event.target.value)}>
               <option value="updated_desc">Most recently updated</option><option value="project_no_asc">Project ID: low to high</option><option value="project_no_desc">Project ID: high to low</option><option value="created_desc">Newest projects first</option><option value="deadline_asc">Due date: soonest first</option><option value="progress_desc">Completion: highest first</option><option value="progress_asc">Completion: lowest first</option><option value="priority">Highest priority first</option>
             </select></label>
           </div>
         </div>
-        <div className="project-result-summary" aria-live="polite"><strong>Showing {filtered.length}</strong> of {projects.length} projects{hasActiveFilters ? " with the selected filters" : ""}</div>
+        <div className="project-result-summary" aria-live="polite"><strong>{filtered.length}</strong>{filtered.length !== projects.length ? ` of ${projects.length}` : ""} projects</div>
       </div>
       {groupFilter && <Link className="text-link" to="/projects">← All project groups</Link>}
       {filtered.length ? <GroupedProjectCollection projects={filtered} grouped={grouped} onGroupingChange={setGrouped} gridClassName="project-grid" renderProject={project => {
@@ -159,7 +154,8 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
             <div className="project-card-meta"><span><small>{t("department")}</small>{project.department_name}</span><span><small>{t("dueDate")}</small>{formatDate(project.due_date)}</span><span><small>Open work</small>{project.open_count || 0}</span></div>
           </div>
           </Link>
-          {canUpdateProgress && <Link to={`/projects/${project.id}?update=1`} className="project-card-quick-update" onClick={rememberProjectContext}><span>Quick update</span><strong>{displayedProgress}% <i>→</i></strong></Link>}
+          <div className="project-card-category"><span>Category</span><CategoryBox id={project.id} name={project.name} category={project.reporting_category} onSaved={load} /></div>
+          {canUpdateProgress && <Link to={`/projects/${project.id}?update=1`} className="project-card-quick-update" onClick={rememberProjectContext}><span><PlusIcon />Quick update</span><strong>{displayedProgress}% <i>→</i></strong></Link>}
         </article>;
       }} /> : <Empty title={myProjectsOnly ? "No owned projects match this view" : "No matching projects"} />}
       {showCreate && <ProjectCreateModal users={users} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
