@@ -1,5 +1,5 @@
 import { GroupedProjectCollection } from "../components/ProjectGroups";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { api, formatDate } from "../api";
@@ -58,6 +58,15 @@ export function WallboardPage() {
   };
   useLiveRefresh(load, "/api/wallboard/live");
 
+  useLayoutEffect(() => {
+    document.documentElement.classList.add("wallboard-display-open");
+    document.body.classList.add("wallboard-display-open");
+    return () => {
+      document.documentElement.classList.remove("wallboard-display-open");
+      document.body.classList.remove("wallboard-display-open");
+    };
+  }, []);
+
   useEffect(() => {
     if (!rotate || inspectingHealth || selectedWorkId !== null || (view !== "overview" && view !== "health")) return;
     const timer = setTimeout(() => setView(current => current === "overview" ? "health" : "overview"), 5 * 60 * 1000);
@@ -65,13 +74,11 @@ export function WallboardPage() {
   }, [rotate, view, inspectingHealth, selectedWorkId, rotationEpoch]);
 
   useEffect(() => {
-    document.body.classList.add("wallboard-display-open");
     soundRef.current = new Audio("/wallboard-notification.mp3");
     soundRef.current.preload = "auto";
     void load();
     const clockTimer = setInterval(() => setNow(new Date()), 1_000);
     return () => {
-      document.body.classList.remove("wallboard-display-open");
       clearInterval(clockTimer);
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
       soundRef.current?.pause();

@@ -1,7 +1,11 @@
 /* Display mode owns the viewport; card pages adapt to its remaining space. */
-body.wallboard-display-open { margin:0; overflow:hidden; background:#071a29; }
-body.wallboard-display-open #root { min-height:100dvh; background:#071a29; }
-.wallboard { box-sizing:border-box; width:100%; height:100dvh; min-height:0; display:flex; flex-direction:column; gap:10px; padding:16px 26px 10px; overflow:hidden; }
+html.wallboard-display-open { height:100%; overflow:hidden; background:#071a29; }
+body.wallboard-display-open { position:fixed; inset:0; width:auto; height:auto; min-width:0; min-height:0; margin:0; overflow:hidden; background:#071a29; }
+body.wallboard-display-open #root { position:absolute; inset:0; min-height:0; background:#071a29; }
+/* Pin all four edges rather than sizing a normal-flow box with viewport units.
+   Browser zoom must resize the display surface as well as its text/cards. */
+body.wallboard-display-open .wallboard { position:fixed; inset:0; }
+.wallboard { box-sizing:border-box; width:auto; height:auto; min-height:0; display:flex; flex-direction:column; gap:10px; padding:16px 26px 10px; overflow:hidden; }
 .wallboard .wallboard-header { flex:0 0 auto; min-height:60px; grid-template-columns:minmax(0,1fr) auto auto auto auto; gap:18px; margin:0; }
 .wallboard .iot-view-controls { flex:0 0 auto; margin:0; }
 .wallboard .wallboard-page-stage { flex:1 1 0; min-height:0; overflow:hidden; }
