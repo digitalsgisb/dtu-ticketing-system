@@ -53,13 +53,16 @@ it("marks retained readings unknown when the monitoring API becomes unavailable"
 
 it("rotates task and health pages and pauses while telemetry is being inspected", async () => {
   await act(async () => root.render(<MemoryRouter><WallboardPage /></MemoryRouter>));
-  expect(host.textContent).toContain("Digital Transformation Unit Task Board");
+  const healthPanel = host.querySelector(".iot-health");
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("Digital Transformation Unit Task Board");
   await act(async () => vi.advanceTimersByTimeAsync(30000));
-  expect(host.textContent).toContain("IoT System Health");
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("IoT System Health");
   await act(async () => (host.querySelector(".iot-card") as HTMLButtonElement).click());
   await act(async () => vi.advanceTimersByTimeAsync(30000));
   expect(host.querySelector('[role="dialog"]')).not.toBeNull();
   await act(async () => (host.querySelector('[aria-label="Close system details"]') as HTMLButtonElement).click());
   await act(async () => vi.advanceTimersByTimeAsync(30000));
-  expect(host.textContent).toContain("Digital Transformation Unit Task Board");
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("Digital Transformation Unit Task Board");
+  expect(host.querySelector(".iot-health")).toBe(healthPanel);
+  expect(healthPanel?.closest(".wallboard-page-layer")?.hasAttribute("inert")).toBe(true);
 });

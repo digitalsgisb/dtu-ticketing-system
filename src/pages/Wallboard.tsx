@@ -106,12 +106,20 @@ export function WallboardPage() {
     </header>
 
     <nav className="iot-view-controls" aria-label="Wallboard pages">
-      <button type="button" aria-pressed={view === "overview"} onClick={() => { setView("overview"); setInspectingHealth(false); }}>Task board</button>
-      <button type="button" aria-pressed={view === "health"} onClick={() => setView("health")}>IoT health</button>
-      <button type="button" aria-pressed={rotate} onClick={() => setRotate(current => !current)}>{rotate ? "Auto-rotate: on · 30s" : "Auto-rotate: paused"}</button>
+      <div className={`wallboard-switcher${view === "health" ? " is-health" : ""}`} role="group" aria-label="Display page">
+        <span className="wallboard-switcher-pill" aria-hidden="true" />
+        <button type="button" aria-pressed={view === "overview"} onClick={() => { setView("overview"); setInspectingHealth(false); }}><ProjectIcon /><span>Task board</span></button>
+        <button type="button" aria-pressed={view === "health"} onClick={() => setView("health")}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4" /></svg><span>IoT health</span></button>
+      </div>
+      <button type="button" className="wallboard-auto" aria-label={rotate ? "Pause automatic page rotation" : "Resume automatic page rotation"} aria-pressed={rotate} onClick={() => setRotate(current => !current)}>
+        <span className="wallboard-auto-icon" aria-hidden="true">{rotate ? <svg viewBox="0 0 20 20" fill="currentColor"><rect x="6" y="5" width="2.5" height="10" rx="1" /><rect x="11.5" y="5" width="2.5" height="10" rx="1" /></svg> : <svg viewBox="0 0 20 20" fill="currentColor"><path d="m7 5 8 5-8 5z" /></svg>}</span>
+        <span><strong>Auto cycle</strong><small>{rotate ? inspectingHealth || selectedWorkId !== null || (view !== "overview" && view !== "health") ? "On hold · viewing details" : "Every 30 seconds" : "Paused"}</small></span>
+        <i className={`wallboard-auto-toggle${rotate ? " is-on" : ""}`} aria-hidden="true" />
+      </button>
     </nav>
-    {view === "health" ? <IotHealthPanel wallboard onInspect={setInspectingHealth} /> : view === "overview"
-      ? <div className="wallboard-shell">
+    <div className="wallboard-page-stage">
+      <div className={`wallboard-page-layer${view === "overview" ? " is-active" : ""}`} aria-hidden={view !== "overview"} inert={view !== "overview"}>
+      <div className="wallboard-shell">
         <main className="wallboard-main">
           <WallboardCommand totalLive={totalLive} />
           <WallboardStats data={data} t={t} />
@@ -131,7 +139,12 @@ export function WallboardPage() {
             : <WallClearState label="Portfolio clear" body="No active, monitoring, or completed projects require display." />}
         </aside>
       </div>
-      : <WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} onSelectWork={setSelectedWorkId} />}
+      </div>
+      <div className={`wallboard-page-layer${view === "health" ? " is-active" : ""}`} aria-hidden={view !== "health"} inert={view !== "health"}>
+        <IotHealthPanel wallboard onInspect={setInspectingHealth} />
+      </div>
+      {(view === "projects" || view === "tickets") && <div className="wallboard-page-layer is-active"><WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} onSelectWork={setSelectedWorkId} /></div>}
+    </div>
 
     <div className="wallboard-watermark">© DIGITAL TRANSFORMATION UNIT</div>
     {selectedWorkId !== null && <WallWorkDetail id={selectedWorkId} onClose={() => setSelectedWorkId(null)} />}

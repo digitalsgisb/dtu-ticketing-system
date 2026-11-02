@@ -80,6 +80,7 @@ export function IotHealthPanel({ wallboard = false, onInspect }: { wallboard?: b
       const status = statusFor(system);
       const telemetry = system.telemetry;
       return <button type="button" className={`iot-card iot-status-${status}`} key={system.id} onClick={() => select(system.id)}>
+        <span className="iot-status-rail" aria-hidden="true"><i /></span>
         <div className="iot-card-top"><span>{system.site}</span><b><i />{labels[status]}</b></div>
         <h2>{system.name}</h2>
         <div className="iot-machine-state"><small>Machine state</small><strong>{display(telemetry?.current_mode)}</strong></div>
