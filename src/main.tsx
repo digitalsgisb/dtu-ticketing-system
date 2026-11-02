@@ -23,6 +23,7 @@ import { LinksPage } from "./pages/Links";
 import { ProfilePage } from "./pages/Profile";
 import { IotHealthPage } from "./pages/IotHealth";
 import "./styles.css";
+import "./pages/wallboard-display.css";
 const MonthlyReviewPage = React.lazy(() => import("./pages/MonthlyReview").then(module => ({ default: module.MonthlyReviewPage })));
 
 function Protected() {

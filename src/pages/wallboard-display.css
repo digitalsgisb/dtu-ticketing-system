@@ -1,0 +1,84 @@
+/* Display mode owns the viewport; card pages adapt to its remaining space. */
+body.wallboard-display-open { margin:0; overflow:hidden; background:#071a29; }
+body.wallboard-display-open #root { min-height:100dvh; background:#071a29; }
+.wallboard { box-sizing:border-box; width:100%; height:100dvh; min-height:0; display:flex; flex-direction:column; gap:10px; padding:16px 26px 10px; overflow:hidden; }
+.wallboard .wallboard-header { flex:0 0 auto; min-height:60px; grid-template-columns:minmax(0,1fr) auto auto auto auto; gap:18px; margin:0; }
+.wallboard .iot-view-controls { flex:0 0 auto; margin:0; }
+.wallboard .wallboard-page-stage { flex:1 1 0; min-height:0; overflow:hidden; }
+.wallboard .wallboard-page-layer,.wallboard .wallboard-page-layer.is-active { position:absolute; inset:0; height:100%; width:100%; min-height:0; transform:none; }
+.wallboard .wallboard-watermark { flex:0 0 auto; position:relative; inset:auto; margin:0; text-align:right; font-size:9px; line-height:12px; }
+.wallboard .wallboard-shell { width:100%; height:100%; min-width:0; min-height:0; grid-template-columns:minmax(0,1fr) clamp(235px,24vw,450px); }
+.wallboard .wallboard-main { min-height:0; grid-template-rows:minmax(82px,.85fr) minmax(70px,.7fr) 24px minmax(170px,2.2fr); gap:10px; }
+.wallboard .wallboard-shell .wallboard-command { height:100%; min-height:0; padding:14px 20px; }
+.wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:clamp(22px,2.2vw,40px); }
+.wallboard .wallboard-shell .stat-card { min-height:0; padding-block:10px; }
+.wallboard .wallboard-shell .wallboard-stats { min-height:0; }
+.wallboard .wallboard-shell .wall-portfolio-panel { padding:12px; overflow:hidden; }
+.wallboard .wallboard-shell .wall-project-rail { overflow:hidden; }
+.wallboard .wallboard-shell .wall-project-fade-stage > .wall-cycle-page.wall-project-rail { grid-template-rows:repeat(4,minmax(0,1fr)); grid-auto-rows:unset; }
+.wallboard .wallboard-shell .wall-project-rail article.wall-project-showcase { min-height:0; height:100%; }
+.wallboard .wallboard-shell .wall-project-rail article.wall-project-showcase > .wall-project-visual { min-height:0; height:100%; }
+.wallboard .wallboard-full-view { height:100%; min-height:0; grid-template-rows:auto minmax(0,1fr); }
+.wallboard .wallboard-full-panel { min-height:0; }
+.wallboard .iot-health-wallboard { display:flex; flex-direction:column; height:100%; min-height:0; margin:0; }
+.wallboard .iot-health-wallboard .iot-heading { flex:0 0 auto; margin:0; padding:12px 20px; }
+.wallboard .iot-health-wallboard .iot-heading h1 { font-size:clamp(24px,2vw,34px); margin:3px 0; }
+.wallboard .iot-health-wallboard .iot-heading p { font-size:12px; }
+.wallboard .iot-health-wallboard .iot-summary strong { font-size:30px; }
+.wallboard .iot-health-wallboard .iot-health-notice { flex:0 0 auto; padding:8px 0; font-size:11px; line-height:1.4; }
+.wallboard .iot-health-wallboard .iot-grid { flex:1 1 0; min-height:0; gap:14px; }
+.wallboard .iot-card[hidden] { display:none; }
+.wallboard .iot-health-wallboard .iot-card { min-height:0; padding:14px 16px 22px; animation:iot-card-page-in .45s ease both; }
+.wallboard .iot-health-wallboard .iot-card h2 { font-size:clamp(15px,1vw,19px); margin:8px 0; }
+.wallboard .iot-health-wallboard .iot-card-top { line-height:1.3; }
+.wallboard .iot-health-wallboard .iot-card small { line-height:1.25; }
+.wallboard .iot-health-wallboard .iot-machine-state { flex-direction:row; justify-content:space-between; align-items:center; padding:6px 8px; }
+.wallboard .iot-health-wallboard .iot-machine-state strong { font-size:11px; line-height:1.25; }
+.wallboard .iot-health-wallboard .iot-counts { margin:10px 0; }
+.wallboard .iot-health-wallboard .iot-counts strong { font-size:clamp(24px,1.6vw,32px); }
+.wallboard .iot-health-wallboard .iot-job { font-size:12px; line-height:1.3; gap:3px; }
+.wallboard .iot-health-wallboard .iot-card footer { margin-top:auto; padding-top:10px; font-size:10px; line-height:1.3; }
+.wallboard .iot-health-wallboard .iot-card-warning { font-size:10px; line-height:1.3; margin:6px 0 0; }
+.wallboard .iot-grid-compact .iot-card { padding-block:10px 20px; }
+.wallboard .iot-grid-compact .iot-job { display:none; }
+.wallboard .iot-grid-compact .iot-counts { margin:8px 0; }
+.iot-pagination { flex:0 0 26px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:#7f9eab; font-size:10px; line-height:1.3; padding-top:4px; }
+.iot-pagination > div { display:flex; gap:4px; }
+.iot-pagination button { display:grid; place-items:center; width:26px; height:22px; border:0; border-radius:6px; background:transparent; cursor:pointer; }
+.iot-pagination button i { width:6px; height:6px; border-radius:6px; background:#7799a64d; transition:width .3s ease,background-color .3s ease; }
+.iot-pagination button[aria-pressed=true] i { width:18px; background:#5ed0c0; }
+.iot-pagination button:focus-visible { outline:2px solid #86dacf; }
+@keyframes iot-card-page-in { from { opacity:0; } to { opacity:1; } }
+@media(max-width:1100px) {
+  .wallboard { padding:10px 16px 8px; gap:8px; }
+  .wallboard .wallboard-header { gap:10px; min-height:48px; }
+  .wallboard .wallboard-brand .company-logo { width:165px; }
+  .wallboard .wallboard-brand small { display:none; }
+  .wallboard .wallboard-clock { min-width:110px; }.wallboard .wallboard-clock strong { font-size:18px; }
+  .wallboard .wallboard-shell .wallboard-command { grid-template-columns:minmax(0,1fr) 100px; padding:10px 14px; }
+  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:23px; }
+  .wallboard .wallboard-shell .wall-project-showcase-copy p { display:none; }
+}
+@media(max-height:650px) {
+  .wallboard { gap:6px; padding-block:8px; }
+  .wallboard .wallboard-header { min-height:42px; }
+  .wallboard .wallboard-brand .company-logo { width:150px; }
+  .wallboard .wallboard-brand small,.wallboard .wallboard-clock small { display:none; }
+  .wallboard .wallboard-main { grid-template-rows:80px 66px 20px minmax(120px,1fr); gap:6px; }
+  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:22px; }
+  .wallboard .wallboard-shell .wallboard-command-copy p { display:none; }
+  .wallboard .wallboard-shell .wall-portfolio-panel { padding:8px; }
+  .wallboard .wallboard-shell .wall-heading { padding-bottom:6px; margin-bottom:4px; }
+  .wallboard .iot-health-wallboard .iot-heading { padding:8px 16px; }
+  .wallboard .iot-health-wallboard .iot-heading h1 { font-size:24px; }
+}
+@media(max-width:700px) {
+  .wallboard .wallboard-header { grid-template-columns:minmax(0,1fr) auto auto; }
+  .wallboard .wallboard-sound-toggle,.wallboard .wallboard-clock { display:none; }
+  .wallboard .wallboard-shell { grid-template-columns:minmax(0,1fr) 190px; gap:8px; }
+  .wallboard .wallboard-shell .wallboard-command { grid-template-columns:1fr; }
+  .wallboard .wallboard-command-summary { display:none; }
+  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:18px; }
+  .wallboard .wallboard-shell .stat-card-value strong { font-size:22px; }
+}
+@media(prefers-reduced-motion:reduce) { .wallboard .iot-health-wallboard .iot-card { animation:none; }.iot-pagination button i { transition:none; } }

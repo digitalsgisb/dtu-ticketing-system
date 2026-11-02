@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { IotHealthPanel } from "../src/pages/IotHealth";
 import { WallboardPage } from "../src/pages/Wallboard";
 import { api } from "../src/api";
+import { useLiveRefresh } from "../src/live";
 vi.mock("../src/api", async original => ({ ...await original<typeof import("../src/api")>(), api: vi.fn() }));
 vi.mock("../src/live", () => ({ useLiveRefresh: vi.fn() }));
 vi.mock("../src/i18n", () => ({ useI18n: () => ({ t: (key: string) => key, lang: "en", setLang: vi.fn() }) }));
@@ -21,12 +22,13 @@ beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
   vi.stubGlobal("Audio", class { preload = ""; pause() {} });
+  vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   localStorage.clear();
   window.history.replaceState({}, "", "/");
   vi.mocked(api).mockImplementation(async url => url === "/api/wallboard" ? { tickets: [], projects: [], stats: { activeProjects: 0, openIssues: 0, overdue: 0, completedMonth: 0 }, generatedAt: new Date().toISOString() } : snapshot());
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 
 it("shows all eight cards, separates planned stops from health, and exposes zero/false values in details", async () => {
   await act(async () => root.render(<IotHealthPanel />));
@@ -55,14 +57,59 @@ it("rotates task and health pages and pauses while telemetry is being inspected"
   await act(async () => root.render(<MemoryRouter><WallboardPage /></MemoryRouter>));
   const healthPanel = host.querySelector(".iot-health");
   expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("Digital Transformation Unit Task Board");
-  await act(async () => vi.advanceTimersByTimeAsync(30000));
+  await act(async () => vi.advanceTimersByTimeAsync(299999));
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("Digital Transformation Unit Task Board");
+  await act(async () => vi.advanceTimersByTimeAsync(1));
   expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("IoT System Health");
   await act(async () => (host.querySelector(".iot-card") as HTMLButtonElement).click());
-  await act(async () => vi.advanceTimersByTimeAsync(30000));
+  await act(async () => vi.advanceTimersByTimeAsync(300000));
   expect(host.querySelector('[role="dialog"]')).not.toBeNull();
   await act(async () => (host.querySelector('[aria-label="Close system details"]') as HTMLButtonElement).click());
-  await act(async () => vi.advanceTimersByTimeAsync(30000));
+  await act(async () => vi.advanceTimersByTimeAsync(300000));
   expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("Digital Transformation Unit Task Board");
   expect(host.querySelector(".iot-health")).toBe(healthPanel);
   expect(healthPanel?.closest(".wallboard-page-layer")?.hasAttribute("inert")).toBe(true);
+});
+
+it("pages health systems to fit a short display and pauses card cycling while inspecting", async () => {
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ width: 960, height: 380 } as DOMRect);
+  await act(async () => root.render(<IotHealthPanel wallboard />));
+  const visible = () => [...host.querySelectorAll<HTMLButtonElement>(".iot-card")].filter(card => !card.hidden);
+  expect(visible()).toHaveLength(2);
+  expect(visible()[0].textContent).toContain("System 0");
+  expect(host.textContent).toContain("Systems 1–2 of 8");
+  await act(async () => vi.advanceTimersByTimeAsync(15000));
+  expect(visible()[0].textContent).toContain("System 2");
+  await act(async () => visible()[0].click());
+  await act(async () => vi.advanceTimersByTimeAsync(30000));
+  expect(visible()[0].textContent).toContain("System 2");
+  await act(async () => (host.querySelector('[aria-label="Close system details"]') as HTMLButtonElement).click());
+  await act(async () => vi.advanceTimersByTimeAsync(15000));
+  expect(visible()[0].textContent).toContain("System 4");
+});
+
+it("immediately returns to the task board when new work arrives and restarts the five-minute interval", async () => {
+  await act(async () => root.render(<MemoryRouter><WallboardPage /></MemoryRouter>));
+  await act(async () => vi.advanceTimersByTimeAsync(300000));
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("IoT System Health");
+  const before = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async url => url === "/api/wallboard" ? {
+    tickets: [{ id: 99, title: "New machine issue", ticket_no: "TKT-99", type: "issue", status: "open", priority: "high" }],
+    projects: [], stats: { activeProjects: 0, openIssues: 1, overdue: 0, completedMonth: 0 }, generatedAt: new Date().toISOString()
+  } : before(url));
+  const refresh = vi.mocked(useLiveRefresh).mock.calls.at(-1)![0];
+  await act(async () => { await refresh(); });
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("New machine issue");
+  await act(async () => vi.advanceTimersByTimeAsync(299999));
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("Digital Transformation Unit Task Board");
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("IoT System Health");
+});
+
+it("uses four cards per page when a two-column TV has room for two compact rows", async () => {
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ width: 992, height: 460 } as DOMRect);
+  await act(async () => root.render(<IotHealthPanel wallboard />));
+  expect(host.querySelectorAll(".iot-card:not([hidden])")).toHaveLength(4);
+  expect(host.textContent).toContain("Systems 1–4 of 8");
+  expect(host.querySelector(".iot-grid-compact")).not.toBeNull();
 });

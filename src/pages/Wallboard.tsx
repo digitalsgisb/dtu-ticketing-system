@@ -23,6 +23,7 @@ export function WallboardPage() {
   const [view, setView] = useState<WallboardView>(() => new URLSearchParams(window.location.search).get("view") === "health" ? "health" : "overview");
   const [rotate, setRotate] = useState(() => new URLSearchParams(window.location.search).get("view") !== "health");
   const [inspectingHealth, setInspectingHealth] = useState(false);
+  const [rotationEpoch, setRotationEpoch] = useState(0);
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("dtu-wallboard-sound") === "on");
   const soundRef = useRef<HTMLAudioElement | null>(null);
@@ -35,6 +36,10 @@ export function WallboardPage() {
     if (previousTicketIds.current) {
       arrivals = new Set([...nextIds].filter(id => !previousTicketIds.current?.has(id)));
       if (arrivals.size) {
+        setView("overview");
+        setInspectingHealth(false);
+        setSelectedWorkId(null);
+        setRotationEpoch(current => current + 1);
         setNewTicketIds(arrivals);
         if (soundEnabled && soundRef.current) {
           soundRef.current.currentTime = 0;
@@ -55,16 +60,18 @@ export function WallboardPage() {
 
   useEffect(() => {
     if (!rotate || inspectingHealth || selectedWorkId !== null || (view !== "overview" && view !== "health")) return;
-    const timer = setTimeout(() => setView(current => current === "overview" ? "health" : "overview"), 30000);
+    const timer = setTimeout(() => setView(current => current === "overview" ? "health" : "overview"), 5 * 60 * 1000);
     return () => clearTimeout(timer);
-  }, [rotate, view, inspectingHealth, selectedWorkId]);
+  }, [rotate, view, inspectingHealth, selectedWorkId, rotationEpoch]);
 
   useEffect(() => {
+    document.body.classList.add("wallboard-display-open");
     soundRef.current = new Audio("/wallboard-notification.mp3");
     soundRef.current.preload = "auto";
     void load();
     const clockTimer = setInterval(() => setNow(new Date()), 1_000);
     return () => {
+      document.body.classList.remove("wallboard-display-open");
       clearInterval(clockTimer);
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
       soundRef.current?.pause();
@@ -113,7 +120,7 @@ export function WallboardPage() {
       </div>
       <button type="button" className="wallboard-auto" aria-label={rotate ? "Pause automatic page rotation" : "Resume automatic page rotation"} aria-pressed={rotate} onClick={() => setRotate(current => !current)}>
         <span className="wallboard-auto-icon" aria-hidden="true">{rotate ? <svg viewBox="0 0 20 20" fill="currentColor"><rect x="6" y="5" width="2.5" height="10" rx="1" /><rect x="11.5" y="5" width="2.5" height="10" rx="1" /></svg> : <svg viewBox="0 0 20 20" fill="currentColor"><path d="m7 5 8 5-8 5z" /></svg>}</span>
-        <span><strong>Auto cycle</strong><small>{rotate ? inspectingHealth || selectedWorkId !== null || (view !== "overview" && view !== "health") ? "On hold · viewing details" : "Every 30 seconds" : "Paused"}</small></span>
+        <span><strong>Auto cycle</strong><small>{rotate ? inspectingHealth || selectedWorkId !== null || (view !== "overview" && view !== "health") ? "On hold · viewing details" : "Every 5 minutes" : "Paused"}</small></span>
         <i className={`wallboard-auto-toggle${rotate ? " is-on" : ""}`} aria-hidden="true" />
       </button>
     </nav>
@@ -141,7 +148,7 @@ export function WallboardPage() {
       </div>
       </div>
       <div className={`wallboard-page-layer${view === "health" ? " is-active" : ""}`} aria-hidden={view !== "health"} inert={view !== "health"}>
-        <IotHealthPanel wallboard onInspect={setInspectingHealth} />
+        <IotHealthPanel wallboard active={view === "health"} onInspect={setInspectingHealth} />
       </div>
       {(view === "projects" || view === "tickets") && <div className="wallboard-page-layer is-active"><WallboardFullView view={view} data={data} t={t} newTicketIds={newTicketIds} onBack={() => setView("overview")} onSelectWork={setSelectedWorkId} /></div>}
     </div>
