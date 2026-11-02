@@ -21,6 +21,7 @@ import { BriefingProjectPage, ProgressBriefingPage } from "./pages/Briefing";
 import { PublicShowcaseDetailPage, PublicShowcasePage, ShowcasePage } from "./pages/Showcase";
 import { LinksPage } from "./pages/Links";
 import { ProfilePage } from "./pages/Profile";
+import { IotHealthPage } from "./pages/IotHealth";
 import "./styles.css";
 const MonthlyReviewPage = React.lazy(() => import("./pages/MonthlyReview").then(module => ({ default: module.MonthlyReviewPage })));
 
@@ -57,6 +58,7 @@ function App() {
     <Route path="/login" element={<LoginRoute />} />
     <Route element={<Protected />}><Route element={<Layout />}>
       <Route index element={<DashboardPage />} />
+      <Route path="iot-health" element={<IotHealthPage />} />
       <Route path="my-projects" element={<ProjectsPage myProjectsOnly />} />
       <Route path="projects" element={<ProjectsPage />} />
       <Route path="projects/:id" element={<ProjectDetailPage />} />

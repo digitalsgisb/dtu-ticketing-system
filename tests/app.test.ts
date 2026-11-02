@@ -30,6 +30,16 @@ describe("DTU Control Centre API", () => {
     expect(response.body.ok).toBe(true);
   });
 
+  it("serves private wallboard IoT status without caching or exposing broker configuration", async () => {
+    const response = await request(app).get("/api/wallboard/iot");
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toContain("no-store");
+    expect(response.body.systems).toHaveLength(8);
+    expect(response.body.systems[0]).not.toHaveProperty("brokerUrl");
+    const publicResponse = await request(app).get("/api/wallboard/iot").set("Host", "report.example.com");
+    expect(publicResponse.status).toBe(404);
+  });
+
   it("authenticates the initial administrator", async () => {
     const response = await request(app).post("/api/auth/login").send({ username: "admin", password: "ChangeMe123!" });
     expect(response.status).toBe(200);

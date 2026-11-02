@@ -1,0 +1,68 @@
+{
+  "systems": [
+    {
+      "id": "pk-checksheet-l1",
+      "enabled": false,
+      "brokerUrl": "mqtt://REPLACE_WITH_TAILSCALE_IP:1883",
+      "topic": "dtu/port-klang/checksheet/line1/telemetry",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    },
+    {
+      "id": "pk-checksheet-l3",
+      "enabled": false,
+      "brokerUrl": "mqtt://REPLACE_WITH_TAILSCALE_IP:1883",
+      "topic": "dtu/port-klang/checksheet/line3/telemetry",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    },
+    {
+      "id": "pk-checksheet-mf",
+      "enabled": false,
+      "brokerUrl": "mqtt://REPLACE_WITH_TAILSCALE_IP:1883",
+      "topic": "dtu/port-klang/checksheet/mf/telemetry",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    },
+    {
+      "id": "sdy-checksheet-l1",
+      "enabled": false,
+      "brokerUrl": "mqtt://100.81.245.93:1883",
+      "topic": "sdy1/data",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    },
+    {
+      "id": "sdy-checksheet-l2",
+      "enabled": false,
+      "brokerUrl": "mqtt://REPLACE_WITH_TAILSCALE_IP:1883",
+      "topic": "dtu/sendayan/checksheet/line2/telemetry",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    },
+    {
+      "id": "oee-pe2",
+      "enabled": false,
+      "brokerUrl": "mqtt://REPLACE_WITH_TAILSCALE_IP:1883",
+      "topic": "dtu/oee/pe2/telemetry",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    },
+    {
+      "id": "oee-4mtr",
+      "enabled": false,
+      "brokerUrl": "mqtt://REPLACE_WITH_TAILSCALE_IP:1883",
+      "topic": "dtu/oee/4mtr/telemetry",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    },
+    {
+      "id": "oee-2mtr",
+      "enabled": false,
+      "brokerUrl": "mqtt://REPLACE_WITH_TAILSCALE_IP:1883",
+      "topic": "dtu/oee/2mtr/telemetry",
+      "delayedAfterSeconds": 30,
+      "silentAfterSeconds": 120
+    }
+  ]
+}

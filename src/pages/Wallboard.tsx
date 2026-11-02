@@ -9,8 +9,9 @@ import { useI18n } from "../i18n";
 import { CompanyLogo } from "../components/CompanyLogo";
 import { useLiveRefresh } from "../live";
 import { TaskProgress } from "../components/TaskProgress";
+import { IotHealthPanel } from "./IotHealth";
 
-type WallboardView = "overview" | "projects" | "tickets";
+type WallboardView = "overview" | "projects" | "tickets" | "health";
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const wallboardPageSize = 4;
 
@@ -19,7 +20,9 @@ export function WallboardPage() {
   const [data, setData] = useState<any>(null);
   const [now, setNow] = useState(new Date());
   const [newTicketIds, setNewTicketIds] = useState<Set<number>>(() => new Set());
-  const [view, setView] = useState<WallboardView>("overview");
+  const [view, setView] = useState<WallboardView>(() => new URLSearchParams(window.location.search).get("view") === "health" ? "health" : "overview");
+  const [rotate, setRotate] = useState(() => new URLSearchParams(window.location.search).get("view") !== "health");
+  const [inspectingHealth, setInspectingHealth] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("dtu-wallboard-sound") === "on");
   const soundRef = useRef<HTMLAudioElement | null>(null);
@@ -49,6 +52,12 @@ export function WallboardPage() {
     setData(next);
   };
   useLiveRefresh(load, "/api/wallboard/live");
+
+  useEffect(() => {
+    if (!rotate || inspectingHealth || selectedWorkId !== null || (view !== "overview" && view !== "health")) return;
+    const timer = setTimeout(() => setView(current => current === "overview" ? "health" : "overview"), 30000);
+    return () => clearTimeout(timer);
+  }, [rotate, view, inspectingHealth, selectedWorkId]);
 
   useEffect(() => {
     soundRef.current = new Audio("/wallboard-notification.mp3");
@@ -96,7 +105,12 @@ export function WallboardPage() {
       <button className="language-button" onClick={() => setLang(lang === "en" ? "ms" : "en")}>{t("language")}</button>
     </header>
 
-    {view === "overview"
+    <nav className="iot-view-controls" aria-label="Wallboard pages">
+      <button type="button" aria-pressed={view === "overview"} onClick={() => { setView("overview"); setInspectingHealth(false); }}>Task board</button>
+      <button type="button" aria-pressed={view === "health"} onClick={() => setView("health")}>IoT health</button>
+      <button type="button" aria-pressed={rotate} onClick={() => setRotate(current => !current)}>{rotate ? "Auto-rotate: on · 30s" : "Auto-rotate: paused"}</button>
+    </nav>
+    {view === "health" ? <IotHealthPanel wallboard onInspect={setInspectingHealth} /> : view === "overview"
       ? <div className="wallboard-shell">
         <main className="wallboard-main">
           <WallboardCommand totalLive={totalLive} />
@@ -254,7 +268,7 @@ function WallboardTicker({ data }: { data: any }) {
 }
 
 function WallboardFullView({ view, data, t, newTicketIds, onBack, onSelectWork }: {
-  view: Exclude<WallboardView, "overview">;
+  view: Exclude<WallboardView, "overview" | "health">;
   data: any;
   t: ReturnType<typeof useI18n>["t"];
   newTicketIds: Set<number>;

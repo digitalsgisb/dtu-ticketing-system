@@ -14,6 +14,8 @@ For the AI PC, follow the [pull and deploy steps](#pull-and-deploy-the-update-on
 
 ## What is implemented
 
+- Direct MQTT IoT health monitoring for eight Checksheet/OEE systems over Tailscale, live production cards, telemetry details, and task/health wallboard rotation. Configure broker addresses and topics using [the IoT setup guide](docs/IOT_MONITORING.md) and [example configuration](config/iot-monitor.example.json).
+
 - Project request workflow: Submitted → Triage → Needs Information → Approved/Rejected.
 - Approval creates a linked project without losing the original request.
 - Project portfolio with owner, department, priority, status, deadline, progress, and permanent QR token.

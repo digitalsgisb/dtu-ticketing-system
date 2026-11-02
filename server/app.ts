@@ -15,6 +15,7 @@ import { addLiveClient, publishLiveUpdate } from "./liveUpdates.js";
 import { assigneesFor, withAssignees } from "./assignees.js";
 import { withTaskProgress } from "./projectTasks.js";
 import { withProjectGroups } from "./projectGroups.js";
+import { iotMonitor } from "./iotMonitor.js";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -64,6 +65,10 @@ app.use("/api/staff", blockStaffOnPublicHost, authenticate, requireCsrf, staffRo
 app.use("/api/staff/imports", blockStaffOnPublicHost, authenticate, requireCsrf, importRouter);
 
 app.get("/api/wallboard/live", blockStaffOnPublicHost, (_req, res) => addLiveClient(res));
+app.get("/api/wallboard/iot", blockStaffOnPublicHost, (_req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json(iotMonitor.snapshot());
+});
 
 app.get("/api/wallboard", blockStaffOnPublicHost, (_req, res) => {
   const today = malaysiaDate();

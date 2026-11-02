@@ -3,8 +3,10 @@ import { config } from "./config.js";
 import { db, seedDatabase } from "./db.js";
 import { notify } from "./services.js";
 import { malaysiaDate } from "./time.js";
+import { iotMonitor } from "./iotMonitor.js";
 
 await seedDatabase();
+iotMonitor.start();
 
 const server = app.listen(config.port, "0.0.0.0", () => {
   console.log(`DTU Control Centre listening on http://0.0.0.0:${config.port}`);
@@ -31,6 +33,7 @@ const deadlineTimer = setInterval(() => {
 deadlineTimer.unref();
 
 function shutdown() {
+  iotMonitor.stop();
   server.close(() => {
     db.close();
     process.exit(0);
