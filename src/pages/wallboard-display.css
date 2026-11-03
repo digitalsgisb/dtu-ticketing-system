@@ -12,9 +12,9 @@ body.wallboard-display-open .wallboard { position:fixed; inset:0; }
 .wallboard .wallboard-page-layer,.wallboard .wallboard-page-layer.is-active { position:absolute; inset:0; height:100%; width:100%; min-height:0; transform:none; }
 .wallboard .wallboard-watermark { flex:0 0 auto; position:relative; inset:auto; margin:0; text-align:right; font-size:9px; line-height:12px; }
 .wallboard .wallboard-shell { width:100%; height:100%; min-width:0; min-height:0; grid-template-columns:minmax(0,1fr) clamp(235px,24vw,450px); }
-.wallboard .wallboard-main { min-height:0; grid-template-rows:minmax(82px,.85fr) auto 24px minmax(170px,2.2fr); gap:10px; }
+.wallboard .wallboard-main { min-height:0; grid-template-rows:minmax(140px,.85fr) auto 24px minmax(170px,2.2fr); gap:10px; }
 .wallboard .wallboard-shell .wallboard-command { height:100%; min-height:0; padding:14px 20px; }
-.wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:clamp(22px,2.2vw,40px); }
+.wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:clamp(32px,3.2vw,56px); line-height:1.12; text-wrap:balance; }
 /* Keep the overview metrics compact, with room for labels to wrap evenly. */
 .wallboard .wallboard-shell .wallboard-stats { min-height:0; gap:10px; margin:0; }
 .wallboard .wallboard-shell .stat-card { display:grid; grid-template-columns:31px minmax(0,1fr); align-content:center; align-items:start; gap:8px 12px; min-height:0; padding:14px 16px; }
@@ -68,7 +68,7 @@ body.wallboard-display-open .wallboard { position:fixed; inset:0; }
   .wallboard .wallboard-brand small { display:none; }
   .wallboard .wallboard-clock { min-width:110px; }.wallboard .wallboard-clock strong { font-size:18px; }
   .wallboard .wallboard-shell .wallboard-command { grid-template-columns:minmax(0,1fr) 100px; padding:10px 14px; }
-  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:23px; }
+  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:clamp(28px,3vw,32px); }
   .wallboard .wallboard-shell .wall-project-showcase-copy p { display:none; }
 }
 @media(max-height:650px) {
@@ -76,12 +76,12 @@ body.wallboard-display-open .wallboard { position:fixed; inset:0; }
   .wallboard .wallboard-header { min-height:42px; }
   .wallboard .wallboard-brand .company-logo { width:150px; }
   .wallboard .wallboard-brand small,.wallboard .wallboard-clock small { display:none; }
-  .wallboard .wallboard-main { grid-template-rows:80px auto 20px minmax(120px,1fr); gap:6px; }
+  .wallboard .wallboard-main { grid-template-rows:112px auto 20px minmax(120px,1fr); gap:6px; }
   .wallboard .wallboard-shell .stat-card { gap:8px; padding:8px 10px; }
   .wallboard .wallboard-shell .stat-card-top small { display:none; }
   .wallboard .wallboard-shell .stat-card-value strong { font-size:24px; }
   .wallboard .wallboard-shell .stat-card-value span { font-size:10px; }
-  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:22px; }
+  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:28px; }
   .wallboard .wallboard-shell .wallboard-command-copy p { display:none; }
   .wallboard .wallboard-shell .wall-portfolio-panel { padding:8px; }
   .wallboard .wallboard-shell .wall-heading { padding-bottom:6px; margin-bottom:4px; }
@@ -97,7 +97,7 @@ body.wallboard-display-open .wallboard { position:fixed; inset:0; }
   .wallboard .wallboard-shell .wallboard-stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
   .wallboard .wallboard-shell .stat-card { padding:8px 10px; gap:8px; }
   .wallboard .wallboard-shell .stat-card-top small { display:none; }
-  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:18px; }
+  .wallboard .wallboard-shell .wallboard-command-copy h1 { font-size:26px; }
   .wallboard .wallboard-shell .stat-card-value strong { font-size:22px; }
 }
 @media(prefers-reduced-motion:reduce) { .wallboard .iot-health-wallboard .iot-card { animation:none; }.iot-pagination button i { transition:none; } }
