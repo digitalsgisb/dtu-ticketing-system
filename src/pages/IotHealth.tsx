@@ -44,32 +44,23 @@ export function IotHealthPanel({ wallboard = false, active = true, onInspect }: 
     }
   }, [active, selected, onInspect]);
   const grid = useRef<HTMLDivElement | null>(null);
-  const [layout, setLayout] = useState({ columns: 4, rows: 2, compact: false });
-  const [page, setPage] = useState(0);
-  const pageSize = wallboard ? layout.columns * layout.rows : 8;
-  const pageCount = Math.max(1, Math.ceil((data?.systems.length ?? 8) / pageSize));
-  const visiblePage = page % pageCount;
+  const [layout, setLayout] = useState({ columns: 4, rows: 2, compact: false, dense: false });
   useEffect(() => {
     if (!wallboard || !grid.current) return;
     const measure = () => {
       const { width, height } = grid.current!.getBoundingClientRect();
       if (!width || !height) return;
-      const columns = width >= 1200 ? 4 : width >= 640 ? 2 : 1;
-      const rows = height >= 454 ? 2 : 1;
+      const columns = width >= 880 ? 4 : width >= 420 ? 2 : 1;
+      const rows = Math.ceil((data?.systems.length ?? 8) / columns);
       const compact = height / rows < 260;
-      setLayout(previous => previous.columns === columns && previous.rows === rows && previous.compact === compact ? previous : { columns, rows, compact });
+      const dense = height / rows < 210;
+      setLayout(previous => previous.columns === columns && previous.rows === rows && previous.compact === compact && previous.dense === dense ? previous : { columns, rows, compact, dense });
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(grid.current);
     return () => observer.disconnect();
-  }, [wallboard]);
-  useEffect(() => { setPage(0); }, [pageSize, active]);
-  useEffect(() => {
-    if (!wallboard || !active || selected || pageCount <= 1) return;
-    const timer = setInterval(() => setPage(current => (current + 1) % pageCount), 15000);
-    return () => clearInterval(timer);
-  }, [wallboard, active, selected, pageCount]);
+  }, [wallboard, data?.systems.length]);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -109,11 +100,10 @@ export function IotHealthPanel({ wallboard = false, active = true, onInspect }: 
   return <section className={`iot-health${wallboard ? " iot-health-wallboard" : ""}`}>
     <header className="iot-heading"><div><small>CONNECTED OPERATIONS · MQTT</small><h1>IoT System Health</h1><p>Port Klang · Sendayan · OEE Monitoring</p></div><div className="iot-summary"><strong>{data?.systems.filter(system => statusFor(system) === "healthy").length ?? 0}<span> / 8</span></strong><small>systems reporting normally</small></div></header>
     <div className="iot-health-notice" role="status">{failed || (data && unavailable) ? "Monitoring unavailable — last readings are stale. Check the AI PC and its network connection." : data?.configurationError ? "Monitoring configuration unavailable — check the receiver configuration file." : !data ? "Connecting to the monitoring receiver…" : "Connection health tracks MQTT activity. Machine operating state is shown separately."}</div>
-    <div ref={grid} className={`iot-grid${layout.compact && wallboard ? " iot-grid-compact" : ""}`} style={wallboard ? { gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))` } : undefined}>{data?.systems.map((system, index) => {
+    <div ref={grid} className={`iot-grid${layout.compact && wallboard ? " iot-grid-compact" : ""}${layout.dense && wallboard ? " iot-grid-dense" : ""}`} style={wallboard ? { gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))` } : undefined}>{data?.systems.map(system => {
       const status = statusFor(system);
       const telemetry = system.telemetry;
-      const cardPage = Math.floor(index / pageSize);
-      return <button type="button" className={`iot-card iot-status-${status}`} hidden={wallboard && cardPage !== visiblePage} key={`${system.id}-${wallboard ? visiblePage : "all"}`} onClick={() => select(system.id)}>
+      return <button type="button" className={`iot-card iot-status-${status}`} key={system.id} onClick={() => select(system.id)}>
         <span className="iot-status-rail" aria-hidden="true"><i /></span>
         <div className="iot-card-top"><span>{system.site}</span><b><i />{labels[status]}</b></div>
         <h2>{system.name}</h2>
@@ -125,7 +115,7 @@ export function IotHealthPanel({ wallboard = false, active = true, onInspect }: 
         {!system.telemetry && system.dataWarning && <p className="iot-card-warning">Messages received; expected a supported JSON payload.</p>}
       </button>;
     })}</div>
-    {wallboard && <div className="iot-pagination" aria-label="System pages"><span>{pageCount > 1 ? `Systems ${visiblePage * pageSize + 1}–${Math.min((visiblePage + 1) * pageSize, data?.systems.length ?? 8)} of ${data?.systems.length ?? 8} · changes every 15s` : "All systems in view"}</span><div>{Array.from({ length: pageCount }, (_, index) => <button key={index} type="button" aria-label={`Show system page ${index + 1}`} aria-pressed={visiblePage === index} onClick={() => setPage(index)}><i /></button>)}</div></div>}
+    {wallboard && <div className="iot-pagination"><span>All {data?.systems.length ?? 8} systems in view · Select a system for full readings</span></div>}
     {detail && <div className="iot-detail-backdrop" onClick={() => select(null)}><section className="iot-detail" role="dialog" aria-modal="true" aria-label={`${detail.name} telemetry`} onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === "Tab") { event.preventDefault(); event.currentTarget.querySelector("button")?.focus(); } }}>
       <header><div><small>{detail.site} · {labels[statusFor(detail)]}</small><h2>{detail.name}</h2></div><button type="button" autoFocus aria-label="Close system details" onClick={() => select(null)}>×</button></header>
       <p>Last live message: {elapsed(detail.lastMessageAt, now)}{detail.lastMessageAt && ` · ${new Date(detail.lastMessageAt).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })} MYT`}</p>

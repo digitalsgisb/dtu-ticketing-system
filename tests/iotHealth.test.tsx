@@ -71,21 +71,23 @@ it("rotates task and health pages and pauses while telemetry is being inspected"
   expect(healthPanel?.closest(".wallboard-page-layer")?.hasAttribute("inert")).toBe(true);
 });
 
-it("pages health systems to fit a short display and pauses card cycling while inspecting", async () => {
+it("keeps all eight health systems visible on a short display without cycling them away", async () => {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ width: 960, height: 380 } as DOMRect);
   await act(async () => root.render(<IotHealthPanel wallboard />));
   const visible = () => [...host.querySelectorAll<HTMLButtonElement>(".iot-card")].filter(card => !card.hidden);
-  expect(visible()).toHaveLength(2);
+  expect(visible()).toHaveLength(8);
   expect(visible()[0].textContent).toContain("System 0");
-  expect(host.textContent).toContain("Systems 1–2 of 8");
+  expect(host.textContent).toContain("All 8 systems in view");
+  expect(host.querySelector(".iot-grid-dense")).not.toBeNull();
   await act(async () => vi.advanceTimersByTimeAsync(15000));
-  expect(visible()[0].textContent).toContain("System 2");
+  expect(visible()[0].textContent).toContain("System 0");
   await act(async () => visible()[0].click());
   await act(async () => vi.advanceTimersByTimeAsync(30000));
-  expect(visible()[0].textContent).toContain("System 2");
+  expect(visible()[0].textContent).toContain("System 0");
   await act(async () => (host.querySelector('[aria-label="Close system details"]') as HTMLButtonElement).click());
   await act(async () => vi.advanceTimersByTimeAsync(15000));
-  expect(visible()[0].textContent).toContain("System 4");
+  expect(visible()).toHaveLength(8);
+  expect(visible()[0].textContent).toContain("System 0");
 });
 
 it("immediately returns to the task board when new work arrives and restarts the five-minute interval", async () => {
@@ -106,10 +108,11 @@ it("immediately returns to the task board when new work arrives and restarts the
   expect(host.querySelector(".wallboard-page-layer.is-active")?.textContent).toContain("IoT System Health");
 });
 
-it("uses four cards per page when a two-column TV has room for two compact rows", async () => {
+it("uses four columns and two compact rows to show all systems on a TV", async () => {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ width: 992, height: 460 } as DOMRect);
   await act(async () => root.render(<IotHealthPanel wallboard />));
-  expect(host.querySelectorAll(".iot-card:not([hidden])")).toHaveLength(4);
-  expect(host.textContent).toContain("Systems 1–4 of 8");
+  expect(host.querySelectorAll(".iot-card:not([hidden])")).toHaveLength(8);
+  expect(host.textContent).toContain("All 8 systems in view");
+  expect((host.querySelector(".iot-grid") as HTMLElement).style.gridTemplateColumns).toBe("repeat(4, minmax(0, 1fr))");
   expect(host.querySelector(".iot-grid-compact")).not.toBeNull();
 });

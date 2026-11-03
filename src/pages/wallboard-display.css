@@ -54,6 +54,17 @@ body.wallboard-display-open .wallboard { position:fixed; inset:0; }
 .wallboard .iot-grid-compact .iot-card { padding-block:10px 20px; }
 .wallboard .iot-grid-compact .iot-job { display:none; }
 .wallboard .iot-grid-compact .iot-counts { margin:8px 0; }
+.wallboard .iot-grid-compact .iot-card h2 { font-size:14px; line-height:1.25; margin:6px 0; min-height:2.5em; }
+.wallboard .iot-grid-compact .iot-card-top { font-size:10px; gap:4px; }
+.wallboard .iot-grid-compact .iot-machine-state { padding:5px 6px; gap:4px; }
+.wallboard .iot-grid-compact .iot-machine-state small { font-size:10px; }
+.wallboard .iot-grid-compact .iot-counts strong { font-size:24px; }
+.wallboard .iot-grid-dense { gap:8px; }
+.wallboard .iot-grid-dense .iot-card { padding:8px 10px 15px; }
+.wallboard .iot-grid-dense .iot-counts,.wallboard .iot-grid-dense .iot-machine-state,.wallboard .iot-grid-dense .iot-job,.wallboard .iot-grid-dense .iot-card-warning { display:none; }
+.wallboard .iot-grid-dense .iot-card h2 { min-height:0; margin:4px 0; font-size:13px; }
+.wallboard .iot-grid-dense .iot-card footer { padding-top:3px; font-size:9px; }
+.wallboard .iot-grid-dense .iot-status-rail { left:10px; right:10px; bottom:5px; height:2px; }
 .iot-pagination { flex:0 0 26px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:#7f9eab; font-size:10px; line-height:1.3; padding-top:4px; }
 .iot-pagination > div { display:flex; gap:4px; }
 .iot-pagination button { display:grid; place-items:center; width:26px; height:22px; border:0; border-radius:6px; background:transparent; cursor:pointer; }
