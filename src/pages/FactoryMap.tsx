@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { assetColors, sendayanAssets } from "./factoryLayout";
+import { assetColors, sendayanAssets, sendayanWalkways } from "./factoryLayout";
 import { animateAsano, animateLoft, animateRobot, buildAsano, buildLoftArea, buildQcLine, buildRobotStation, buildRollStorage, type AsanoRig, type LoftRig, type RobotRig } from "./factoryModels";
 import "./factory-map.css";
 
@@ -48,10 +48,11 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     };
     mesh(scene, 110, .35, 80, "#293947", 0, -.3, 0);
     const grid = new THREE.GridHelper(110, 55, 0x405260, 0x30424f); grid.position.y = -.1; scene.add(grid);
-    // Aisles reproduce the plan's broad circulation pattern, without safety-route claims.
-    mesh(scene, 46, .03, 4, "#405d58", -14, .015, 0);
-    mesh(scene, 3, .03, 49, "#405d58", 13, .015, 0);
-    mesh(scene, 3, .03, 28, "#405d58", -32, .015, -12);
+    // High-contrast green lanes remain clear of equipment and storage footprints.
+    for (const lane of sendayanWalkways) {
+      const path = mesh(scene, lane.width, .025, lane.depth, "#26964f", lane.x, .035, lane.z);
+      (path.material as THREE.MeshStandardMaterial).roughness = 1;
+    }
     const roots = new Map<string, THREE.Group>();
     const robots: RobotRig[] = [];
     const lofts: LoftRig[] = [];
@@ -179,11 +180,11 @@ export function FactoryMapPage() {
   return <div className="factory-page">
     <div className="page-header"><div><h1>3D Factory Map</h1><p>Explore your sites, equipment and working areas.</p></div><label className="factory-site">Site<select value={site} onChange={event => setSite(event.target.value)}><option value="sendayan">Sendayan</option><option value="port-klang">Port Klang</option></select></label></div>
     {site === "port-klang" ? <section className="factory-placeholder"><span>PORT KLANG</span><h2>Your next factory view</h2><p>The Port Klang layout has not been added yet.</p><button type="button" className="btn" onClick={() => setSite("sendayan")}>Explore Sendayan</button></section> : <>
-      <div className="factory-notice"><strong>Sendayan · layout preview</strong><span>Line 1 (lower) and Line 2 (upper) share the same layout. Approximate scale · Illustrative robot & forklift motion · No live readings.</span></div>
+      <div className="factory-notice"><strong>Sendayan · layout preview</strong><span>Line 1 (lower) · Line 2 (upper, opposite mould-change side) · Green walkways · Approximate scale · Illustrative motion · No live readings.</span></div>
       <div className="factory-workspace"><section className="factory-viewport" aria-label="Interactive factory map">
         <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" onClick={() => { setSelected("loft"); setView(previous => ({ mode: "loft", revision: previous.revision + 1 })); }}>Loft area</button><button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause motion" : "Animate motion"}</button></div></div>
         <FactoryScene selected={selected} onSelect={setSelected} view={view} moving={moving} />
-        <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Asano <i /> ABB / UR <i /> QC lighting</span></div>
+        <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Asano <i /> ABB / UR <i /> QC lighting <i className="factory-walkway-key" /> Walkway</span></div>
       </section><aside className="factory-sidebar">
         <section className="factory-detail" aria-live="polite"><small>SELECTED EQUIPMENT / AREA</small><h2>{asset?.name ?? "Select equipment"}</h2>{asset && <><span className="factory-kind">{asset.kind === "forming" ? "Asano forming machine" : asset.kind === "waterjet" ? "ABB robotic waterjet" : asset.kind === "glue" ? "UR auto glue" : asset.kind === "qc" ? "QC inspection & lighting" : asset.kind === "area" ? "Working area" : asset.kind === "room" ? "Facility" : asset.kind}</span><p>{asset.note ?? "Placed using the current Sendayan fire plan. Select another item in the map or equipment list to explore."}</p><div className="factory-data-status"><i />Layout only · no live status</div></>}</section>
         <div className="factory-equipment-heading"><h3>Equipment & areas</h3><span>{items.length}</span></div>

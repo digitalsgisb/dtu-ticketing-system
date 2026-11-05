@@ -3,7 +3,7 @@ export type FactoryAsset = {
   x: number; z: number; width: number; depth: number; note?: string; line?: 1 | 2;
 };
 
-// One station template keeps both production lines identical in size and arrangement.
+// Shared equipment sizes, with the Asano mould-change platform mirrored on Line 2.
 export function productionLine(line: 1 | 2, z: number): FactoryAsset[] {
   const prefix = `Line ${line}`;
   return [
@@ -52,3 +52,17 @@ export const assetColors: Record<FactoryAsset["kind"], string> = {
   forming: "#e4ad39", rolls: "#ac5652", waterjet: "#f08a38", glue: "#75b9d4", qc: "#e4efd6", pump: "#4bbbc5", rack: "#8297b4",
   area: "#538b82", room: "#a293bf", tank: "#55a8d3"
 };
+
+// Schematic walkways follow the plan's main circulation and clear every asset footprint.
+// Coordinates are scene units, not surveyed distances or certified evacuation routes.
+export const sendayanWalkways = [
+  { x: -33.25, z: -16.025, width: 2, depth: 28.55 },
+  { x: -10.125, z: -1.75, width: 46.25, depth: 1.8 },
+  { x: 13, z: 3.65, width: 2.6, depth: 67.9 },
+  { x: -10.125, z: -30.3, width: 46.25, depth: 1.8 },
+  { x: -15.5, z: 32, width: 57, depth: 1.8 },
+  { x: -44, z: .55, width: 1.8, depth: 74.1 },
+  { x: 5, z: -36.5, width: 98, depth: 1.8 },
+  { x: 54, z: .55, width: 1.5, depth: 74.1 },
+  { x: 5, z: 37.6, width: 98, depth: 1.8 },
+];

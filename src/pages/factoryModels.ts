@@ -77,10 +77,11 @@ export function buildAsano(root: THREE.Group, asset: FactoryAsset): AsanoRig {
   box(platen, [3.3, .4, 3.8], [0, 0, 0], "#818f96");
   const out = stage("Carpet out", 6.4, 0); conveyor(out, 2.9, 3.5, 1.4);
   const carpet = carpetProduct(out); carpet.position.set(0, 1.7, 0);
-  const change = stage("Mould-change platform", 2.9, 5.3);
+  const change = stage("Mould-change platform", 2.9, asset.line === 2 ? -5.3 : 5.3);
   box(change, [4.3, .35, 3.7], [0, .5, 0], "#93685d");
   for (const x of [-1.5, 1.5]) box(change, [.1, .1, 3.6], [x, .75, 0], "#b8c1c2");
-  const cabinet = stage("Hydraulic & control unit", 2.9, -4.6);
+  // Keep the small cabinet clear of Line 2's relocated platform.
+  const cabinet = stage("Hydraulic & control unit", asset.line === 2 ? -1 : 2.9, -4.6);
   box(cabinet, [2.5, 2.4, 2.1], [0, 1.2, 0], "#97a7aa");
   box(cabinet, [1, .8, .06], [0, 1.6, 1.08], "#17394a");
   const rig = { platen, roll, carpet, phase: asset.line === 1 ? 0 : 2 };
