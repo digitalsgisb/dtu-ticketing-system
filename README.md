@@ -18,6 +18,8 @@ For the AI PC, follow the [pull and deploy steps](#pull-and-deploy-the-update-on
 
 - Factory map navigation: drag to rotate, hold Space and drag to pan, and scroll to zoom on desktop. On touchscreens, one finger pans and two fingers rotate/pinch to zoom. Tap equipment for details. ABB and UR motion runs at three times the initial preview speed.
 - The loft-layer area has approximately two-storey rack rows with a central aisle and an animated forklift that drives forward and reverses inside it. Use **Loft area** for an aisle view. **Pause motion** controls both robots and the forklift; all animation respects the existing reduced-motion default and hidden-tab pause. Loft height and forklift movement are illustrative, not measured or live.
+- The Asano models show car-floor-carpet forming: left-side loft-layer and roll feeds, heating section, forming press, right-side shaped carpet outlet, hydraulic unit, and mould-change platform. Rolls are also grouped in three staging areas based on the plan's red circles. Hover a machine section for its name. The press and input roll share the motion control. These are schematic interpretations, with approximate proportions.
+- Each waterjet section has two animated ABB arms side by side on the same side of its mould, facing the same direction: four sections and eight ABB arms across Sendayan's two lines. Each auto-glue section retains one UR arm.
 
 - Direct MQTT IoT health monitoring for eight Checksheet/OEE systems over Tailscale, live production cards, telemetry details, and task/health wallboard rotation. Configure broker addresses and topics using [the IoT setup guide](docs/IOT_MONITORING.md) and [example configuration](config/iot-monitor.example.json).
 

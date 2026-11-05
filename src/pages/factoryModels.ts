@@ -3,6 +3,7 @@ import type { FactoryAsset } from "./factoryLayout";
 
 export type RobotRig = { yaw: THREE.Group; shoulder: THREE.Group; elbow: THREE.Group; wrist: THREE.Group; phase: number; kind: "waterjet" | "glue" };
 export type LoftRig = { vehicle: THREE.Group; wheels: THREE.Mesh[]; forks: THREE.Group; travel: number };
+export type AsanoRig = { platen: THREE.Group; roll: THREE.Group; carpet: THREE.Group; phase: number };
 
 function box(parent: THREE.Object3D, size: [number, number, number], position: [number, number, number], color: string, emissive = false) {
   const object = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshStandardMaterial({ color, metalness: .35, roughness: .5, ...(emissive ? { emissive: color, emissiveIntensity: 2.2 } : {}) }));
@@ -18,7 +19,92 @@ function joint(parent: THREE.Object3D, radius: number, color: string) {
   const part = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshStandardMaterial({ color, metalness: .4, roughness: .4 })); parent.add(part);
 }
 
-export function buildRobotStation(root: THREE.Group, asset: FactoryAsset): RobotRig {
+function carpetProduct(parent: THREE.Object3D) {
+  const carpet = new THREE.Group(); parent.add(carpet);
+  // A formed automotive floor carpet: four recessed footwells and a raised centre tunnel.
+  box(carpet, [2, .08, 2.6], [0, 0, 0], "#4b4e50");
+  for (const x of [-.52, .52]) for (const z of [-.65, .65]) {
+    box(carpet, [.82, .08, 1.05], [x, .08, z], "#242b2e");
+    for (const edge of [-.44, .44]) box(carpet, [.07, .25, 1.12], [x + edge, .16, z], "#41474a");
+    for (const edge of [-.55, .55]) box(carpet, [.9, .23, .07], [x, .15, z + edge], "#41474a");
+  }
+  box(carpet, [.25, .4, 2.6], [0, .2, 0], "#52575a");
+  box(carpet, [1.95, .23, .16], [0, .15, 0], "#52575a");
+  return carpet;
+}
+
+export function buildAsano(root: THREE.Group, asset: FactoryAsset): AsanoRig {
+  const stage = (name: string, x: number, z: number) => {
+    const group = new THREE.Group(); group.position.set(x, 0, z); group.userData.partName = `${asset.name} · ${name}`; root.add(group); return group;
+  };
+  const conveyor = (parent: THREE.Group, length: number, width: number, y: number) => {
+    box(parent, [length, .25, width], [0, y, 0], "#425760");
+    for (let x = -length / 2 + .15; x < length / 2; x += .42) {
+      const roller = cylinder(parent, .1, width - .1, "#a8b6bd", 0); roller.rotation.x = Math.PI / 2; roller.position.set(x, y + .2, 0);
+    }
+    for (const x of [-length * .35, length * .35]) for (const z of [-width * .35, width * .35]) box(parent, [.12, y, .12], [x, y / 2, z], "#657983");
+  };
+  const loftFeed = stage("Loft layer in", -6.3, 0); conveyor(loftFeed, 3.1, 3.1, 1.25);
+  for (const y of [1.55, 1.65, 1.75]) box(loftFeed, [2.4, .07, 2.5], [-.2, y, 0], "#c8c6b6");
+  const feedSide = asset.line === 1 ? -1 : 1;
+  const feed = stage("Roll in", -5, feedSide * 4.8);
+  for (const z of [-1.2, 1.2]) box(feed, [.18, 2.8, .18], [0, 1.4, z], "#6d838d");
+  const roll = new THREE.Group(); roll.position.y = 1.7; feed.add(roll);
+  const drum = cylinder(roll, .85, 2.6, "#8f5148", 0); drum.rotation.x = Math.PI / 2;
+  const core = cylinder(roll, .2, 2.9, "#c2af87", 0); core.rotation.x = Math.PI / 2;
+  box(roll, [.1, .1, 2.65], [.85, 0, 0], "#b68b74");
+  box(feed, [2.2, .07, 2.6], [1.05, 1.35, 0], "#676665");
+  const prep = stage("Roll material preparation", -2.1, feedSide * 4.2);
+  conveyor(prep, 3.5, 2.4, 1.3); box(prep, [2.8, .08, 1.8], [0, 1.58, 0], "#666460");
+  const heat = stage("Heating & layer feed", -1.8, 0);
+  conveyor(heat, 5.3, 4, 1.4);
+  for (const side of [-1, 1]) {
+    box(heat, [5.3, 2.3, .3], [0, 2.6, side * 2], "#d6a234");
+    box(heat, [4.7, .18, .12], [0, 2.2, side * 1.8], "#ffb763", true);
+  }
+  box(heat, [5.3, .3, 4.2], [0, 3.9, 0], "#dab04b");
+  for (let x = -2.1; x <= 2.1; x += .7) box(heat, [.1, .1, 3.7], [x, 4.1, 0], "#7d8f97");
+  const forming = stage("Carpet forming press", 2.9, 0);
+  box(forming, [4.2, .65, 5.1], [0, .7, 0], "#b78129");
+  for (const x of [-1.65, 1.65]) for (const z of [-2, 2]) {
+    box(forming, [.32, 4.5, .32], [x, 2.8, z], "#b4bfc4");
+    cylinder(forming, .22, 1.5, "#6d818b", 4.6).position.set(x, 4.6, z);
+  }
+  box(forming, [4.3, .65, 5.2], [0, 5, 0], "#e5ad37");
+  box(forming, [3.2, .3, 3.7], [0, 1.45, 0], "#65737a");
+  const lowerMould = carpetProduct(forming); lowerMould.position.y = 1.7;
+  const platen = new THREE.Group(); forming.add(platen);
+  box(platen, [3.3, .4, 3.8], [0, 0, 0], "#818f96");
+  const out = stage("Carpet out", 6.4, 0); conveyor(out, 2.9, 3.5, 1.4);
+  const carpet = carpetProduct(out); carpet.position.set(0, 1.7, 0);
+  const change = stage("Mould-change platform", 2.9, 5.3);
+  box(change, [4.3, .35, 3.7], [0, .5, 0], "#93685d");
+  for (const x of [-1.5, 1.5]) box(change, [.1, .1, 3.6], [x, .75, 0], "#b8c1c2");
+  const cabinet = stage("Hydraulic & control unit", 2.9, -4.6);
+  box(cabinet, [2.5, 2.4, 2.1], [0, 1.2, 0], "#97a7aa");
+  box(cabinet, [1, .8, .06], [0, 1.6, 1.08], "#17394a");
+  const rig = { platen, roll, carpet, phase: asset.line === 1 ? 0 : 2 };
+  animateAsano(rig, 0); return rig;
+}
+
+export function animateAsano(rig: AsanoRig, seconds: number) {
+  const t = seconds * .8 + rig.phase;
+  rig.platen.position.y = 2.8 + .55 * Math.cos(t);
+  rig.roll.rotation.z = -seconds * .6;
+}
+
+export function buildRollStorage(root: THREE.Group, asset: FactoryAsset) {
+  const columns = Math.max(1, Math.floor(asset.width / .9));
+  const rows = Math.max(1, Math.floor(asset.depth / .9));
+  for (let x = 0; x < columns; x++) for (let z = 0; z < rows; z++) {
+    const roll = new THREE.Group(); roll.position.set((x - (columns - 1) / 2) * .85, 0, (z - (rows - 1) / 2) * .85); root.add(roll);
+    cylinder(roll, .34, 1.05, "#914d49", .7);
+    cylinder(roll, .12, .03, "#cfb58b", 1.24);
+    cylinder(roll, .065, .035, "#394047", 1.26);
+  }
+}
+
+export function buildRobotStation(root: THREE.Group, asset: FactoryAsset): RobotRig[] {
   const abb = asset.kind === "waterjet";
   const body = abb ? "#ed782c" : "#c5cdd2", joints = abb ? "#424851" : "#69aeca";
   box(root, [asset.width * .9, .3, asset.depth * .85], [0, .3, 0], "#344552");
@@ -26,11 +112,18 @@ export function buildRobotStation(root: THREE.Group, asset: FactoryAsset): Robot
   // Waterjet 1 reaches inward from the north end, Waterjet 2 from the south.
   // Rotate the entire cell so animation stays relative to its own mould.
   if (abb) station.rotation.y = asset.id.endsWith("-2") ? Math.PI / 2 : -Math.PI / 2;
-  box(station, [2.5, 1, asset.depth * .65], [1.4, .9, 0], abb ? "#547f8d" : "#778e86");
-  box(station, [1.9, .18, asset.depth * .48], [1.4, 1.5, 0], "#adb9b5");
-  if (abb) for (const z of [-asset.depth * .36, asset.depth * .36]) box(station, [3, .4, .15], [1.4, 1.7, z], "#88acb5");
-  const yaw = new THREE.Group(); yaw.position.set(-asset.width * .28, .4, 0); station.add(yaw);
-  yaw.scale.setScalar(abb ? .9 : .67);
+  const workX = abb ? 0 : 1.4;
+  box(station, [2.5, 1, asset.depth * .65], [workX, .9, 0], abb ? "#547f8d" : "#778e86");
+  box(station, [1.9, .18, asset.depth * .48], [workX, 1.5, 0], "#adb9b5");
+  if (abb) for (const z of [-asset.depth * .36, asset.depth * .36]) box(station, [3, .4, .15], [0, 1.7, z], "#88acb5");
+  const rigs: RobotRig[] = [];
+  for (let index = 0; index < (abb ? 2 : 1); index++) {
+  // Both ABB arms sit side by side at the same end, facing the mould together.
+  const mount = new THREE.Group(); mount.position.set(-asset.width * .28, .4, abb ? (index === 0 ? -1.15 : 1.15) : 0);
+  mount.userData.partName = `${asset.name} · ${abb ? "ABB" : "UR"} arm ${index + 1}`;
+  station.add(mount);
+  const yaw = new THREE.Group(); mount.add(yaw);
+  yaw.scale.setScalar(abb ? .68 : .67);
   cylinder(yaw, .7, .35, "#3e4c59", .18); cylinder(yaw, .46, .8, body, .7);
   const shoulder = new THREE.Group(); shoulder.position.y = 1.15; yaw.add(shoulder); joint(shoulder, .48, joints);
   cylinder(shoulder, .27, 2.1, body, 1.05);
@@ -40,8 +133,10 @@ export function buildRobotStation(root: THREE.Group, asset: FactoryAsset): Robot
   cylinder(wrist, .16, .55, body, .28);
   box(wrist, [.3, .28, .3], [0, .63, 0], "#25343c");
   cylinder(wrist, .055, abb ? .65 : .45, "#b9cbd2", .9);
-  const rig: RobotRig = { yaw, shoulder, elbow, wrist, phase: (asset.line ?? 1) * .8 + (asset.id.endsWith("2") ? 1.8 : 0), kind: abb ? "waterjet" : "glue" };
-  animateRobot(rig, 0); return rig;
+  const rig: RobotRig = { yaw, shoulder, elbow, wrist, phase: (asset.line ?? 1) * .8 + (asset.id.endsWith("2") ? 1.8 : 0) + index * Math.PI, kind: abb ? "waterjet" : "glue" };
+  animateRobot(rig, 0); rigs.push(rig);
+  }
+  return rigs;
 }
 
 export function animateRobot(rig: RobotRig, seconds: number) {

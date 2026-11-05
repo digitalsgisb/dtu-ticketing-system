@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { assetColors, sendayanAssets } from "./factoryLayout";
-import { animateLoft, animateRobot, buildLoftArea, buildQcLine, buildRobotStation, type LoftRig, type RobotRig } from "./factoryModels";
+import { animateAsano, animateLoft, animateRobot, buildAsano, buildLoftArea, buildQcLine, buildRobotStation, buildRollStorage, type AsanoRig, type LoftRig, type RobotRig } from "./factoryModels";
 import "./factory-map.css";
 
 type FactoryView = "overview" | "top" | "line-1" | "line-2" | "loft";
@@ -55,21 +55,18 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     const roots = new Map<string, THREE.Group>();
     const robots: RobotRig[] = [];
     const lofts: LoftRig[] = [];
+    const formingLines: AsanoRig[] = [];
     for (const asset of sendayanAssets) {
       const root = new THREE.Group(); root.position.set(asset.x, 0, asset.z); root.userData.assetId = asset.id;
       scene.add(root); roots.set(asset.id, root);
       const { width: w, depth: d } = asset; const color = assetColors[asset.kind];
-      mesh(root, w, .18, d, color);
+      mesh(root, w, .18, d, asset.kind === "forming" ? "#344853" : color);
       if (asset.kind === "forming") {
-        mesh(root, w * .83, .9, d * .8, "#b57e25", 0, .65);
-        for (const x of [-w * .32, w * .32]) for (const z of [-d * .3, d * .3]) mesh(root, .8, 4.8, .8, "#c5cdd1", x, 3, z);
-        mesh(root, w * .84, 1.1, d * .8, color, 0, 5.4);
-        mesh(root, w * .65, .6, d * .65, "#9ca6aa", 0, 2.4);
-        mesh(root, w * .48, .4, d * .5, "#394854", 0, 2.9);
-        mesh(root, 2, 2.3, 2, color, w * .48, 1.2, 0);
-        mesh(root, .1, 1, 1.2, "#172d3b", w * .48 + 1.05, 1.7, 0);
+        formingLines.push(buildAsano(root, asset));
+      } else if (asset.kind === "rolls") {
+        buildRollStorage(root, asset);
       } else if (asset.kind === "waterjet" || asset.kind === "glue") {
-        robots.push(buildRobotStation(root, asset));
+        robots.push(...buildRobotStation(root, asset));
       } else if (asset.kind === "qc") {
         buildQcLine(root, asset);
       } else if (asset.id === "loft") {
@@ -93,6 +90,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       elapsed += Math.min((now - previousTime) / 1000, .05); previousTime = now;
       robots.forEach(robot => animateRobot(robot, elapsed));
       lofts.forEach(loft => animateLoft(loft, elapsed));
+      formingLines.forEach(line => animateAsano(line, elapsed));
       if (selectedRoot) highlight.setFromObject(selectedRoot);
       render(); frame = requestAnimationFrame(tick);
     };
@@ -129,23 +127,24 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       const rect = renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
       const hit = ray.intersectObjects([...roots.values()], true)[0]; let object: THREE.Object3D | null = hit?.object ?? null;
-      while (object && !object.userData.assetId) object = object.parent;
-      return object?.userData.assetId as string | undefined;
+      let name: string | undefined;
+      while (object && !object.userData.assetId) { name ??= object.userData.partName; object = object.parent; }
+      return object ? { id: object.userData.assetId as string, name } : undefined;
     };
     const pointerUp = (event: PointerEvent) => {
       pointers.delete(event.pointerId);
       if (event.button !== 0 || gestureMoved || spacePanning || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) return;
-      const id = pick(event); if (id) onSelect(id);
+      const picked = pick(event); if (picked) onSelect(picked.id);
       pointerMove(event);
     };
     const pointerMove = (event: PointerEvent) => {
       pointerInside = true;
       if (pointers.has(event.pointerId) && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) gestureMoved = true;
       if (event.pointerType === "touch" || event.buttons) { setHover(null); return; }
-      const id = pick(event), asset = sendayanAssets.find(item => item.id === id);
+      const picked = pick(event), asset = sendayanAssets.find(item => item.id === picked?.id);
       renderer.domElement.style.cursor = spacePanning ? "grab" : asset ? "pointer" : "grab";
       const rect = container.getBoundingClientRect();
-      setHover(asset ? { name: asset.name, x: Math.max(8, Math.min(event.clientX - rect.left + 14, rect.width - 230)), y: Math.max(8, Math.min(event.clientY - rect.top + 14, rect.height - 50)) } : null);
+      setHover(asset ? { name: picked?.name ?? asset.name, x: Math.max(8, Math.min(event.clientX - rect.left + 14, rect.width - 230)), y: Math.max(8, Math.min(event.clientY - rect.top + 14, rect.height - 50)) } : null);
     };
     const pointerLeave = () => { pointerInside = false; setHover(null); };
     const pointerCancel = (event: PointerEvent) => { pointers.delete(event.pointerId); gestureMoved = true; setHover(null); };
