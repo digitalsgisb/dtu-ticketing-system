@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { Box3, Group, Mesh } from "three";
 import { portKlangFloors, portKlangServer } from "../src/pages/portKlangLayout";
 import { animatePortKlangDataFlows, buildPortKlangModel, portKlangModelDescriptions, portKlangModelType, type PortKlangDataFlow, type PortKlangNetworkNode } from "../src/pages/portKlangModels";
+import { animateRobot, type RobotRig } from "../src/pages/factoryModels";
 
 it("chooses recognisable models without mistaking stored forming materials for machines",()=>{
   const expected:Record<string,string>={"pk-ground-waterjet-1":"waterjet","pk-ground-waterjet-assy":"assembly-line","pk-ground-forming-4":"forming-oven","pk-ground-oven-4":"oven","pk-ground-latex":"coating","pk-ground-hot-roller":"hot-roller","pk-ground-dilo":"needle-punch","pk-ground-tube":"tube-rack","pk-ground-mould-jig":"mould-rack","pk-first-roll-form":"tube-rack","pk-first-canteen":"canteen","pk-ground-toilets-north":"toilets","pk-roof-solar":"solar"};
@@ -26,6 +27,19 @@ it("gives each active waterjet its own sensor, Pi and TV, with world-space netwo
   const before=flows[0].dots[0].position.clone();animatePortKlangDataFlows(flows,.75);expect(flows[0].dots[0].position.equals(before)).toBe(false);
   expect(portKlangModelType(portKlangServer)).toBe("server");
   expect(portKlangServer.id).toBe("pk-first-ai-pc");
+});
+
+it("moves all six Port Klang arms while keeping their full motion inside their stations",()=>{
+  for(const asset of portKlangFloors.ground.assets.filter(item=>portKlangModelType(item)==="waterjet")) {
+    const root=new Group(),robots:RobotRig[]=[];buildPortKlangModel(root,asset,[],[],robots);expect(robots).toHaveLength(2);
+    const before=robots[0].shoulder.rotation.z;robots.forEach(robot=>animateRobot(robot,.6));expect(robots[0].shoulder.rotation.z).not.toBe(before);
+    for(let step=0;step<80;step++) {
+      robots.forEach(robot=>animateRobot(robot,step*.37));const bounds=new Box3().setFromObject(root);
+      expect(bounds.min.x,asset.name).toBeGreaterThanOrEqual(-asset.width/2-.01);expect(bounds.max.x,asset.name).toBeLessThanOrEqual(asset.width/2+.01);
+      expect(bounds.min.z,asset.name).toBeGreaterThanOrEqual(-asset.depth/2-.01);expect(bounds.max.z,asset.name).toBeLessThanOrEqual(asset.depth/2+.01);
+    }
+    root.traverse(object=>{if(object instanceof Mesh){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>material.dispose());}});
+  }
 });
 
 it("keeps every detailed model inside its traced footprint so it cannot extend across adjacent routes",()=>{

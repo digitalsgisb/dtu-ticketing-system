@@ -1,5 +1,5 @@
 import { DashboardProjectSearch } from "../components/DashboardProjectSearch";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatDate } from "../api";
 import { useAuth } from "../auth";
@@ -8,6 +8,7 @@ import { Badge, Empty, Loading, StatCard } from "../components/UI";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
 import { PendingWorkCards } from "../components/WorkItems";
+const DashboardFactoryMaps = lazy(() => import("./DashboardFactoryMaps"));
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -78,6 +79,7 @@ export function DashboardPage() {
           </div>
         </aside>
       </section>
+      <Suspense fallback={<div className="dashboard-maps-loading" role="status">Loading factory maps…</div>}><DashboardFactoryMaps /></Suspense>
       <section className="stat-grid dashboard-stat-grid">
         {role === "member" ? <>
           <StatCard label="My open work" value={data.stats.personalOpen} tone="blue" note="Assigned to you" index={0} icon={<CheckIcon />} />

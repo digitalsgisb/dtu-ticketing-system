@@ -33,3 +33,7 @@ it("switches to Port Klang and keeps searches and selections within each floor",
     for(const asset of floor.assets) {expect(asset.width).toBeGreaterThan(0);expect(asset.depth).toBeGreaterThan(0);expect(Math.abs(asset.x)).toBeLessThan(74);expect(Math.abs(asset.z)).toBeLessThan(19);}
   }
 });
+it("opens Port Klang directly from its dashboard link",()=>{
+  act(()=>root.render(<MemoryRouter key="port-link" initialEntries={["/factory-map?site=port-klang"]}><FactoryMapPage/></MemoryRouter>));
+  expect(host.querySelector("select")?.value).toBe("port-klang");expect(host.textContent).toContain("Waterjet data flow");
+});

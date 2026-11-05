@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { animatePortKlangDataFlows, buildPortKlangModel, portKlangModelDescriptions, portKlangModelType, type PortKlangDataFlow, type PortKlangNetworkNode } from "./portKlangModels";
+import { animateRobot, type RobotRig } from "./factoryModels";
+import { FactoryViewport, FactoryFullscreenButton } from "./FactoryViewport";
 import { createFactoryCameraMotion } from "./factoryCamera";
 import { portKlangFloors, portKlangPoint, portKlangServer, type PortKlangFloor } from "./portKlangLayout";
 
 type PortKlangView = { top: boolean; revision: number; focusId?: string; network?: boolean };
-function PortKlangScene({ floor, selected, onSelect, view, moving }: { floor: PortKlangFloor; selected: string | null; onSelect: (id: string) => void; view: PortKlangView; moving: boolean }) {
+function PortKlangScene({ floor, selected, onSelect, view, moving, compact }: { floor: PortKlangFloor; selected: string | null; onSelect: (id: string) => void; view: PortKlangView; moving: boolean; compact: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const serverLabel = useRef<HTMLDivElement>(null);
   const controller = useRef<{ select: (id: string | null) => void; view: (top: boolean) => void; focus: (id: string) => void; network: () => void; motion: (enabled: boolean) => void } | null>(null);
@@ -18,7 +20,7 @@ function PortKlangScene({ floor, selected, onSelect, view, moving }: { floor: Po
     setHover(null); setError(false);
     let renderer: THREE.WebGLRenderer;
     try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch { setError(true); return; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, compact ? 1 : 2));
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.tabIndex = 0;
     renderer.domElement.setAttribute("aria-label", `Port Klang ${layout.label} 3D map. Equipment is also available in the searchable list.`);
@@ -46,10 +48,10 @@ function PortKlangScene({ floor, selected, onSelect, view, moving }: { floor: Po
     box(scene, 147, .3, 37, 0,-.25,0,"#e0e9e2");
     const grid = new THREE.GridHelper(150, 100, 0xd0ddd3, 0xdce6df); grid.scale.z = .24; grid.position.y = -.08; scene.add(grid);
     const roots = new Map<string,THREE.Group>();
-    const dataFlows: PortKlangDataFlow[] = [], networkNodes: PortKlangNetworkNode[] = [];
+    const dataFlows: PortKlangDataFlow[] = [], networkNodes: PortKlangNetworkNode[] = []; const robots: RobotRig[] = [];
     for (const asset of layout.assets) {
       const root = new THREE.Group(); root.position.set(asset.x,0,asset.z); root.userData.assetId = asset.id; roots.set(asset.id,root); scene.add(root);
-      buildPortKlangModel(root, asset, dataFlows, networkNodes);
+      buildPortKlangModel(root, asset, dataFlows, networkNodes, robots);
     }
     if(floor==="ground") {
       const server = new THREE.Group();server.position.set(portKlangServer.x,7,portKlangServer.z);server.userData.assetId=portKlangServer.id;scene.add(server);roots.set(portKlangServer.id,server);buildPortKlangModel(server,portKlangServer);
@@ -79,10 +81,10 @@ function PortKlangScene({ floor, selected, onSelect, view, moving }: { floor: Po
     }
     const highlight = new THREE.BoxHelper(new THREE.Object3D(),0x16856a); highlight.visible=false;scene.add(highlight);
     const motion = createFactoryCameraMotion(camera,controls,render);
-    let dataFrame=0,dataSeconds=0,lastTime=0,dataEnabled=false;
-    const tick=(now:number)=>{dataSeconds+=Math.min(.05,(now-lastTime)/1000);lastTime=now;animatePortKlangDataFlows(dataFlows,dataSeconds);render();dataFrame=requestAnimationFrame(tick);};
-    const syncData=()=>{cancelAnimationFrame(dataFrame);dataFrame=0;if(dataEnabled&&!document.hidden){lastTime=performance.now();dataFrame=requestAnimationFrame(tick);}};
-    document.addEventListener("visibilitychange",syncData);
+    let dataFrame=0,dataSeconds=0,lastTime=0,dataEnabled=false,onScreen=true;let selectedRoot:THREE.Group|undefined;
+    const tick=(now:number)=>{dataSeconds+=Math.min(.05,(now-lastTime)/1000);lastTime=now;animatePortKlangDataFlows(dataFlows,dataSeconds);robots.forEach(robot=>animateRobot(robot,dataSeconds));if(selectedRoot)highlight.setFromObject(selectedRoot);render();dataFrame=requestAnimationFrame(tick);};
+    const syncData=()=>{cancelAnimationFrame(dataFrame);dataFrame=0;if(dataEnabled&&!document.hidden&&onScreen){lastTime=performance.now();dataFrame=requestAnimationFrame(tick);}};
+    document.addEventListener("visibilitychange",syncData);const visibilityObserver=typeof IntersectionObserver!=="undefined"?new IntersectionObserver(entries=>{onScreen=entries[0]?.isIntersecting??false;syncData();}):null;visibilityObserver?.observe(container);
     camera.aspect = container.clientWidth / Math.max(1,container.clientHeight); camera.updateProjectionMatrix(); renderer.setSize(container.clientWidth,container.clientHeight);
     let initialized=false,currentTop=false;let resizeView:(()=>void)|null=null;
     const setView = (top:boolean) => {
@@ -91,7 +93,7 @@ function PortKlangScene({ floor, selected, onSelect, view, moving }: { floor: Po
       motion.move(top ? new THREE.Vector3(0,distance,.1) : new THREE.Vector3(15,distance*.8,distance*.7),new THREE.Vector3(0,0,0),initialized);
       initialized=true;
     };
-    controller.current={select(id){const object=id?roots.get(id):undefined;highlight.visible=!!object;if(object)highlight.setFromObject(object);render();},view:setView,focus(id){resizeView=()=>controller.current?.focus(id);const asset=layout.assets.find(item=>item.id===id);if(!asset)return;const fit=Math.max(1,1.25/camera.aspect),distance=Math.max(7,Math.max(asset.width,asset.depth)*1.15)*fit;motion.move(new THREE.Vector3(asset.x+distance*.5,distance*.85,asset.z+distance),new THREE.Vector3(asset.x,.6,asset.z));},network(){resizeView=()=>controller.current?.network();const distance=Math.max(45,30/(Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.aspect));motion.move(new THREE.Vector3(-30,distance*.85,distance*.7),new THREE.Vector3(-36,1,0));},motion(enabled){dataEnabled=enabled;syncData();}};
+    controller.current={select(id){const object=id?roots.get(id):undefined;selectedRoot=object;highlight.visible=!!object;if(object)highlight.setFromObject(object);render();},view:setView,focus(id){resizeView=()=>controller.current?.focus(id);const asset=layout.assets.find(item=>item.id===id);if(!asset)return;const fit=Math.max(1,1.25/camera.aspect),distance=Math.max(7,Math.max(asset.width,asset.depth)*1.15)*fit;motion.move(new THREE.Vector3(asset.x+distance*.5,distance*.85,asset.z+distance),new THREE.Vector3(asset.x,.6,asset.z));},network(){resizeView=()=>controller.current?.network();const distance=Math.max(45,30/(Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.aspect));motion.move(new THREE.Vector3(-30,distance*.85,distance*.7),new THREE.Vector3(-36,1,0));},motion(enabled){dataEnabled=enabled;syncData();}};
     const resize=new ResizeObserver(()=>{const {width,height}=container.getBoundingClientRect();if(!width||!height)return;const changed=Math.abs(camera.aspect-width/height)>.001;camera.aspect=width/height;camera.updateProjectionMatrix();renderer.setSize(width,height);if(!initialized||changed){if(resizeView)resizeView();else setView(currentTop);}else render();});resize.observe(container);
     controls.addEventListener("change",render);
     let space=false,inside=false,down={x:0,y:0},moved=false;const pointers=new Set<number>();
@@ -107,15 +109,15 @@ function PortKlangScene({ floor, selected, onSelect, view, moving }: { floor: Po
     const leave=()=>{inside=false;setHover(null);};const cancel=(event:PointerEvent)=>{pointers.delete(event.pointerId);moved=true;setHover(null);};
     const events={pointerdown:pointerDown,pointermove:pointerMove,pointerup:pointerUp,pointerleave:leave,pointercancel:cancel};
     for(const [name,handler]of Object.entries(events))renderer.domElement.addEventListener(name,handler as EventListener);
-    return()=>{cancelAnimationFrame(dataFrame);document.removeEventListener("visibilitychange",syncData);controller.current=null;resize.disconnect();motion.dispose();controls.dispose();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",resetSpace);for(const[name,handler]of Object.entries(events))renderer.domElement.removeEventListener(name,handler as EventListener);scene.traverse(object=>{if(object instanceof THREE.Mesh||object instanceof THREE.LineSegments){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>material.dispose());}});sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
-  },[floor,onSelect]);
+    return()=>{visibilityObserver?.disconnect();cancelAnimationFrame(dataFrame);document.removeEventListener("visibilitychange",syncData);controller.current=null;resize.disconnect();motion.dispose();controls.dispose();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",resetSpace);for(const[name,handler]of Object.entries(events))renderer.domElement.removeEventListener(name,handler as EventListener);scene.traverse(object=>{if(object instanceof THREE.Mesh||object instanceof THREE.LineSegments){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>material.dispose());}});sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
+  },[floor,onSelect,compact]);
   useEffect(()=>controller.current?.select(selected),[selected,floor]);
   useEffect(()=>controller.current?.motion(moving),[moving,floor]);
   useEffect(()=>{if(view.network)controller.current?.network();else if(view.focusId)controller.current?.focus(view.focusId);else controller.current?.view(view.top);},[view,floor]);
   return <div className="factory-canvas factory-port-canvas" ref={host}><div hidden ref={serverLabel} className="factory-port-server-label">AI PC / Database<small>First-floor front office{floor==="ground"?" · raised marker":""}</small></div>{hover&&<div className="factory-hover-name" role="tooltip" style={{left:hover.x,top:hover.y}}>{hover.name}</div>}{error&&<div className="factory-render-error" role="alert">3D rendering is unavailable. Use the floor selector and equipment list to explore the layout.</div>}</div>;
 }
 
-export function PortKlangMap() {
+export function PortKlangMap({ compact = false }: { compact?: boolean } = {}) {
   const [floor,setFloor]=useState<PortKlangFloor>("ground"),[selected,setSelected]=useState<string|null>(null),[query,setQuery]=useState("");
   const [view,setView]=useState<PortKlangView>({top:false,revision:0});
   const [moving,setMoving]=useState(()=>!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -123,15 +125,15 @@ export function PortKlangMap() {
   const layout=portKlangFloors[floor],asset=layout.assets.find(item=>item.id===selected);
   const items=layout.assets.filter(item=>item.name.toLowerCase().includes(query.toLowerCase()));
   return <>
-    <div className="factory-notice"><strong>Port Klang · layout preview</strong><span>Based on the fire plan dated 5 Jan 2026 · Approximate proportions · No live systems connected.</span></div>
-    <div className="factory-workspace"><section className="factory-viewport" aria-label="Port Klang factory map">
-      <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Port Klang / {layout.label}</strong></div><div className="factory-view-buttons"><button type="button" onClick={()=>setView(previous=>({top:false,revision:previous.revision+1}))}>Reset view</button><button type="button" onClick={()=>setView(previous=>({top:true,revision:previous.revision+1}))}>Top view</button><button type="button" disabled={!selected} onClick={()=>setView(previous=>({top:false,revision:previous.revision+1,focusId:selected??undefined}))}>Focus selected</button></div></div>
-      <div className="factory-floor-controls" aria-label="Port Klang floors">{(Object.keys(portKlangFloors) as PortKlangFloor[]).map(key=><button type="button" key={key} aria-pressed={floor===key} onClick={()=>{setFloor(key);setSelected(null);setQuery("");setView(previous=>({top:false,revision:previous.revision+1}));}}>{portKlangFloors[key].label}</button>)}</div>
-      <div className="factory-system-strip"><span><b>DATA FLOW</b>3 waterjet sensors → 3 Raspberry Pi → AI PC / database · First-floor front office<small className="factory-office-flow">Cyan: sensor → Pi · Purple: Pi → AI PC · Illustrative only</small></span><button type="button" onClick={()=>{setFloor("ground");setSelected(null);setView(previous=>({top:false,revision:previous.revision+1,network:true}));}}>Waterjet data flow ↗</button><button type="button" onClick={()=>select(portKlangServer.id)}>AI PC · first floor ↗</button><button type="button" aria-pressed={moving} onClick={()=>setMoving(value=>!value)}>{moving?"Pause data flow":"Animate data flow"}</button></div>
-      <PortKlangScene floor={floor} selected={selected} onSelect={select} view={view} moving={moving}/>
-      <div className="factory-map-footer"><span>Drag to rotate · Space + drag to pan · Scroll to zoom<br/>Mobile: one finger to pan · Two fingers to rotate / zoom</span><span>White: equipment & facilities · Green arrows: marked routes<br/>Route widths and equipment shapes are illustrative.</span></div>
-    </section><aside className="factory-sidebar"><section className="factory-detail" aria-live="polite"><small>{layout.label.toUpperCase()} / SELECTED AREA</small><h2>{asset?.name??"Explore Port Klang"}</h2>{asset&&<span className="factory-kind">{asset.kind}</span>}<p>{asset?"Position and footprint follow the supplied evacuation plan. Models are schematic interpretations of the names, rather than measured replicas.":"Select equipment in the map or list. Switch floors to explore the upper offices, storage, training centre, canteen and rooftop."}</p>{asset&&<p>{portKlangModelDescriptions[portKlangModelType(asset)]}</p>}{floor==="first"&&<p>The shaded central footprint has no equipment detail in the source plan.</p>}<div className="factory-data-status"><i/>Layout only · no live status</div></section>
+    {!compact && <div className="factory-notice"><strong>Port Klang · layout preview</strong><span>Based on the fire plan dated 5 Jan 2026 · Approximate proportions · No live systems connected.</span></div>}
+    <div className={`factory-workspace${compact?" factory-compact-workspace":""}`}><FactoryViewport label="Port Klang factory map">
+      <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Port Klang / {layout.label}</strong></div><div className="factory-view-buttons"><button type="button" onClick={()=>setView(previous=>({top:false,revision:previous.revision+1}))}>Reset view</button><button type="button" onClick={()=>setView(previous=>({top:true,revision:previous.revision+1}))}>Top view</button><button type="button" disabled={!selected} onClick={()=>setView(previous=>({top:false,revision:previous.revision+1,focusId:selected??undefined}))}>Focus selected</button><FactoryFullscreenButton />{compact&&<button type="button" aria-pressed={moving} onClick={()=>setMoving(value=>!value)}>{moving?"Pause motion":"Animate motion"}</button>}</div></div>
+      {!compact&&<div className="factory-floor-controls" aria-label="Port Klang floors">{(Object.keys(portKlangFloors) as PortKlangFloor[]).map(key=><button type="button" key={key} aria-pressed={floor===key} onClick={()=>{setFloor(key);setSelected(null);setQuery("");setView(previous=>({top:false,revision:previous.revision+1}));}}>{portKlangFloors[key].label}</button>)}</div>}
+      {!compact&&<div className="factory-system-strip"><span><b>DATA FLOW</b>3 waterjet sensors → 3 Raspberry Pi → AI PC / database · First-floor front office<small className="factory-office-flow">Cyan: sensor → Pi · Purple: Pi → AI PC · Illustrative only</small></span><button type="button" onClick={()=>{setFloor("ground");setSelected(null);setView(previous=>({top:false,revision:previous.revision+1,network:true}));}}>Waterjet data flow ↗</button><button type="button" onClick={()=>select(portKlangServer.id)}>AI PC · first floor ↗</button><button type="button" aria-pressed={moving} onClick={()=>setMoving(value=>!value)}>{moving?"Pause motion":"Animate motion"}</button></div>}
+      <PortKlangScene floor={floor} selected={selected} onSelect={select} view={view} moving={moving} compact={compact}/>
+      {compact?<div className="factory-map-footer"><span>{asset?.name??"Drag to rotate · Space + drag to pan · Scroll to zoom"}</span><span>Illustrative motion · No live readings</span></div>:<div className="factory-map-footer"><span>Drag to rotate · Space + drag to pan · Scroll to zoom<br/>Mobile: one finger to pan · Two fingers to rotate / zoom</span><span>White: equipment & facilities · Green arrows: marked routes<br/>Route widths and equipment shapes are illustrative.</span></div>}
+    </FactoryViewport>{!compact && <aside className="factory-sidebar"><section className="factory-detail" aria-live="polite"><small>{layout.label.toUpperCase()} / SELECTED AREA</small><h2>{asset?.name??"Explore Port Klang"}</h2>{asset&&<span className="factory-kind">{asset.kind}</span>}<p>{asset?"Position and footprint follow the supplied evacuation plan. Models are schematic interpretations of the names, rather than measured replicas.":"Select equipment in the map or list. Switch floors to explore the upper offices, storage, training centre, canteen and rooftop."}</p>{asset&&<p>{portKlangModelDescriptions[portKlangModelType(asset)]}</p>}{floor==="first"&&<p>The shaded central footprint has no equipment detail in the source plan.</p>}<div className="factory-data-status"><i/>Layout only · no live status</div></section>
     <div className="factory-equipment-heading"><h3>Equipment & areas</h3><span>{items.length}</span></div><label className="factory-search"><span>Find equipment or an area</span><input type="search" placeholder="Search forming, office, storage…" value={query} onChange={event=>setQuery(event.target.value)}/></label><div className="factory-asset-list">{items.map(item=><button type="button" key={item.id} aria-pressed={selected===item.id} onClick={()=>select(item.id)}><i style={{background:item.kind==="assembly"?"#27945a":"#cbd5cf"}}/><span>{item.name}</span><span aria-hidden="true">↗</span></button>)}{!items.length&&<p>No matching equipment or areas.</p>}</div>
-    </aside></div>
+    </aside>}</div>
   </>;
 }

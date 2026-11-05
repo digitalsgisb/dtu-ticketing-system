@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { PortKlangAsset } from "./portKlangLayout";
-import { buildRobotStation } from "./factoryModels";
+import { animateRobot, buildRobotStation, type RobotRig } from "./factoryModels";
 
 export type PortKlangDataFlow = { curve: THREE.CatmullRomCurve3; dots: THREE.Mesh[]; phase: number };
 export type PortKlangNetworkNode = { assetId: string; piPosition: THREE.Vector3 };
@@ -84,7 +84,7 @@ export const portKlangModelDescriptions: Record<ReturnType<typeof portKlangModel
 
 // Name-based, schematic models. Each model uses the traced footprint; no exact
 // equipment make, robot configuration or physical dimension is inferred.
-export function buildPortKlangModel(root: THREE.Group, asset: PortKlangAsset, flows: PortKlangDataFlow[] = [], nodes: PortKlangNetworkNode[] = []) {
+export function buildPortKlangModel(root: THREE.Group, asset: PortKlangAsset, flows: PortKlangDataFlow[] = [], nodes: PortKlangNetworkNode[] = [], robots: RobotRig[] = []) {
   const type = portKlangModelType(asset);
   root.userData.modelType = type;
   const processing = ["forming", "forming-oven", "oven", "waterjet", "coating", "hot-roller", "needle-punch", "assembly-line", "luggage"].includes(type);
@@ -164,9 +164,13 @@ export function buildPortKlangModel(root: THREE.Group, asset: PortKlangAsset, fl
     case "waterjet":
       {
         const cell = new THREE.Group();
-        buildRobotStation(cell, { ...asset, kind: "waterjet", width: 8, depth: 7 });
-        const bounds = new THREE.Box3().setFromObject(cell), size = bounds.getSize(new THREE.Vector3()), center = bounds.getCenter(new THREE.Vector3());
-        cell.scale.set(.62/size.x,.8/size.y,.55/size.z);
+        const rigs = buildRobotStation(cell, { ...asset, kind: "waterjet", width: 8, depth: 7 }); robots.push(...rigs);
+        // Fit the swept robot envelope, rather than just the initial pose.
+        const bounds = new THREE.Box3();
+        for (let step=0;step<=56;step++) { rigs.forEach(rig=>animateRobot(rig,step*.5)); bounds.union(new THREE.Box3().setFromObject(cell)); }
+        rigs.forEach(rig=>animateRobot(rig,0));
+        const size = bounds.getSize(new THREE.Vector3()), center = bounds.getCenter(new THREE.Vector3());
+        cell.scale.set(.59/size.x,.78/size.y,.52/size.z);
         cell.position.set(-center.x*cell.scale.x,.08-bounds.min.y*cell.scale.y,-center.z*cell.scale.z);
         cell.traverse(object => { if (object instanceof THREE.Mesh) {
           object.castShadow = true; object.receiveShadow = true;
