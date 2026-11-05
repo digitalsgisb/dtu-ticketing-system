@@ -25,6 +25,7 @@ import { IotHealthPage } from "./pages/IotHealth";
 import "./styles.css";
 import "./pages/wallboard-display.css";
 const MonthlyReviewPage = React.lazy(() => import("./pages/MonthlyReview").then(module => ({ default: module.MonthlyReviewPage })));
+const FactoryMapPage = React.lazy(() => import("./pages/FactoryMap").then(module => ({ default: module.FactoryMapPage })));
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -60,6 +61,7 @@ function App() {
     <Route element={<Protected />}><Route element={<Layout />}>
       <Route index element={<DashboardPage />} />
       <Route path="iot-health" element={<IotHealthPage />} />
+      <Route path="factory-map" element={<React.Suspense fallback={<Loading />}><FactoryMapPage /></React.Suspense>} />
       <Route path="my-projects" element={<ProjectsPage myProjectsOnly />} />
       <Route path="projects" element={<ProjectsPage />} />
       <Route path="projects/:id" element={<ProjectDetailPage />} />

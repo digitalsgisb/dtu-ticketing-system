@@ -98,6 +98,7 @@ export function Layout() {
   const items: NavItem[] = [
     ["/", t("dashboard"), <GridIcon key="grid" />],
     ["/iot-health", "IoT health", <ScreenIcon key="iot-health" />],
+    ["/factory-map", "3D Factory Map", <GridIcon key="factory-map" />],
     ["/tickets", t("tickets"), <TicketIcon key="ticket" />],
     ...(user?.role !== "member" ? [["/requests", t("requests"), <RequestIcon key="request" />] as NavItem] : []),
     ...(user?.role !== "member" ? [["/briefing", t("briefing"), <PresentationIcon key="briefing" />] as NavItem] : []),
