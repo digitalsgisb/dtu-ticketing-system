@@ -16,18 +16,18 @@ export function productionLine(line: 1 | 2, z: number): FactoryAsset[] {
 
 // Approximate plan coordinates, not metres. Top of the supplied fire plan is negative Z.
 export const sendayanAssets: FactoryAsset[] = [
-  ...productionLine(1, 17),
-  ...productionLine(2, -17),
+  ...productionLine(1, 20),
+  ...productionLine(2, -19.2),
   { id: "loft", name: "Loft layer area", kind: "rack", x: -38, z: -13, width: 6, depth: 23, note: "Tall storage racks, approximately two storeys high, with a central forklift aisle. The forklift travels forward and reverses within the aisle. Height and motion are illustrative, not measured or live." },
-  { id: "rolls-upper", name: "Material rolls · upper staging", kind: "rolls", x: -24, z: -5.5, width: 10, depth: 4, note: "Upright material rolls grouped beside the upper Asano, based on the red circles in the fire plan." },
+  { id: "rolls-upper", name: "Material rolls · upper staging", kind: "rolls", x: -24, z: -6, width: 10, depth: 4, note: "Upright material rolls grouped beside the upper Asano, based on the red circles in the fire plan." },
   { id: "rolls-west", name: "Material rolls · beside maintenance", kind: "rolls", x: -33, z: 4, width: 2.5, depth: 5, note: "Material rolls staged beside the maintenance office." },
   { id: "rolls-centre", name: "Material rolls · central staging", kind: "rolls", x: -26, z: 6.5, width: 12, depth: 3, note: "Grouped material rolls staged alongside the child-part transition area." },
-  { id: "child-upper", name: "Child part transition · upper", kind: "area", x: 4, z: -5, width: 12, depth: 4 },
-  { id: "child-centre", name: "Child part transition · centre", kind: "area", x: -15, z: 2, width: 17, depth: 5 },
-  { id: "spare-tire", name: "Spare tire", kind: "rack", x: 2, z: 2, width: 4, depth: 5 },
-  { id: "board-deck", name: "Board assy deck", kind: "rack", x: 7, z: 2, width: 5, depth: 5 },
+  { id: "child-upper", name: "Child part transition · upper", kind: "area", x: 4, z: -6, width: 12, depth: 4 },
+  { id: "child-centre", name: "Child part transition · centre", kind: "area", x: -15, z: 2.2, width: 17, depth: 5 },
+  { id: "spare-tire", name: "Spare tire", kind: "rack", x: 2, z: 2.2, width: 4, depth: 5 },
+  { id: "board-deck", name: "Board assy deck", kind: "rack", x: 7, z: 2.2, width: 5, depth: 5 },
   { id: "storage-upper", name: "Storage racks · upper", kind: "rack", x: 25, z: -15, width: 18, depth: 19 },
-  { id: "storage-lower", name: "Storage racks · lower", kind: "rack", x: 25, z: 8, width: 18, depth: 11 },
+  { id: "storage-lower", name: "Storage racks · lower", kind: "rack", x: 25, z: 5.5, width: 18, depth: 11 },
   { id: "maintenance-office", name: "Maintenance office", kind: "room", x: -38, z: 3, width: 6, depth: 4 },
   { id: "maintenance-store", name: "Maintenance store", kind: "room", x: -37, z: 14, width: 8, depth: 5 },
   { id: "pump-room", name: "Pump room", kind: "room", x: -36, z: 20, width: 6, depth: 4 },
@@ -36,7 +36,7 @@ export const sendayanAssets: FactoryAsset[] = [
   { id: "meeting", name: "Meeting room", kind: "room", x: 23, z: 20, width: 6, depth: 7 },
   { id: "office-east", name: "Office · east", kind: "room", x: 36, z: 24, width: 7, depth: 6 },
   { id: "toilets", name: "Toilets", kind: "room", x: 29, z: 26, width: 5, depth: 3 },
-  { id: "carpark", name: "Car park", kind: "area", x: 41, z: 7, width: 4, depth: 12 },
+  { id: "carpark", name: "Car park", kind: "area", x: 43, z: 7, width: 3, depth: 12 },
   { id: "guard", name: "Guard house", kind: "room", x: 50, z: 1, width: 4, depth: 4 },
   { id: "tnb", name: "TNB", kind: "room", x: 49, z: 29, width: 8, depth: 12 },
   { id: "empty-top", name: "Empty rack · north edge", kind: "rack", x: 31, z: -33, width: 34, depth: 3 },
@@ -53,16 +53,30 @@ export const assetColors: Record<FactoryAsset["kind"], string> = {
   area: "#538b82", room: "#a293bf", tank: "#55a8d3"
 };
 
-// Schematic walkways follow the plan's main circulation and clear every asset footprint.
-// Coordinates are scene units, not surveyed distances or certified evacuation routes.
-export const sendayanWalkways = [
-  { x: -33.25, z: -16.025, width: 2, depth: 28.55 },
-  { x: -10.125, z: -1.75, width: 46.25, depth: 1.8 },
-  { x: 13, z: 3.65, width: 2.6, depth: 67.9 },
-  { x: -10.125, z: -30.3, width: 46.25, depth: 1.8 },
-  { x: -15.5, z: 32, width: 57, depth: 1.8 },
-  { x: -44, z: .55, width: 1.8, depth: 74.1 },
-  { x: 5, z: -36.5, width: 98, depth: 1.8 },
-  { x: 54, z: .55, width: 1.5, depth: 74.1 },
-  { x: 5, z: 37.6, width: 98, depth: 1.8 },
-];
+// Manually traced filled-green lane boundaries in the supplied 1080 × 810 fire-plan
+// photograph. Outside arrows are separate symbols, not a continuous painted lane.
+// Photo coordinates are registered to the existing schematic scene, not metres.
+export const firePlanWalkwayBounds = [
+  [230, 248, 255, 431], // Wide loft-side aisle.
+  [230, 406, 659, 431], // Wide main cross-aisle.
+  [634, 248, 659, 622], // Wide north–south spine.
+  [254, 346, 365, 356], // Narrow upper-Asano branch and its stepped bend.
+  [355, 346, 365, 374],
+  [355, 364, 432, 374],
+  [422, 355, 432, 374],
+  [422, 355, 646, 365],
+  [211, 509, 646, 519], // Narrow lower cross-aisle.
+  [658, 518, 889, 531], // Lower storage edge and car-park connection.
+  [879, 435, 889, 531],
+] as const;
+
+function firePlanRectangle([left, top, right, bottom]: readonly number[]) {
+  const scaleX = 46.25 / 404, scaleZ = 50 / 372;
+  return { x: 13 + ((left + right) / 2 - 646) * scaleX, z: -25 + ((top + bottom) / 2 - 248) * scaleZ, width: (right - left) * scaleX, depth: (bottom - top) * scaleZ };
+}
+
+export const sendayanWalkways = firePlanWalkwayBounds.map(firePlanRectangle);
+export const sendayanCrossings = [[634, 354, 659, 365], [634, 509, 659, 520]].map(firePlanRectangle);
+// Correct the old schematic's stretched depth when rendering the registered plan.
+// After this correction, one photo pixel has the same world length on both axes.
+export const firePlanDepthScale = (46.25 / 404) / (50 / 372);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { assetColors, sendayanAssets, sendayanWalkways } from "./factoryLayout";
+import { assetColors, firePlanDepthScale, sendayanAssets, sendayanCrossings, sendayanWalkways } from "./factoryLayout";
 import { animateAsano, animateLoft, animateRobot, buildAsano, buildLoftArea, buildQcLine, buildRobotStation, buildRollStorage, type AsanoRig, type LoftRig, type RobotRig } from "./factoryModels";
 import "./factory-map.css";
 
@@ -42,16 +42,21 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     const render = () => renderer.render(scene, camera);
     scene.add(new THREE.HemisphereLight(0xffffff, 0x35485a, 2.3));
     const sun = new THREE.DirectionalLight(0xffefd1, 3); sun.position.set(-30, 70, 20); scene.add(sun);
+    const floorPlan = new THREE.Group(); floorPlan.scale.z = firePlanDepthScale; scene.add(floorPlan);
     const mesh = (parent: THREE.Object3D, w: number, h: number, d: number, color: string, x = 0, y = h / 2, z = 0) => {
       const object = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, roughness: .65, metalness: .15 }));
       object.position.set(x, y, z); parent.add(object); return object;
     };
-    mesh(scene, 110, .35, 80, "#293947", 0, -.3, 0);
-    const grid = new THREE.GridHelper(110, 55, 0x405260, 0x30424f); grid.position.y = -.1; scene.add(grid);
-    // High-contrast green lanes remain clear of equipment and storage footprints.
+    mesh(floorPlan, 110, .35, 80, "#293947", 0, -.3, 0);
+    const grid = new THREE.GridHelper(110, 55, 0x405260, 0x30424f); grid.position.y = -.1; floorPlan.add(grid);
+    // Traced filled lanes preserve the fire plan's wide aisles and narrow branches.
     for (const lane of sendayanWalkways) {
-      const path = mesh(scene, lane.width, .025, lane.depth, "#26964f", lane.x, .035, lane.z);
+      const path = mesh(floorPlan, lane.width, .025, lane.depth, "#26964f", lane.x, .035, lane.z);
       (path.material as THREE.MeshStandardMaterial).roughness = 1;
+    }
+    for (const crossing of sendayanCrossings) {
+      mesh(floorPlan, crossing.width, .01, crossing.depth, "#263436", crossing.x, .055, crossing.z);
+      for (let index = 0; index < 7; index += 2) mesh(floorPlan, crossing.width / 7, .006, crossing.depth * .9, "#e7ece6", crossing.x - crossing.width / 2 + (index + .5) * crossing.width / 7, .066, crossing.z);
     }
     const roots = new Map<string, THREE.Group>();
     const robots: RobotRig[] = [];
@@ -59,9 +64,10 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     const formingLines: AsanoRig[] = [];
     for (const asset of sendayanAssets) {
       const root = new THREE.Group(); root.position.set(asset.x, 0, asset.z); root.userData.assetId = asset.id;
-      scene.add(root); roots.set(asset.id, root);
+      floorPlan.add(root); roots.set(asset.id, root);
       const { width: w, depth: d } = asset; const color = assetColors[asset.kind];
-      mesh(root, w, .18, d, asset.kind === "forming" ? "#344853" : color);
+      // Asano has an irregular footprint; a full square plinth would cover its aisle.
+      if (asset.kind !== "forming") mesh(root, w, .18, d, color);
       if (asset.kind === "forming") {
         formingLines.push(buildAsano(root, asset));
       } else if (asset.kind === "rolls") {
@@ -84,6 +90,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
         mesh(root, w * .9, height, d * .9, color);
       }
     }
+    floorPlan.updateMatrixWorld(true);
     const highlight = new THREE.BoxHelper(roots.get("asano-upper")!, 0x78e6d1); highlight.visible = false; scene.add(highlight);
     let selectedRoot: THREE.Group | undefined;
     let frame = 0, elapsed = 0, previousTime = 0, motionEnabled = false;
@@ -105,10 +112,10 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       view(mode) {
         setHover(null);
         if (mode === "loft") {
-          controls.target.set(-38, 3, -13); camera.position.set(-35, 15, 17);
+          controls.target.set(-38, 3, -13 * firePlanDepthScale); camera.position.set(-35, 15, 17 * firePlanDepthScale);
         } else if (mode === "line-1" || mode === "line-2") {
-          const z = mode === "line-1" ? 17 : -17;
-          controls.target.set(-12, 0, z); camera.position.set(7, 28, z + 32);
+          const z = mode === "line-1" ? 20 : -19.2;
+          controls.target.set(-12, 0, z * firePlanDepthScale); camera.position.set(7, 28, (z + 32) * firePlanDepthScale);
         } else { controls.target.set(0, 0, 0); camera.position.set(...(mode === "top" ? [0, 125, .1] : [78, 86, 105]) as [number, number, number]); }
         controls.update(); render();
       },
