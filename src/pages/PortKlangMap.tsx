@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { animatePortKlangDataFlows, buildPortKlangModel, portKlangModelDescriptions, portKlangModelType, type PortKlangDataFlow, type PortKlangNetworkNode } from "./portKlangModels";
+import { animatePortKlangDataFlows, sizePortKlangDataPackets, buildPortKlangModel, portKlangModelDescriptions, portKlangModelType, type PortKlangDataFlow, type PortKlangNetworkNode } from "./portKlangModels";
 import { animateRobot, type RobotRig } from "./factoryModels";
 import { FactoryViewport, FactoryFullscreenButton } from "./FactoryViewport";
+import { createFactoryAnimationLoop } from "./factoryAnimation";
 import { createFactoryCameraMotion } from "./factoryCamera";
 import { portKlangFloors, portKlangPoint, portKlangServer, type PortKlangFloor } from "./portKlangLayout";
 
@@ -11,6 +12,7 @@ type PortKlangView = { top: boolean; revision: number; focusId?: string; network
 function PortKlangScene({ floor, selected, onSelect, view, moving, compact }: { floor: PortKlangFloor; selected: string | null; onSelect: (id: string) => void; view: PortKlangView; moving: boolean; compact: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const serverLabel = useRef<HTMLDivElement>(null);
+  const motionEnabled = useRef(moving); motionEnabled.current = moving;
   const controller = useRef<{ select: (id: string | null) => void; view: (top: boolean) => void; focus: (id: string) => void; network: () => void; motion: (enabled: boolean) => void } | null>(null);
   const [error, setError] = useState(false);
   const [hover, setHover] = useState<{ name: string; x: number; y: number } | null>(null);
@@ -31,7 +33,7 @@ function PortKlangScene({ floor, selected, onSelect, view, moving, compact }: { 
     controls.maxPolarAngle = Math.PI / 2.05; controls.minDistance = 8; controls.maxDistance = 300;
     controls.touches.ONE = THREE.TOUCH.PAN; controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
     const render = () => {
-      renderer.render(scene, camera);
+      sizePortKlangDataPackets(dataFlows,camera,container.clientHeight);renderer.render(scene, camera);
       if(serverLabel.current) {
         const point = new THREE.Vector3(portKlangServer.x,floor==="ground"?9.2:2.4,portKlangServer.z).project(camera);
         serverLabel.current.hidden=floor==="roof"||Math.abs(point.x)>1||Math.abs(point.y)>1||point.z>1||point.z< -1;
@@ -60,7 +62,7 @@ function PortKlangScene({ floor, selected, onSelect, view, moving, compact }: { 
         const middle=node.piPosition.clone().lerp(destination,.5);middle.y=9+node.piPosition.distanceTo(destination)*.045;
         const curve=new THREE.CatmullRomCurve3([node.piPosition,middle,destination]);
         const path=new THREE.Mesh(new THREE.TubeGeometry(curve,56,.055,6,false),new THREE.MeshBasicMaterial({color:"#9887c8",transparent:true,opacity:.8}));path.userData.partName="Raspberry Pi → first-floor AI PC / database · illustrative";scene.add(path);
-        const dots=Array.from({length:4},()=>{const dot=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),new THREE.MeshBasicMaterial({color:"#8771bc"}));scene.add(dot);return dot;});
+        const dots=Array.from({length:4},(_,index)=>{const dot=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),new THREE.MeshBasicMaterial({color:index===0?"#542bb1":"#aa8cdd",depthTest:false}));dot.renderOrder=3;scene.add(dot);return dot;});
         dataFlows.push({curve,dots,phase:index*.2});
       });
     }
@@ -81,10 +83,10 @@ function PortKlangScene({ floor, selected, onSelect, view, moving, compact }: { 
     }
     const highlight = new THREE.BoxHelper(new THREE.Object3D(),0x16856a); highlight.visible=false;scene.add(highlight);
     const motion = createFactoryCameraMotion(camera,controls,render);
-    let dataFrame=0,dataSeconds=0,lastTime=0,dataEnabled=false,onScreen=true;let selectedRoot:THREE.Group|undefined;
-    const tick=(now:number)=>{dataSeconds+=Math.min(.05,(now-lastTime)/1000);lastTime=now;animatePortKlangDataFlows(dataFlows,dataSeconds);robots.forEach(robot=>animateRobot(robot,dataSeconds));if(selectedRoot)highlight.setFromObject(selectedRoot);render();dataFrame=requestAnimationFrame(tick);};
-    const syncData=()=>{cancelAnimationFrame(dataFrame);dataFrame=0;if(dataEnabled&&!document.hidden&&onScreen){lastTime=performance.now();dataFrame=requestAnimationFrame(tick);}};
-    document.addEventListener("visibilitychange",syncData);const visibilityObserver=typeof IntersectionObserver!=="undefined"?new IntersectionObserver(entries=>{onScreen=entries[0]?.isIntersecting??false;syncData();}):null;visibilityObserver?.observe(container);
+    let selectedRoot:THREE.Group|undefined;
+    const animation=createFactoryAnimationLoop(seconds=>{animatePortKlangDataFlows(dataFlows,seconds);robots.forEach(robot=>animateRobot(robot,seconds));if(selectedRoot)highlight.setFromObject(selectedRoot);render();});
+    const syncVisibility=()=>animation.setPageVisible(!document.hidden);syncVisibility();document.addEventListener("visibilitychange",syncVisibility);
+    const visibilityObserver=typeof IntersectionObserver!=="undefined"?new IntersectionObserver(entries=>animation.setInViewport(entries[entries.length-1]?.isIntersecting??false)):null;visibilityObserver?.observe(container);
     camera.aspect = container.clientWidth / Math.max(1,container.clientHeight); camera.updateProjectionMatrix(); renderer.setSize(container.clientWidth,container.clientHeight);
     let initialized=false,currentTop=false;let resizeView:(()=>void)|null=null;
     const setView = (top:boolean) => {
@@ -93,7 +95,8 @@ function PortKlangScene({ floor, selected, onSelect, view, moving, compact }: { 
       motion.move(top ? new THREE.Vector3(0,distance,.1) : new THREE.Vector3(15,distance*.8,distance*.7),new THREE.Vector3(0,0,0),initialized);
       initialized=true;
     };
-    controller.current={select(id){const object=id?roots.get(id):undefined;selectedRoot=object;highlight.visible=!!object;if(object)highlight.setFromObject(object);render();},view:setView,focus(id){resizeView=()=>controller.current?.focus(id);const asset=layout.assets.find(item=>item.id===id);if(!asset)return;const fit=Math.max(1,1.25/camera.aspect),distance=Math.max(7,Math.max(asset.width,asset.depth)*1.15)*fit;motion.move(new THREE.Vector3(asset.x+distance*.5,distance*.85,asset.z+distance),new THREE.Vector3(asset.x,.6,asset.z));},network(){resizeView=()=>controller.current?.network();const distance=Math.max(45,30/(Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.aspect));motion.move(new THREE.Vector3(-30,distance*.85,distance*.7),new THREE.Vector3(-36,1,0));},motion(enabled){dataEnabled=enabled;syncData();}};
+    controller.current={select(id){const object=id?roots.get(id):undefined;selectedRoot=object;highlight.visible=!!object;if(object)highlight.setFromObject(object);render();},view:setView,focus(id){resizeView=()=>controller.current?.focus(id);const asset=layout.assets.find(item=>item.id===id);if(!asset)return;const fit=Math.max(1,1.25/camera.aspect),distance=Math.max(7,Math.max(asset.width,asset.depth)*1.15)*fit;motion.move(new THREE.Vector3(asset.x+distance*.5,distance*.85,asset.z+distance),new THREE.Vector3(asset.x,.6,asset.z));},network(){resizeView=()=>controller.current?.network();const distance=Math.max(45,30/(Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.aspect));motion.move(new THREE.Vector3(-30,distance*.85,distance*.7),new THREE.Vector3(-36,1,0));},motion(enabled){animation.setEnabled(enabled);}};
+    animation.setEnabled(motionEnabled.current);
     const resize=new ResizeObserver(()=>{const {width,height}=container.getBoundingClientRect();if(!width||!height)return;const changed=Math.abs(camera.aspect-width/height)>.001;camera.aspect=width/height;camera.updateProjectionMatrix();renderer.setSize(width,height);if(!initialized||changed){if(resizeView)resizeView();else setView(currentTop);}else render();});resize.observe(container);
     controls.addEventListener("change",render);
     let space=false,inside=false,down={x:0,y:0},moved=false;const pointers=new Set<number>();
@@ -109,7 +112,7 @@ function PortKlangScene({ floor, selected, onSelect, view, moving, compact }: { 
     const leave=()=>{inside=false;setHover(null);};const cancel=(event:PointerEvent)=>{pointers.delete(event.pointerId);moved=true;setHover(null);};
     const events={pointerdown:pointerDown,pointermove:pointerMove,pointerup:pointerUp,pointerleave:leave,pointercancel:cancel};
     for(const [name,handler]of Object.entries(events))renderer.domElement.addEventListener(name,handler as EventListener);
-    return()=>{visibilityObserver?.disconnect();cancelAnimationFrame(dataFrame);document.removeEventListener("visibilitychange",syncData);controller.current=null;resize.disconnect();motion.dispose();controls.dispose();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",resetSpace);for(const[name,handler]of Object.entries(events))renderer.domElement.removeEventListener(name,handler as EventListener);scene.traverse(object=>{if(object instanceof THREE.Mesh||object instanceof THREE.LineSegments){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>material.dispose());}});sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
+    return()=>{visibilityObserver?.disconnect();animation.dispose();document.removeEventListener("visibilitychange",syncVisibility);controller.current=null;resize.disconnect();motion.dispose();controls.dispose();window.removeEventListener("keydown",keyDown);window.removeEventListener("keyup",keyUp);window.removeEventListener("blur",resetSpace);for(const[name,handler]of Object.entries(events))renderer.domElement.removeEventListener(name,handler as EventListener);scene.traverse(object=>{if(object instanceof THREE.Mesh||object instanceof THREE.LineSegments){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>material.dispose());}});sun.shadow.dispose();renderer.dispose();renderer.domElement.remove();};
   },[floor,onSelect,compact]);
   useEffect(()=>controller.current?.select(selected),[selected,floor]);
   useEffect(()=>controller.current?.motion(moving),[moving,floor]);

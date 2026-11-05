@@ -14,6 +14,8 @@ For the AI PC, follow the [pull and deploy steps](#pull-and-deploy-the-update-on
 
 ## What is implemented
 
+- Port Klang data packets use bright, unlit colours and a consistent screen size so their movement remains visible in the overview and close-ups. Uneven spacing distinguishes the moving packets from a stationary dotted line. Its animation loop preserves time through pause/resume, avoids restarting on repeated visibility events, and reapplies the current motion preference when a scene is rebuilt. Slow frames no longer reduce stream speed as aggressively. Packet sizing and visibility/pause lifecycle regressions are tested.
+
 - The main dashboard places two interactive factory previews directly below the blue welcome header: Port Klang on the left and Sendayan on the right, with the existing status cards and work sections underneath. They stack on narrow screens and link to the corresponding full factory page. Previews load lazily, use a capped pixel ratio, and pause animation while outside the viewport or in a hidden tab. Project pins remain hidden in dashboard previews.
 - Both factory maps have **Fullscreen / Exit fullscreen** controls, including from the dashboard. Native browser fullscreen is used where available; an accessible expanded overlay supports browsers without it, with Escape to close and restored scrolling. Port Klang now animates all six waterjet robot arms along with its data dots, using **Pause motion / Animate motion** and reduced-motion defaults. Model scaling accounts for the arms' swept envelope so the animation stays inside the mapped station footprints.
 

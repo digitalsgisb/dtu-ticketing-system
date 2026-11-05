@@ -1,12 +1,25 @@
 import { expect, it } from "vitest";
-import { Box3, Group, Mesh } from "three";
+import { Box3, Group, Mesh, PerspectiveCamera, Vector3 } from "three";
 import { portKlangFloors, portKlangServer } from "../src/pages/portKlangLayout";
-import { animatePortKlangDataFlows, buildPortKlangModel, portKlangModelDescriptions, portKlangModelType, type PortKlangDataFlow, type PortKlangNetworkNode } from "../src/pages/portKlangModels";
+import { animatePortKlangDataFlows, sizePortKlangDataPackets, buildPortKlangModel, portKlangModelDescriptions, portKlangModelType, type PortKlangDataFlow, type PortKlangNetworkNode } from "../src/pages/portKlangModels";
 import { animateRobot, type RobotRig } from "../src/pages/factoryModels";
 
 it("chooses recognisable models without mistaking stored forming materials for machines",()=>{
   const expected:Record<string,string>={"pk-ground-waterjet-1":"waterjet","pk-ground-waterjet-assy":"assembly-line","pk-ground-forming-4":"forming-oven","pk-ground-oven-4":"oven","pk-ground-latex":"coating","pk-ground-hot-roller":"hot-roller","pk-ground-dilo":"needle-punch","pk-ground-tube":"tube-rack","pk-ground-mould-jig":"mould-rack","pk-first-roll-form":"tube-rack","pk-first-canteen":"canteen","pk-ground-toilets-north":"toilets","pk-roof-solar":"solar"};
   for(const asset of Object.values(portKlangFloors).flatMap(floor=>floor.assets)) if(expected[asset.id])expect(portKlangModelType(asset)).toBe(expected[asset.id]);
+});
+
+it("keeps moving packets visible at overview and close-up zoom despite scaled station geometry",()=>{
+  const root=new Group(),flows:PortKlangDataFlow[]=[];
+  buildPortKlangModel(root,portKlangFloors.ground.assets.find(asset=>asset.id==="pk-ground-waterjet-1")!,flows);
+  const camera=new PerspectiveCamera(43,1,.1,700),dot=flows[0].dots[0];
+  for(const distance of [20,100]) {
+    camera.position.set(0,10,distance);sizePortKlangDataPackets(flows,camera,600);
+    const point=dot.getWorldPosition(new Vector3()),scale=dot.getWorldScale(new Vector3());
+    const radius=.012*scale.x,perPixel=2*camera.position.distanceTo(point)*Math.tan(43*Math.PI/360)/600;
+    expect(radius/perPixel).toBeCloseTo(2.8);expect(scale.x).toBeCloseTo(scale.y);expect(scale.y).toBeCloseTo(scale.z);
+  }
+  root.traverse(object=>{if(object instanceof Mesh){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>material.dispose());}});
 });
 
 it("gives each active waterjet its own sensor, Pi and TV, with world-space network anchors",()=>{

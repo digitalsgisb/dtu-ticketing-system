@@ -5,7 +5,20 @@ import { animateRobot, buildRobotStation, type RobotRig } from "./factoryModels"
 export type PortKlangDataFlow = { curve: THREE.CatmullRomCurve3; dots: THREE.Mesh[]; phase: number };
 export type PortKlangNetworkNode = { assetId: string; piPosition: THREE.Vector3 };
 export function animatePortKlangDataFlows(flows: PortKlangDataFlow[], seconds: number) {
-  for (const flow of flows) flow.dots.forEach((dot,index) => dot.position.copy(flow.curve.getPoint((seconds*.35+flow.phase+index/flow.dots.length)%1)));
+  for (const flow of flows) flow.dots.forEach((dot,index) => dot.position.copy(flow.curve.getPoint((seconds*.35+flow.phase+index*.23)%1)));
+}
+
+// Keep packets legible at overview scale, including dots inside scaled station models.
+export function sizePortKlangDataPackets(flows: PortKlangDataFlow[], camera: THREE.PerspectiveCamera, viewportHeight: number) {
+  const position = new THREE.Vector3(), parentScale = new THREE.Vector3();
+  for (const flow of flows) flow.dots.forEach((dot,index) => {
+    dot.getWorldPosition(position); dot.parent?.getWorldScale(parentScale);
+    if (!dot.parent) parentScale.set(1,1,1);
+    const perPixel = 2 * camera.position.distanceTo(position) * Math.tan(THREE.MathUtils.degToRad(camera.fov/2)) / Math.max(1,viewportHeight);
+    const radius = Math.max(.025,Math.min(.65,perPixel*(index===0?2.8:1.9)));
+    const geometryRadius = (dot.geometry as THREE.SphereGeometry).parameters.radius;
+    dot.scale.set(radius/(geometryRadius*parentScale.x),radius/(geometryRadius*parentScale.y),radius/(geometryRadius*parentScale.z));
+  });
 }
 
 export function portKlangModelType(asset: PortKlangAsset) {
@@ -193,7 +206,7 @@ export function buildPortKlangModel(root: THREE.Group, asset: PortKlangAsset, fl
         for(let index=0;index<3;index++)box(.05,.025+index*.02,.006,.18+index*.077,.75+index*.01,-.345,"#9bd2c5","Illustrative dashboard bar");
         const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0,.62,0),new THREE.Vector3(cabinetX*.45,1.12,cabinetZ*.6),new THREE.Vector3(cabinetX,.47,cabinetZ+.11)]);
         const path = new THREE.Mesh(new THREE.TubeGeometry(curve,32,.003,6,false),material("#80bdc2")); path.userData.partName="Sensor → Raspberry Pi · illustrative data"; model.add(path);
-        const dots = Array.from({length:3},(_,index)=>{const dot=add(new THREE.SphereGeometry(.012,8,6),0,0,0,"#00a5bf","Data packet · illustrative");dot.position.copy(curve.getPoint(index/3));return dot;});
+        const dots = Array.from({length:3},(_,index)=>{const dot=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial({color:index===0?"#007f9c":"#11bfd1",depthTest:false}));dot.userData.partName="Data packet · illustrative";dot.renderOrder=3;model.add(dot);dot.position.copy(curve.getPoint(index*.23));return dot;});
         flows.push({curve,dots,phase:asset.id.endsWith("2")?.25:0});
         nodes.push({assetId:asset.id,piPosition:model.localToWorld(new THREE.Vector3(cabinetX,.47,cabinetZ+.11))});
       }
