@@ -1,10 +1,11 @@
 import * as THREE from "three";
-import { officeDataHub, sendayanAssets, sendayanNetworks } from "./factoryLayout";
+import { officeDataHub, sendayanAssets, sendayanNetworks, type FactoryAsset } from "./factoryLayout";
 
 export type DataFlow = { fromId: string; toId: string; curve: THREE.QuadraticBezierCurve3; dots: THREE.Mesh[]; offset: number };
 
 export function buildDataFlows(parent: THREE.Group): DataFlow[] {
   const flows: DataFlow[] = [];
+  const edgePoint = (edge: FactoryAsset) => new THREE.Vector3(edge.x + Math.sin(edge.rotationY ?? 0) * .18, (edge.elevation ?? 0) + .25, edge.z + Math.cos(edge.rotationY ?? 0) * .18);
   const connect = (fromId: string, toId: string, start: THREE.Vector3, end: THREE.Vector3, colour: string, height: number, offset: number, count: number) => {
     const arch = start.clone().lerp(end, .5); arch.y = height;
     const curve = new THREE.QuadraticBezierCurve3(start, arch, end);
@@ -20,11 +21,11 @@ export function buildDataFlows(parent: THREE.Group): DataFlow[] {
     for (const [index, sensor] of network.sensors.entries()) {
       connect(sensor.id, network.edge.id,
         new THREE.Vector3(sensor.x, (sensor.elevation ?? 0) + .7, sensor.z),
-        new THREE.Vector3(network.edge.x, (network.edge.elevation ?? 0) + .25, network.edge.z + .18),
+        edgePoint(network.edge),
         "#00a5bf", 12 + index, network.line * .2 + index * .13, 4);
     }
     connect(network.edge.id, officeDataHub.id,
-      new THREE.Vector3(network.edge.x, (network.edge.elevation ?? 0) + .25, network.edge.z + .18),
+      edgePoint(network.edge),
       new THREE.Vector3(officeDataHub.x, (officeDataHub.elevation ?? 0) + .6, officeDataHub.z),
       "#7662c3", 22, network.line * .21, 6);
   }
