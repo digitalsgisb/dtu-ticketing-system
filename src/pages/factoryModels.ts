@@ -19,8 +19,32 @@ function joint(parent: THREE.Object3D, radius: number, color: string) {
   const part = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshStandardMaterial({ color, metalness: .4, roughness: .4 })); parent.add(part);
 }
 
+function tvDisplays(parent: THREE.Group, y: number, z: number, prefix: string) {
+  for (const [index, x] of [-.95, .95].entries()) {
+    const tv = new THREE.Group(); tv.position.set(x, y, z); tv.userData.partName = `${prefix} · TV display ${index + 1}`; parent.add(tv);
+    box(tv, [1.7, 1.05, .16], [0, 0, 0], "#243a42");
+    box(tv, [1.5, .85, .02], [0, 0, .09], "#143e4e", true);
+    box(tv, [1.27, .06, .025], [0, .29, .11], "#b5e2d8");
+    for (let bar = 0; bar < 5; bar++) box(tv, [.12, .15 + bar * .055, .025], [-.5 + bar * .23, -.24 + bar * .0275, .11], index ? "#79c7ed" : "#61d3b6");
+  }
+}
+
 export function buildFacility(root: THREE.Group, asset: FactoryAsset): boolean {
   const w = asset.width, d = asset.depth;
+  if (asset.kind === "panel") {
+    const h = asset.line === 2 ? 4.8 : 4.5;
+    box(root, [w, h, d], [0, h / 2, 0], "#557c83");
+    for (const x of [-.85, .85]) box(root, [.02, h - .35, .03], [x, h / 2, d / 2 + .025], "#a3bbc0");
+    if (asset.line === 2) tvDisplays(root, 3.55, d / 2 + .12, asset.name);
+    else box(root, [1.1, .6, .04], [0, 3.4, d / 2 + .03], "#143e4e");
+    for (const x of [-1.35, 1.35]) box(root, [.12, .3, .08], [x, 1.65, d / 2 + .07], "#d0dce0");
+    return true;
+  }
+  if (asset.kind === "display") {
+    box(root, [.15, 2.7, .15], [0, 1.35, 0], "#507782");
+    box(root, [2.9, .12, .7], [0, .18, 0], "#507782");
+    tvDisplays(root, 3.15, 0, asset.name); return true;
+  }
   if (asset.id === "office-east" || asset.id === "toilets") {
     const h = asset.id === "office-east" ? 3.1 : 2.2;
     const upright = asset.id === "office-east" ? .44 : .23, foot = asset.id === "office-east" ? .45 : .22;
@@ -32,6 +56,7 @@ export function buildFacility(root: THREE.Group, asset: FactoryAsset): boolean {
       if (asset.id === "ev-bay") {
         for (const offset of [-1.1, 1.1]) box(root, [4.6, .025, .06], [-.7, .21, offset], "#ffffff");
       } else for (const x of [-1.1, 1.1]) box(root, [.06, .025, 4.6], [x, .21, z], "#ffffff");
+      if (asset.id === "carpark") continue;
       const car = new THREE.Group(); car.position.set(0, .2, z); root.add(car);
       if (asset.id === "ev-bay") { car.position.x = -.7; car.rotation.y = Math.PI / 2; }
       box(car, [1.4, .45, 3.1], [0, .55, 0], "#edf1ef");
@@ -65,9 +90,22 @@ export function buildFacility(root: THREE.Group, asset: FactoryAsset): boolean {
     box(root, [w, .14, .18], [0, 2.4, 0], "#edf2ef"); return true;
   }
   if (asset.kind === "attendance") {
-    box(root, [.16, 1.5, .16], [0, .75, 0], "#888fa2");
-    box(root, [.65, .85, .25], [0, 1.8, 0], "#7662c3");
-    box(root, [.45, .52, .04], [0, 1.85, .15], "#d5f1eb", true); return true;
+    box(root, [1.8, 3.2, .18], [0, 1.6, 0], "#f4f6f4");
+    box(root, [1.3, .9, .13], [0, 2.2, .14], "#273b43");
+    box(root, [1.02, .68, .025], [.08, 2.2, .22], "#224c66", true);
+    box(root, [.45, .48, .03], [.3, 2.2, .245], "#4f7e89");
+    box(root, [.05, .05, .03], [-.52, 2.2, .23], "#101e26");
+    box(root, [.5, .78, .12], [0, 1.18, .15], "#344451");
+    box(root, [.39, .6, .025], [0, 1.18, .22], "#667fcb", true);
+    const cable = new THREE.CatmullRomCurve3([new THREE.Vector3(.56, 2, .18), new THREE.Vector3(.7, 1.5, .2), new THREE.Vector3(.3, 1.5, .21), new THREE.Vector3(.22, 1.2, .21)]);
+    root.add(new THREE.Mesh(new THREE.TubeGeometry(cable, 16, .025, 5, false), new THREE.MeshStandardMaterial({ color: "#48606a" }))); return true;
+  }
+  if (asset.kind === "hub") {
+    box(root, [1.4, .8, .9], [0, .4, 0], "#655ba3");
+    for (const y of [.22, .43, .64]) {
+      box(root, [1.1, .08, .03], [0, y, .48], "#333c5a");
+      box(root, [.1, .06, .04], [.43, y, .5], "#8df4d4", true);
+    } return true;
   }
   if (asset.kind === "sensor") {
     box(root, [.12, .3, .12], [0, .15, 0], "#5b8893");
@@ -145,10 +183,7 @@ export function buildAsano(root: THREE.Group, asset: FactoryAsset): AsanoRig {
   const change = stage("Mould-change platform", 2.9, asset.line === 2 ? -5.3 : 5.3);
   box(change, [4.3, .35, 3.7], [0, .5, 0], "#93685d");
   for (const x of [-1.5, 1.5]) box(change, [.1, .1, 3.6], [x, .75, 0], "#b8c1c2");
-  // Keep the small cabinet clear of Line 2's relocated platform.
-  const cabinet = stage("Hydraulic & control unit", asset.line === 2 ? -1 : 2.9, -4.6);
-  box(cabinet, [2.5, 2.4, 2.1], [0, 1.2, 0], "#97a7aa");
-  box(cabinet, [1, .8, .06], [0, 1.6, 1.08], "#17394a");
+  // Control panels and displays are separate assets, shared with Pi/data endpoints.
   const rig = { platen, roll, carpet, phase: asset.line === 1 ? 0 : 2 };
   animateAsano(rig, 0); return rig;
 }

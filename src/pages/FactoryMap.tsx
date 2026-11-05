@@ -6,7 +6,7 @@ import { animateAsano, animateLoft, animateRobot, buildAsano, buildFacility, bui
 import { animateDataFlows, buildDataFlows } from "./factoryDataFlow";
 import "./factory-map.css";
 
-type FactoryView = "overview" | "top" | "line-1" | "line-2" | "loft" | "office";
+type FactoryView = "overview" | "top" | "line-1" | "line-2" | "loft" | "office" | "attendance";
 
 function FactoryScene({ selected, onSelect, view, moving }: { selected: string | null; onSelect: (id: string) => void; view: { mode: FactoryView; revision: number }; moving: boolean }) {
   const host = useRef<HTMLDivElement>(null);
@@ -71,7 +71,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     const lofts: LoftRig[] = [];
     const formingLines: AsanoRig[] = [];
     for (const asset of sendayanAssets) {
-      const root = new THREE.Group(); root.position.set(asset.x, asset.elevation ?? 0, asset.z); root.userData.assetId = asset.id;
+      const root = new THREE.Group(); root.position.set(asset.x, asset.elevation ?? 0, asset.z); root.rotation.y = asset.rotationY ?? 0; root.userData.assetId = asset.id;
       floorPlan.add(root); roots.set(asset.id, root);
       const { width: w, depth: d } = asset; const color = assetColors[asset.kind];
       // Asano has an irregular footprint; a full square plinth would cover its aisle.
@@ -134,7 +134,9 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       select(id) { selectedRoot = id ? roots.get(id) : undefined; highlight.visible = !!selectedRoot; if (selectedRoot) highlight.setFromObject(selectedRoot); render(); },
       view(mode) {
         setHover(null);
-        if (mode === "office") {
+        if (mode === "attendance") {
+          controls.target.set(41.5, 1.65, 15.2 * firePlanDepthScale); camera.position.set(27.5, 5, 12 * firePlanDepthScale);
+        } else if (mode === "office") {
           controls.target.set(39, 1, 20 * firePlanDepthScale); camera.position.set(65, 38, 54 * firePlanDepthScale);
         } else if (mode === "loft") {
           controls.target.set(-38, 3, -13 * firePlanDepthScale); camera.position.set(-35, 15, 17 * firePlanDepthScale);
@@ -215,7 +217,7 @@ export function FactoryMapPage() {
       <div className="factory-notice"><strong>Sendayan · connected systems</strong><span>White = factory context · Colour = system equipment · 3 sensors per line → Raspberry Pi inside each control panel · Illustrative flow, no live readings.</span></div>
       <div className="factory-workspace"><section className="factory-viewport" aria-label="Interactive factory map">
         <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" onClick={() => { setSelected("loft"); setView(previous => ({ mode: "loft", revision: previous.revision + 1 })); }}>Loft area</button><button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause motion" : "Animate motion"}</button></div></div>
-        <div className="factory-system-strip"><span><b>EDGE DATA FLOW</b> 6 sensors <span aria-hidden="true">→</span> 2 Raspberry Pi</span><button type="button" onClick={() => { setSelected("attendance"); setView(previous => ({ mode: "office", revision: previous.revision + 1 })); }}>Office & attendance ↗</button></div>
+        <div className="factory-system-strip"><span><b>DATA FLOW</b> 6 sensors <span aria-hidden="true">→</span> 2 Raspberry Pi <span aria-hidden="true">→</span> Office<small className="factory-office-flow">Smart Attendance → Office</small></span><button type="button" onClick={() => { setSelected("office-data"); setView(previous => ({ mode: "office", revision: previous.revision + 1 })); }}>Office & attendance ↗</button><button type="button" onClick={() => { setSelected("attendance"); setView(previous => ({ mode: "attendance", revision: previous.revision + 1 })); }}>Attendance unit ↗</button></div>
         <FactoryScene selected={selected} onSelect={setSelected} view={view} moving={moving} />
         <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Equipment <i className="factory-sensor-key" /> Sensor / data <i className="factory-edge-key" /> Raspberry Pi <i className="factory-walkway-key" /> Walkway <i className="factory-road-key" /> Road</span></div>
       </section><aside className="factory-sidebar">
