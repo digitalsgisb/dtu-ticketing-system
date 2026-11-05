@@ -1,6 +1,6 @@
 export type PortKlangFloor = "ground" | "first" | "roof";
 export type PortKlangAsset = {
-  id: string; name: string; kind: "machine" | "storage" | "room" | "tank" | "parking" | "assembly" | "chemical" | "roof";
+  id: string; name: string; kind: "machine" | "storage" | "room" | "tank" | "parking" | "assembly" | "chemical" | "roof" | "server";
   x: number; z: number; width: number; depth: number;
 };
 type Rect = [number, number, number, number];
@@ -30,7 +30,6 @@ export const portKlangFloors: Record<PortKlangFloor, { label: string; assets: Po
     ground("finished-3", "Finished goods · store 3", "storage", [471,292,590,430]),
     ground("waterjet-assy", "Waterjet assembly line", "machine", [606,377,692,428]),
     ground("waterjet-2", "3D waterjet machine 2", "machine", [631,301,675,373]),
-    ground("waterjet-3", "3D waterjet machine 3", "machine", [694,384,735,429]),
     ground("forming-7", "Continuous forming machine 7", "machine", [710,325,867,380]),
     ground("forming-6", "Continuous forming machine 6", "machine", [753,381,879,429]),
     ground("latex", "Latex coating machine", "machine", [884,296,1038,340]),
@@ -76,6 +75,7 @@ export const portKlangFloors: Record<PortKlangFloor, { label: string; assets: Po
   first: { label: "First floor", assets: [
     first("office-north", "Office · first floor north", "room", [204,677,276,747]),
     first("office-south", "Office · first floor south", "room", [204,800,276,924]),
+    first("ai-pc", "AI PC · main server / database", "server", [220,840,251,866]),
     first("roll-form", "Roll form storage", "storage", [823,674,871,760]),
     first("office-centre", "Office · first floor centre", "room", [913,887,980,923]),
     first("old-parts", "Old part storage", "storage", [1092,675,1299,785]),
@@ -94,3 +94,4 @@ export const portKlangFloors: Record<PortKlangFloor, { label: string; assets: Po
     area("roof", "roof", "Rooftop · second floor", "roof", [278,1035,1608,1235]),
   ], routes: [ [[245,1095],[290,1095]] ] }
 };
+export const portKlangServer = portKlangFloors.first.assets.find(asset => asset.kind === "server")!;

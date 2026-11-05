@@ -25,6 +25,7 @@ it("switches to Port Klang and keeps searches and selections within each floor",
   const select=host.querySelector("select")!;
   act(()=>{select.value="port-klang";select.dispatchEvent(new Event("change",{bubbles:true}));});
   expect(host.textContent).toContain("Continuous forming machine 7");
+  click("AI PC · first floor ↗");expect(host.querySelector(".factory-detail h2")?.textContent).toBe("AI PC · main server / database");expect(host.textContent).toContain("Receives data from the three waterjet Raspberry Pis");
   click("First floor");expect(host.textContent).toContain("Training centre");expect(host.textContent).not.toContain("Continuous forming machine 7");
   click("Rooftop / second floor");expect(host.textContent).toContain("Solar panel access");expect(host.textContent).not.toContain("Training centre");
   for(const floor of Object.values(portKlangFloors)) {
