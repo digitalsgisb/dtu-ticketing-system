@@ -6,10 +6,12 @@ import { animateAsano, animateLoft, animateRobot, buildAsano, buildFacility, bui
 import { animateDataFlows, buildDataFlows } from "./factoryDataFlow";
 import { FactoryProjectCard, factoryProjectPins, pinForFactoryAsset, useFactoryProjects } from "./factoryProjects";
 import "./factory-map.css";
+import { createFactoryCameraMotion } from "./factoryCamera";
+import { PortKlangMap } from "./PortKlangMap";
 
 type FactoryView = "overview" | "top" | "line-1" | "line-2" | "loft" | "office" | "attendance";
 
-function FactoryScene({ selected, onSelect, view, moving, activeProject, onProjectSelect, projectCard }: { selected: string | null; onSelect: (id: string) => void; view: { mode: FactoryView; revision: number }; moving: boolean; activeProject: string | null; onProjectSelect: (key: string) => void; projectCard: ReactNode }) {
+function FactoryScene({ selected, onSelect, view, moving, activeProject, onProjectSelect, projectCard, showProjects }: { selected: string | null; onSelect: (id: string) => void; view: { mode: FactoryView; revision: number }; moving: boolean; activeProject: string | null; onProjectSelect: (key: string) => void; projectCard: ReactNode; showProjects: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const pinElements = useRef(new Map<string, HTMLButtonElement>());
   const controller = useRef<{ select: (id: string | null) => void; view: (mode: string) => void; motion: (enabled: boolean) => void } | null>(null);
@@ -144,10 +146,13 @@ function FactoryScene({ selected, onSelect, view, moving, activeProject, onProje
       if (motionEnabled && !document.hidden) { previousTime = performance.now(); frame = requestAnimationFrame(tick); }
     };
     document.addEventListener("visibilitychange", syncMotion);
+    const cameraMotion = createFactoryCameraMotion(camera, controls, render);
+    let firstView = true;
     controller.current = {
       select(id) { selectedRoot = id ? roots.get(id) : undefined; highlight.visible = !!selectedRoot; if (selectedRoot) highlight.setFromObject(selectedRoot); render(); },
       view(mode) {
         setHover(null);
+        const previousPosition = camera.position.clone(), previousTarget = controls.target.clone();
         if (mode === "attendance") {
           controls.target.set(41.5, 1.65, 15.2 * firePlanDepthScale); camera.position.set(27.5, 5, 12 * firePlanDepthScale);
         } else if (mode === "office") {
@@ -159,7 +164,9 @@ function FactoryScene({ selected, onSelect, view, moving, activeProject, onProje
           const fit = Math.max(1, 1.4 / camera.aspect);
           controls.target.set(-12, 0, z * firePlanDepthScale); camera.position.set(-12 + 19 * fit, 28 * fit, (z + 32 * fit) * firePlanDepthScale);
         } else { controls.target.set(3, 0, 0); camera.position.set(...(mode === "top" ? [3, Math.max(125, 68 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect)), .1] : [78, 86, 105]) as [number, number, number]); }
-        controls.update(); render();
+        const position = camera.position.clone(), target = controls.target.clone();
+        camera.position.copy(previousPosition); controls.target.copy(previousTarget);
+        cameraMotion.move(position, target, !firstView); firstView = false;
       },
       motion(enabled) { motionEnabled = enabled; syncMotion(); }
     };
@@ -204,7 +211,7 @@ function FactoryScene({ selected, onSelect, view, moving, activeProject, onProje
     return () => {
       window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp); window.removeEventListener("blur", resetSpace);
       cancelAnimationFrame(frame); document.removeEventListener("visibilitychange", syncMotion);
-      controller.current = null; resize.disconnect(); controls.dispose();
+      controller.current = null; resize.disconnect(); cameraMotion.dispose(); controls.dispose();
       renderer.domElement.removeEventListener("pointerdown", pointerDown); renderer.domElement.removeEventListener("pointerup", pointerUp);
       renderer.domElement.removeEventListener("pointermove", pointerMove); renderer.domElement.removeEventListener("pointerleave", pointerLeave);
       renderer.domElement.removeEventListener("pointercancel", pointerCancel);
@@ -216,7 +223,7 @@ function FactoryScene({ selected, onSelect, view, moving, activeProject, onProje
   useEffect(() => controller.current?.view(view.mode), [view]);
   useEffect(() => controller.current?.motion(moving), [moving]);
   return <div className="factory-canvas" ref={host}>
-    <div className="factory-project-pins" aria-label="Projects on this map">{factoryProjectPins.map(pin => <button key={pin.key} type="button" className="factory-project-pin" hidden ref={element => { if (element) pinElements.current.set(pin.key, element); else pinElements.current.delete(pin.key); }} aria-label={`Open ${pin.projectNo} · ${pin.label}`} aria-pressed={activeProject === pin.key} onClick={() => onProjectSelect(pin.key)}><span className="factory-pin-label"><strong>{pin.label}</strong><small>{pin.projectNo}</small></span><span className="factory-pin-marker"><b>{pin.symbol}</b></span></button>)}</div>
+    <div className="factory-project-pins" hidden={!showProjects} aria-label="Projects on this map">{factoryProjectPins.map(pin => <button key={pin.key} type="button" className="factory-project-pin" hidden ref={element => { if (element) pinElements.current.set(pin.key, element); else pinElements.current.delete(pin.key); }} aria-label={`Open ${pin.projectNo} · ${pin.label}`} aria-pressed={activeProject === pin.key} onClick={() => onProjectSelect(pin.key)}><span className="factory-pin-label"><strong>{pin.label}</strong><small>{pin.projectNo}</small></span><span className="factory-pin-marker"><b>{pin.symbol}</b></span></button>)}</div>
     {hover && <div className="factory-hover-name" role="tooltip" style={{ left: hover.x, top: hover.y }}>{hover.name}</div>}{projectCard}
     {error && <div className="factory-render-error" role="alert">3D rendering is unavailable in this browser. You can still explore the equipment list and details.</div>}
   </div>;
@@ -226,9 +233,11 @@ export function FactoryMapPage() {
   const [site, setSite] = useState("sendayan");
   const [selected, setSelected] = useState<string | null>("line-1-edge");
   const [projectKey, setProjectKey] = useState<string | null>(null);
+  const [showProjects, setShowProjects] = useState(false);
+  const projectsVisible = useRef(false); projectsVisible.current = showProjects;
   const { projects, error: projectError, refresh: refreshProjects } = useFactoryProjects();
-  const selectAsset = useCallback((id: string) => { setSelected(id); setProjectKey(pinForFactoryAsset(sendayanAssets.find(item => item.id === id))?.key ?? null); }, []);
-  const openProject = useCallback((key: string) => { const pin = factoryProjectPins.find(item => item.key === key); if (pin) { setSelected(pin.assetId); setProjectKey(pin.key); } }, []);
+  const selectAsset = useCallback((id: string) => { setSelected(id); setProjectKey(projectsVisible.current ? pinForFactoryAsset(sendayanAssets.find(item => item.id === id))?.key ?? null : null); }, []);
+  const openProject = useCallback((key: string) => { const pin = factoryProjectPins.find(item => item.key === key); if (pin) { setSelected(pin.assetId); setProjectKey(pin.key); setView(previous => ({ mode: pin.line === 1 ? "line-1" : pin.line === 2 ? "line-2" : "attendance", revision: previous.revision + 1 })); } }, []);
   const closeProject = useCallback(() => setProjectKey(null), []);
   const [query, setQuery] = useState("");
   const [moving, setMoving] = useState(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -238,13 +247,14 @@ export function FactoryMapPage() {
   const items = sendayanAssets.filter(item => item.name.toLowerCase().includes(query.toLowerCase()));
   return <div className="factory-page">
     <div className="page-header"><div><h1>3D Factory Map</h1><p>Explore your sites, equipment and working areas.</p></div><label className="factory-site">Site<select value={site} onChange={event => setSite(event.target.value)}><option value="sendayan">Sendayan</option><option value="port-klang">Port Klang</option></select></label></div>
-    {site === "port-klang" ? <section className="factory-placeholder"><span>PORT KLANG</span><h2>Your next factory view</h2><p>The Port Klang layout has not been added yet.</p><button type="button" className="btn" onClick={() => setSite("sendayan")}>Explore Sendayan</button></section> : <>
+    {site === "port-klang" ? <PortKlangMap /> : <>
       <div className="factory-notice"><strong>Sendayan · connected systems</strong><span>White = factory context · Colour = system equipment · 3 sensors per line → Raspberry Pi inside each control panel · Illustrative flow, no live readings.</span></div>
       <div className="factory-workspace"><section className="factory-viewport" aria-label="Interactive factory map">
         <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" onClick={() => { setSelected("loft"); setView(previous => ({ mode: "loft", revision: previous.revision + 1 })); }}>Loft area</button><button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause motion" : "Animate motion"}</button></div></div>
         <div className="factory-system-strip"><span><b>DATA FLOW</b> 6 sensors <span aria-hidden="true">→</span> 2 Raspberry Pi <span aria-hidden="true">→</span> Office<small className="factory-office-flow">Smart Attendance → Office</small></span><button type="button" onClick={() => { setSelected("office-data"); setView(previous => ({ mode: "office", revision: previous.revision + 1 })); }}>Office & attendance ↗</button><button type="button" onClick={() => { setSelected("attendance"); setView(previous => ({ mode: "attendance", revision: previous.revision + 1 })); }}>Attendance unit ↗</button></div>
-        <div className="factory-project-shortcuts" aria-label="Find a project">{factoryProjectPins.map(pin => <button type="button" key={pin.key} onClick={() => { openProject(pin.key); setView(previous => ({ mode: pin.line === 1 ? "line-1" : pin.line === 2 ? "line-2" : "attendance", revision: previous.revision + 1 })); }}><span aria-hidden="true">●</span>{pin.label}</button>)}<small>Click a pin for the saved project</small></div>
-        <FactoryScene selected={selected} onSelect={selectAsset} view={view} moving={moving} activeProject={projectKey} onProjectSelect={openProject} projectCard={projectPin ? <FactoryProjectCard key={projectPin.key} pin={projectPin} projects={projects} error={projectError} onRetry={refreshProjects} onClose={closeProject} /> : null} />
+        <div className="factory-project-controls"><button type="button" aria-pressed={showProjects} aria-expanded={showProjects} onClick={() => { setShowProjects(value => !value); setProjectKey(null); }}>{showProjects ? "Hide projects" : "Show projects"}</button></div>
+        {showProjects && <div className="factory-project-shortcuts" aria-label="Find a project">{factoryProjectPins.map(pin => <button type="button" key={pin.key} onClick={() => openProject(pin.key)}><span aria-hidden="true">●</span>{pin.label}</button>)}<small>Click a pin for the saved project</small></div>}
+        <FactoryScene selected={selected} onSelect={selectAsset} view={view} moving={moving} showProjects={showProjects} activeProject={projectKey} onProjectSelect={openProject} projectCard={showProjects && projectPin ? <FactoryProjectCard key={projectPin.key} pin={projectPin} projects={projects} error={projectError} onRetry={refreshProjects} onClose={closeProject} /> : null} />
         <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Equipment <i className="factory-sensor-key" /> Sensor / data <i className="factory-edge-key" /> Raspberry Pi <i className="factory-walkway-key" /> Walkway <i className="factory-road-key" /> Road</span></div>
       </section><aside className="factory-sidebar">
         <section className="factory-detail" aria-live="polite"><small>SELECTED EQUIPMENT / AREA</small><h2>{asset?.name ?? "Select equipment"}</h2>{asset && <><span className="factory-kind">{asset.kind === "forming" ? "Asano forming machine" : asset.kind === "waterjet" ? "ABB robotic waterjet" : asset.kind === "glue" ? "UR auto glue" : asset.kind === "qc" ? "QC inspection & lighting" : asset.kind === "area" ? "Working area" : asset.kind === "room" ? "Facility" : asset.kind}</span><p>{asset.note ?? "Placed using the current Sendayan fire plan. Select another item in the map or equipment list to explore."}</p><div className="factory-data-status"><i />Layout only · no live status</div></>}</section>
