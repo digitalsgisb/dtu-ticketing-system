@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { FactoryAsset } from "./factoryLayout";
 
 export type RobotRig = { yaw: THREE.Group; shoulder: THREE.Group; elbow: THREE.Group; wrist: THREE.Group; phase: number; kind: "waterjet" | "glue" };
+export type LoftRig = { vehicle: THREE.Group; wheels: THREE.Mesh[]; forks: THREE.Group; travel: number };
 
 function box(parent: THREE.Object3D, size: [number, number, number], position: [number, number, number], color: string, emissive = false) {
   const object = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshStandardMaterial({ color, metalness: .35, roughness: .5, ...(emissive ? { emissive: color, emissiveIntensity: 2.2 } : {}) }));
@@ -49,6 +50,53 @@ export function animateRobot(rig: RobotRig, seconds: number) {
   rig.shoulder.rotation.z = -.7 + Math.sin(t * 1.2) * .15;
   rig.elbow.rotation.z = -1.35 + Math.cos(t * 1.2) * .24;
   rig.wrist.rotation.z = -1 + Math.sin(t * 1.5) * .2;
+}
+
+export function buildLoftArea(root: THREE.Group, asset: FactoryAsset): LoftRig {
+  const height = 9, shelfWidth = 1.1;
+  const ends = asset.depth / 2 - .5;
+  // Two tall rack rows leave an open central aisle; no shelf crosses the vehicle path.
+  for (const side of [-1, 1]) {
+    const x = side * (asset.width / 2 - .7);
+    for (let bay = 0; bay <= 5; bay++) {
+      const z = -ends + bay * (2 * ends / 5);
+      for (const offset of [-shelfWidth / 2, shelfWidth / 2]) box(root, [.14, height, .14], [x + offset, height / 2, z], "#587f95");
+    }
+    for (const y of [1.2, 3.5, 5.8, 8.1]) {
+      box(root, [shelfWidth, .15, asset.depth - 1], [x, y, 0], "#91a4b1");
+      box(root, [.12, .25, asset.depth - 1], [x - side * shelfWidth / 2, y, 0], "#d69b43");
+      for (let bay = 0; bay < 5; bay++) {
+        const z = -ends + (bay + .5) * (2 * ends / 5);
+        box(root, [.8, .8, 2.1], [x, y + .48, z], bay % 2 ? "#b2b6a4" : "#958773");
+      }
+    }
+  }
+  for (const x of [-1.15, 1.15]) box(root, [.07, .02, asset.depth - 1], [x, .2, 0], "#d2b55f");
+  const vehicle = new THREE.Group(); vehicle.position.y = .18; root.add(vehicle);
+  const wheels: THREE.Mesh[] = [];
+  for (const x of [-.68, .68]) for (const z of [-.65, .55]) {
+    const wheel = cylinder(vehicle, .31, .23, "#202c34", 0);
+    wheel.rotation.z = Math.PI / 2; wheel.position.set(x, .32, z); wheels.push(wheel);
+  }
+  box(vehicle, [1.25, .65, 1.75], [0, .65, -.1], "#e6b036");
+  box(vehicle, [1.2, .5, .55], [0, 1.05, -.7], "#ce902b");
+  box(vehicle, [.55, .14, .55], [0, 1.05, -.2], "#283b44");
+  box(vehicle, [.55, .5, .12], [0, 1.3, -.43], "#283b44");
+  for (const x of [-.56, .56]) for (const z of [-.8, .6]) box(vehicle, [.07, 1.5, .07], [x, 1.7, z], "#394b55");
+  box(vehicle, [1.35, .12, 1.6], [0, 2.45, -.1], "#e6b036");
+  for (const x of [-.42, .42]) box(vehicle, [.12, 2.7, .12], [x, 1.6, .85], "#384d59");
+  const forks = new THREE.Group(); vehicle.add(forks);
+  box(forks, [1, .55, .15], [0, .55, .95], "#71828c");
+  for (const x of [-.33, .33]) box(forks, [.13, .1, 1.25], [x, .3, 1.5], "#aab7bc");
+  const rig = { vehicle, wheels, forks, travel: asset.depth / 2 - 3.3 };
+  animateLoft(rig, 0); return rig;
+}
+
+export function animateLoft(rig: LoftRig, seconds: number) {
+  // Reversing avoids an unrealistic U-turn inside the narrow aisle.
+  rig.vehicle.position.z = Math.sin(seconds * .38) * rig.travel;
+  rig.wheels.forEach(wheel => { wheel.rotation.y = rig.vehicle.position.z / .31; });
+  rig.forks.position.y = .15 + .3 * Math.pow(Math.sin(seconds * .38), 8);
 }
 
 export function buildQcLine(root: THREE.Group, asset: FactoryAsset) {

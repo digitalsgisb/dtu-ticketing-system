@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { assetColors, sendayanAssets } from "./factoryLayout";
-import { animateRobot, buildQcLine, buildRobotStation, type RobotRig } from "./factoryModels";
+import { animateLoft, animateRobot, buildLoftArea, buildQcLine, buildRobotStation, type LoftRig, type RobotRig } from "./factoryModels";
 import "./factory-map.css";
 
-type FactoryView = "overview" | "top" | "line-1" | "line-2";
+type FactoryView = "overview" | "top" | "line-1" | "line-2" | "loft";
 
 function FactoryScene({ selected, onSelect, view, moving }: { selected: string | null; onSelect: (id: string) => void; view: { mode: FactoryView; revision: number }; moving: boolean }) {
   const host = useRef<HTMLDivElement>(null);
@@ -54,6 +54,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     mesh(scene, 3, .03, 28, "#405d58", -32, .015, -12);
     const roots = new Map<string, THREE.Group>();
     const robots: RobotRig[] = [];
+    const lofts: LoftRig[] = [];
     for (const asset of sendayanAssets) {
       const root = new THREE.Group(); root.position.set(asset.x, 0, asset.z); root.userData.assetId = asset.id;
       scene.add(root); roots.set(asset.id, root);
@@ -71,6 +72,8 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
         robots.push(buildRobotStation(root, asset));
       } else if (asset.kind === "qc") {
         buildQcLine(root, asset);
+      } else if (asset.id === "loft") {
+        lofts.push(buildLoftArea(root, asset));
       } else if (asset.kind === "rack") {
         const height = 2.6;
         for (const x of [-w / 2 + .2, w / 2 - .2]) for (const z of [-d / 2 + .2, d / 2 - .2]) mesh(root, .22, height, .22, "#566b80", x, height / 2, z);
@@ -89,6 +92,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     const tick = (now: number) => {
       elapsed += Math.min((now - previousTime) / 1000, .05); previousTime = now;
       robots.forEach(robot => animateRobot(robot, elapsed));
+      lofts.forEach(loft => animateLoft(loft, elapsed));
       if (selectedRoot) highlight.setFromObject(selectedRoot);
       render(); frame = requestAnimationFrame(tick);
     };
@@ -101,7 +105,9 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       select(id) { selectedRoot = id ? roots.get(id) : undefined; highlight.visible = !!selectedRoot; if (selectedRoot) highlight.setFromObject(selectedRoot); render(); },
       view(mode) {
         setHover(null);
-        if (mode === "line-1" || mode === "line-2") {
+        if (mode === "loft") {
+          controls.target.set(-38, 3, -13); camera.position.set(-35, 15, 17);
+        } else if (mode === "line-1" || mode === "line-2") {
           const z = mode === "line-1" ? 17 : -17;
           controls.target.set(-12, 0, z); camera.position.set(7, 28, z + 32);
         } else { controls.target.set(0, 0, 0); camera.position.set(...(mode === "top" ? [0, 125, .1] : [78, 86, 105]) as [number, number, number]); }
@@ -174,9 +180,9 @@ export function FactoryMapPage() {
   return <div className="factory-page">
     <div className="page-header"><div><h1>3D Factory Map</h1><p>Explore your sites, equipment and working areas.</p></div><label className="factory-site">Site<select value={site} onChange={event => setSite(event.target.value)}><option value="sendayan">Sendayan</option><option value="port-klang">Port Klang</option></select></label></div>
     {site === "port-klang" ? <section className="factory-placeholder"><span>PORT KLANG</span><h2>Your next factory view</h2><p>The Port Klang layout has not been added yet.</p><button type="button" className="btn" onClick={() => setSite("sendayan")}>Explore Sendayan</button></section> : <>
-      <div className="factory-notice"><strong>Sendayan · layout preview</strong><span>Line 1 (lower) and Line 2 (upper) share the same layout. Approximate scale · Illustrative robot motion · No live readings.</span></div>
+      <div className="factory-notice"><strong>Sendayan · layout preview</strong><span>Line 1 (lower) and Line 2 (upper) share the same layout. Approximate scale · Illustrative robot & forklift motion · No live readings.</span></div>
       <div className="factory-workspace"><section className="factory-viewport" aria-label="Interactive factory map">
-        <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause robots" : "Animate robots"}</button></div></div>
+        <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" onClick={() => { setSelected("loft"); setView(previous => ({ mode: "loft", revision: previous.revision + 1 })); }}>Loft area</button><button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause motion" : "Animate motion"}</button></div></div>
         <FactoryScene selected={selected} onSelect={setSelected} view={view} moving={moving} />
         <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Asano <i /> ABB / UR <i /> QC lighting</span></div>
       </section><aside className="factory-sidebar">

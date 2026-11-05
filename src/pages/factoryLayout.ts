@@ -18,7 +18,7 @@ export function productionLine(line: 1 | 2, z: number): FactoryAsset[] {
 export const sendayanAssets: FactoryAsset[] = [
   ...productionLine(1, 17),
   ...productionLine(2, -17),
-  { id: "loft", name: "Loft layer area", kind: "rack", x: -38, z: -13, width: 6, depth: 23 },
+  { id: "loft", name: "Loft layer area", kind: "rack", x: -38, z: -13, width: 6, depth: 23, note: "Tall storage racks, approximately two storeys high, with a central forklift aisle. The forklift travels forward and reverses within the aisle. Height and motion are illustrative, not measured or live." },
   { id: "child-upper", name: "Child part transition · upper", kind: "area", x: 4, z: -5, width: 12, depth: 4 },
   { id: "child-centre", name: "Child part transition · centre", kind: "area", x: -15, z: 2, width: 17, depth: 5 },
   { id: "spare-tire", name: "Spare tire", kind: "rack", x: 2, z: 2, width: 4, depth: 5 },
