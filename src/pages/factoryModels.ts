@@ -44,7 +44,7 @@ export function buildRobotStation(root: THREE.Group, asset: FactoryAsset): Robot
 }
 
 export function animateRobot(rig: RobotRig, seconds: number) {
-  const t = seconds * (rig.kind === "waterjet" ? .75 : .55) + rig.phase;
+  const t = seconds * (rig.kind === "waterjet" ? 2.25 : 1.65) + rig.phase;
   rig.yaw.rotation.y = -.4 + Math.sin(t) * .3;
   rig.shoulder.rotation.z = -.7 + Math.sin(t * 1.2) * .15;
   rig.elbow.rotation.z = -1.35 + Math.cos(t * 1.2) * .24;

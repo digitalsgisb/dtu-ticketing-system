@@ -21,10 +21,24 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
     renderer.domElement.setAttribute("aria-label", "Sendayan factory 3D overview. Use the equipment list to select an asset with a keyboard.");
+    renderer.domElement.tabIndex = 0;
+    renderer.domElement.setAttribute("aria-keyshortcuts", "Space");
     const scene = new THREE.Scene(); scene.background = new THREE.Color("#111e2b");
     const camera = new THREE.PerspectiveCamera(43, 1, .1, 700);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.maxPolarAngle = Math.PI / 2.05; controls.minDistance = 12; controls.maxDistance = 240;
+    controls.touches.ONE = THREE.TOUCH.PAN;
+    controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+    let spacePanning = false, pointerInside = false;
+    const resetSpace = () => { spacePanning = false; controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE; container.classList.remove("factory-space-pan"); };
+    const keyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (event.code !== "Space" || (target instanceof HTMLElement && target.closest("input, textarea, select, button, a, [contenteditable]"))) return;
+      if (!pointerInside && document.activeElement !== renderer.domElement) return;
+      event.preventDefault(); spacePanning = true; controls.mouseButtons.LEFT = THREE.MOUSE.PAN; container.classList.add("factory-space-pan");
+    };
+    const keyUp = (event: KeyboardEvent) => { if (event.code === "Space" && spacePanning) { event.preventDefault(); resetSpace(); } };
+    window.addEventListener("keydown", keyDown); window.addEventListener("keyup", keyUp); window.addEventListener("blur", resetSpace);
     const render = () => renderer.render(scene, camera);
     scene.add(new THREE.HemisphereLight(0xffffff, 0x35485a, 2.3));
     const sun = new THREE.DirectionalLight(0xffefd1, 3); sun.position.set(-30, 70, 20); scene.add(sun);
@@ -98,8 +112,13 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     controller.current.view("overview");
     const resize = new ResizeObserver(() => { const { width, height } = container.getBoundingClientRect(); if (!width || !height) return; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height); render(); }); resize.observe(container);
     controls.addEventListener("change", render);
-    const ray = new THREE.Raycaster(); let down = { x: 0, y: 0 };
-    const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; setHover(null); };
+    const ray = new THREE.Raycaster(); let down = { x: 0, y: 0 }, gestureMoved = false;
+    const pointers = new Set<number>();
+    const pointerDown = (event: PointerEvent) => {
+      if (!pointers.size) { down = { x: event.clientX, y: event.clientY }; gestureMoved = spacePanning; }
+      pointers.add(event.pointerId); if (pointers.size > 1) gestureMoved = true;
+      renderer.domElement.focus({ preventScroll: true }); setHover(null);
+    };
     const pick = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
@@ -108,25 +127,32 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       return object?.userData.assetId as string | undefined;
     };
     const pointerUp = (event: PointerEvent) => {
-      if (event.button !== 0 || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) return;
+      pointers.delete(event.pointerId);
+      if (event.button !== 0 || gestureMoved || spacePanning || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) return;
       const id = pick(event); if (id) onSelect(id);
       pointerMove(event);
     };
     const pointerMove = (event: PointerEvent) => {
+      pointerInside = true;
+      if (pointers.has(event.pointerId) && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) gestureMoved = true;
       if (event.pointerType === "touch" || event.buttons) { setHover(null); return; }
       const id = pick(event), asset = sendayanAssets.find(item => item.id === id);
-      renderer.domElement.style.cursor = asset ? "pointer" : "grab";
+      renderer.domElement.style.cursor = spacePanning ? "grab" : asset ? "pointer" : "grab";
       const rect = container.getBoundingClientRect();
       setHover(asset ? { name: asset.name, x: Math.max(8, Math.min(event.clientX - rect.left + 14, rect.width - 230)), y: Math.max(8, Math.min(event.clientY - rect.top + 14, rect.height - 50)) } : null);
     };
-    const pointerLeave = () => setHover(null);
+    const pointerLeave = () => { pointerInside = false; setHover(null); };
+    const pointerCancel = (event: PointerEvent) => { pointers.delete(event.pointerId); gestureMoved = true; setHover(null); };
     renderer.domElement.addEventListener("pointerdown", pointerDown); renderer.domElement.addEventListener("pointerup", pointerUp);
     renderer.domElement.addEventListener("pointermove", pointerMove); renderer.domElement.addEventListener("pointerleave", pointerLeave);
+    renderer.domElement.addEventListener("pointercancel", pointerCancel);
     return () => {
+      window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp); window.removeEventListener("blur", resetSpace);
       cancelAnimationFrame(frame); document.removeEventListener("visibilitychange", syncMotion);
       controller.current = null; resize.disconnect(); controls.dispose();
       renderer.domElement.removeEventListener("pointerdown", pointerDown); renderer.domElement.removeEventListener("pointerup", pointerUp);
       renderer.domElement.removeEventListener("pointermove", pointerMove); renderer.domElement.removeEventListener("pointerleave", pointerLeave);
+      renderer.domElement.removeEventListener("pointercancel", pointerCancel);
       scene.traverse(object => { const drawable = object as THREE.Mesh; drawable.geometry?.dispose(); const materials = drawable.material ? (Array.isArray(drawable.material) ? drawable.material : [drawable.material]) : []; materials.forEach(material => material.dispose()); });
       renderer.dispose(); renderer.domElement.remove();
     };
@@ -152,7 +178,7 @@ export function FactoryMapPage() {
       <div className="factory-workspace"><section className="factory-viewport" aria-label="Interactive factory map">
         <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause robots" : "Animate robots"}</button></div></div>
         <FactoryScene selected={selected} onSelect={setSelected} view={view} moving={moving} />
-        <div className="factory-map-footer"><span>Hover for names · Drag to rotate · Scroll to zoom · Click or tap for details</span><span><i /> Asano <i /> ABB / UR <i /> QC lighting</span></div>
+        <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Asano <i /> ABB / UR <i /> QC lighting</span></div>
       </section><aside className="factory-sidebar">
         <section className="factory-detail" aria-live="polite"><small>SELECTED EQUIPMENT / AREA</small><h2>{asset?.name ?? "Select equipment"}</h2>{asset && <><span className="factory-kind">{asset.kind === "forming" ? "Asano forming machine" : asset.kind === "waterjet" ? "ABB robotic waterjet" : asset.kind === "glue" ? "UR auto glue" : asset.kind === "qc" ? "QC inspection & lighting" : asset.kind === "area" ? "Working area" : asset.kind === "room" ? "Facility" : asset.kind}</span><p>{asset.note ?? "Placed using the current Sendayan fire plan. Select another item in the map or equipment list to explore."}</p><div className="factory-data-status"><i />Layout only · no live status</div></>}</section>
         <div className="factory-equipment-heading"><h3>Equipment & areas</h3><span>{items.length}</span></div>
