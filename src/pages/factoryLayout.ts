@@ -1,6 +1,6 @@
 export type FactoryAsset = {
-  id: string; name: string; kind: "forming" | "rolls" | "waterjet" | "glue" | "qc" | "pump" | "rack" | "area" | "room" | "tank";
-  x: number; z: number; width: number; depth: number; note?: string; line?: 1 | 2;
+  id: string; name: string; kind: "forming" | "rolls" | "waterjet" | "glue" | "qc" | "pump" | "rack" | "area" | "room" | "tank" | "sensor" | "edge" | "attendance" | "entrance" | "seating" | "charger";
+  x: number; z: number; width: number; depth: number; note?: string; line?: 1 | 2; system?: boolean; elevation?: number;
 };
 
 // Shared equipment sizes, with the Asano mould-change platform mirrored on Line 2.
@@ -32,16 +32,23 @@ export const sendayanAssets: FactoryAsset[] = [
   { id: "maintenance-store", name: "Maintenance store", kind: "room", x: -37, z: 14, width: 8, depth: 5 },
   { id: "pump-room", name: "Pump room", kind: "room", x: -36, z: 20, width: 6, depth: 4 },
   { id: "fire-tank", name: "Tangki bomba", kind: "tank", x: -38, z: 26, width: 8, depth: 5 },
-  { id: "office-west", name: "Office · west", kind: "room", x: 18, z: 22, width: 3, depth: 9 },
-  { id: "meeting", name: "Meeting room", kind: "room", x: 23, z: 20, width: 6, depth: 7 },
-  { id: "office-east", name: "Office · east", kind: "room", x: 36, z: 24, width: 7, depth: 6 },
-  { id: "toilets", name: "Toilets", kind: "room", x: 29, z: 26, width: 5, depth: 3 },
-  { id: "carpark", name: "Car park", kind: "area", x: 43, z: 7, width: 3, depth: 12 },
-  { id: "guard", name: "Guard house", kind: "room", x: 50, z: 1, width: 4, depth: 4 },
-  { id: "tnb", name: "TNB", kind: "room", x: 49, z: 29, width: 8, depth: 12 },
+  { id: "office-west", name: "Office · west", kind: "room", ...firePlanRectangle([678, 532, 695, 600]) },
+  { id: "meeting", name: "Meeting room", kind: "room", ...firePlanRectangle([696, 532, 745, 586]) },
+  { id: "seating", name: "Tables & chairs · in front of meeting room", kind: "seating", ...firePlanRectangle([752, 532, 809, 585]), note: "Tables and chairs in front of the meeting room, as shown on the main fire plan." },
+  { id: "office-east", name: "Office", kind: "room", ...firePlanRectangle([835, 555, 889, 620]), note: "L-shaped office footprint following the main fire plan." },
+  { id: "toilets", name: "Toilets", kind: "room", ...firePlanRectangle([752, 555, 833, 620]), note: "L-shaped toilet block: long lower leg and narrow upright beside the office, following the main fire plan." },
+  { id: "msb", name: "MSB", kind: "room", ...firePlanRectangle([840, 554, 862, 584]), note: "MSB in the office corner, positioned from the main fire plan." },
+  { id: "carpark", name: "Car park", kind: "area", ...firePlanRectangle([890, 435, 920, 532]) },
+  { id: "entrance-north", name: "Entrance · car park upper end", kind: "entrance", x: 43, z: .5, width: 2.8, depth: .4, note: "Entrance at the upper end of the car-park strip in your sketch." },
+  { id: "entrance-office", name: "Entrance · office side", kind: "entrance", x: 43, z: 14, width: 2.8, depth: .4, note: "Office-side entrance beside the Smart Attendance point." },
+  { id: "attendance", name: "Smart Attendance system", kind: "attendance", x: 41.5, z: 15.2, width: .8, depth: .6, system: true, note: "Smart Attendance terminal near the office-side entrance. Location follows your sketch; no live attendance data is connected." },
+  { id: "guard", name: "Guard house", kind: "room", ...firePlanRectangle([1008, 414, 1035, 453]) },
+  { id: "tnb", name: "TNB", kind: "room", ...firePlanRectangle([957, 593, 1035, 691]) },
+  { id: "ev-bay", name: "EV parking bay", kind: "area", ...firePlanRectangle([979, 563, 1034, 590]), note: "EV parking bay between the empty rack and TNB, beside the road." },
+  { id: "ev-charger", name: "EV charger", kind: "charger", x: 56.6, z: 19.15, width: .8, depth: .8, system: true, note: "EV charger beside the EV parking bay shown on the main fire plan. Display marker only; charging status is not connected." },
   { id: "empty-top", name: "Empty rack · north edge", kind: "rack", x: 31, z: -33, width: 34, depth: 3 },
   { id: "empty-bottom", name: "Empty rack · south edge", kind: "rack", x: 30, z: 35, width: 30, depth: 3 },
-  { id: "empty-east", name: "Empty rack · east edge", kind: "rack", x: 49, z: 14, width: 6, depth: 11 },
+  { id: "empty-east", name: "Empty rack · east edge", kind: "rack", ...firePlanRectangle([979, 467, 1034, 561]) },
   { id: "mould-west-upper", name: "Mould storage · west upper", kind: "rack", x: -48, z: -23, width: 3, depth: 17 },
   { id: "mould-west-lower", name: "Mould storage · west lower", kind: "rack", x: -48, z: 26, width: 3, depth: 17 },
   { id: "mould-south", name: "Mould storage · south", kind: "rack", x: -17, z: 29, width: 17, depth: 2 },
@@ -50,8 +57,23 @@ export const sendayanAssets: FactoryAsset[] = [
 
 export const assetColors: Record<FactoryAsset["kind"], string> = {
   forming: "#e4ad39", rolls: "#ac5652", waterjet: "#f08a38", glue: "#75b9d4", qc: "#e4efd6", pump: "#4bbbc5", rack: "#8297b4",
-  area: "#538b82", room: "#a293bf", tank: "#55a8d3"
+  area: "#538b82", room: "#a293bf", tank: "#55a8d3", sensor: "#00a5bf", edge: "#14a67a", attendance: "#7662c3", entrance: "#97a69f", seating: "#c4cec8", charger: "#21a086"
 };
+
+// Three sensors feed the Raspberry Pi inside each line's Asano control panel.
+export const sendayanNetworks = ([1, 2] as const).map(line => {
+  const forming = sendayanAssets.find(asset => asset.kind === "forming" && asset.line === line)!;
+  const panelX = forming.x + (line === 2 ? -1 : 2.9);
+  const edge: FactoryAsset = { id: `line-${line}-edge`, name: `Line ${line} · Raspberry Pi · control panel`, kind: "edge", x: panelX, z: forming.z - 3.47, elevation: 1.35, width: 1.2, depth: .3, line, system: true, note: "Raspberry Pi edge device inside the Asano control panel, shown as a cutaway board. Receives the two waterjet sensors and the forming-trolley sensor. Animated dots illustrate data direction; they are not live readings." };
+  const sensors: FactoryAsset[] = [1, 2].map(number => {
+    const station = sendayanAssets.find(asset => asset.id === `line-${line}-waterjet-${number}`)!;
+    return { id: `line-${line}-sensor-waterjet-${number}`, name: `Line ${line} · Waterjet ${number} sensor`, kind: "sensor", x: station.x, z: station.z, elevation: 1.75, width: .55, depth: .55, line, system: true, note: `Sensor/transmitter on Waterjet ${number}, sending to the Raspberry Pi inside this line's control panel. Illustrative data flow.` };
+  });
+  sensors.push({ id: `line-${line}-sensor-forming`, name: `Line ${line} · Forming trolley sensor`, kind: "sensor", x: forming.x + 2.9, z: forming.z + 2.55, elevation: 1.2, width: .55, depth: .55, line, system: true, note: "Forming-trolley sensor sending to the Raspberry Pi inside this line's control panel. Illustrative data flow." });
+  return { line, edge, sensors };
+});
+export const sendayanSystemAssets = [...sendayanAssets, ...sendayanNetworks.flatMap(network => [network.edge, ...network.sensors])];
+export function isSystemAsset(asset: FactoryAsset) { return !!asset.system || asset.kind === "forming" || asset.kind === "waterjet"; }
 
 // Manually traced filled-green lane boundaries in the supplied 1080 × 810 fire-plan
 // photograph. Outside arrows are separate symbols, not a continuous painted lane.
@@ -80,3 +102,5 @@ export const sendayanCrossings = [[634, 354, 659, 365], [634, 509, 659, 520]].ma
 // Correct the old schematic's stretched depth when rendering the registered plan.
 // After this correction, one photo pixel has the same world length on both axes.
 export const firePlanDepthScale = (46.25 / 404) / (50 / 372);
+// Road, distinct from the filled green pedestrian lanes.
+export const sendayanRoads = [[921, 200, 977, 593], [921, 593, 955, 622], [841, 399, 1008, 434], [105, 622, 955, 669]].map(firePlanRectangle);

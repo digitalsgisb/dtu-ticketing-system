@@ -19,6 +19,71 @@ function joint(parent: THREE.Object3D, radius: number, color: string) {
   const part = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshStandardMaterial({ color, metalness: .4, roughness: .4 })); parent.add(part);
 }
 
+export function buildFacility(root: THREE.Group, asset: FactoryAsset): boolean {
+  const w = asset.width, d = asset.depth;
+  if (asset.id === "office-east" || asset.id === "toilets") {
+    const h = asset.id === "office-east" ? 3.1 : 2.2;
+    const upright = asset.id === "office-east" ? .44 : .23, foot = asset.id === "office-east" ? .45 : .22;
+    box(root, [w * upright, h, d], [w * (.5 - upright / 2), h / 2, 0], "#f6f8f7");
+    box(root, [w * (1 - upright), h, d * foot], [-w * upright / 2, h / 2, d * (.5 - foot / 2)], "#f6f8f7"); return true;
+  }
+  if (asset.id === "carpark" || asset.id === "ev-bay") {
+    for (const z of (asset.id === "ev-bay" ? [0] : [-3, 3])) {
+      if (asset.id === "ev-bay") {
+        for (const offset of [-1.1, 1.1]) box(root, [4.6, .025, .06], [-.7, .21, offset], "#ffffff");
+      } else for (const x of [-1.1, 1.1]) box(root, [.06, .025, 4.6], [x, .21, z], "#ffffff");
+      const car = new THREE.Group(); car.position.set(0, .2, z); root.add(car);
+      if (asset.id === "ev-bay") { car.position.x = -.7; car.rotation.y = Math.PI / 2; }
+      box(car, [1.4, .45, 3.1], [0, .55, 0], "#edf1ef");
+      box(car, [1.15, .5, 1.55], [0, 1, -.05], "#bec8c8");
+      box(car, [1.2, .1, 1.35], [0, 1.29, -.05], "#edf1ef");
+      for (const x of [-.7, .7]) for (const wheelZ of [-1, 1]) {
+        const wheel = cylinder(car, .25, .17, "#37484b", 0); wheel.rotation.z = Math.PI / 2; wheel.position.set(x, .3, wheelZ);
+      }
+    } return true;
+  }
+  if (asset.kind === "seating") {
+    for (const x of [-w * .23, w * .23]) {
+      box(root, [.85, .12, d * .78], [x, 1.1, 0], "#f1f4f2");
+      for (const z of [-d * .28, d * .28]) for (const dx of [-.27, .27]) box(root, [.08, 1, .08], [x + dx, .5, z], "#899892");
+      for (const z of [-d * .28, 0, d * .28]) for (const side of [-1, 1]) {
+        box(root, [.45, .1, .5], [x + side * .75, .6, z], "#c6ceca");
+        box(root, [.08, .6, .5], [x + side * .98, .9, z], "#c6ceca");
+        for (const dz of [-.17, .17]) box(root, [.06, .55, .06], [x + side * .75, .28, z + dz], "#899892");
+      }
+    } return true;
+  }
+  if (asset.kind === "charger") {
+    box(root, [.65, 1.7, .4], [0, .95, 0], "#21a086");
+    box(root, [.42, .5, .05], [0, 1.35, .23], "#b8f4de", true);
+    const cable = new THREE.CatmullRomCurve3([new THREE.Vector3(.3, 1.5, .1), new THREE.Vector3(.65, .8, .2), new THREE.Vector3(.5, .35, .35), new THREE.Vector3(.25, 1.05, .3)]);
+    root.add(new THREE.Mesh(new THREE.TubeGeometry(cable, 20, .035, 6, false), new THREE.MeshStandardMaterial({ color: "#405a54" })));
+    return true;
+  }
+  if (asset.kind === "entrance") {
+    for (const x of [-w / 2, w / 2]) box(root, [.13, 2.4, .16], [x, 1.2, 0], "#edf2ef");
+    box(root, [w, .14, .18], [0, 2.4, 0], "#edf2ef"); return true;
+  }
+  if (asset.kind === "attendance") {
+    box(root, [.16, 1.5, .16], [0, .75, 0], "#888fa2");
+    box(root, [.65, .85, .25], [0, 1.8, 0], "#7662c3");
+    box(root, [.45, .52, .04], [0, 1.85, .15], "#d5f1eb", true); return true;
+  }
+  if (asset.kind === "sensor") {
+    box(root, [.12, .3, .12], [0, .15, 0], "#5b8893");
+    box(root, [.55, .35, .45], [0, .42, 0], "#00a5bf");
+    cylinder(root, .03, .6, "#4f737a", .88).position.x = .2;
+    box(root, [.1, .08, .08], [0, .46, .26], "#96ffdf", true); return true;
+  }
+  if (asset.kind === "edge") {
+    box(root, [1.1, .75, .1], [0, .25, 0], "#159b72");
+    box(root, [.34, .3, .12], [-.1, .25, .1], "#2c4243");
+    for (const x of [-.4, -.27, -.14, -.01, .12, .25]) box(root, [.06, .1, .08], [x, .56, .09], "#e1ba65");
+    box(root, [.22, .25, .2], [.45, .2, .1], "#c3d2cc"); return true;
+  }
+  return false;
+}
+
 function carpetProduct(parent: THREE.Object3D) {
   const carpet = new THREE.Group(); parent.add(carpet);
   // A formed automotive floor carpet: four recessed footwells and a raised centre tunnel.

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { assetColors, firePlanDepthScale, sendayanAssets, sendayanCrossings, sendayanWalkways } from "./factoryLayout";
-import { animateAsano, animateLoft, animateRobot, buildAsano, buildLoftArea, buildQcLine, buildRobotStation, buildRollStorage, type AsanoRig, type LoftRig, type RobotRig } from "./factoryModels";
+import { assetColors, firePlanDepthScale, isSystemAsset, sendayanSystemAssets as sendayanAssets, sendayanCrossings, sendayanRoads, sendayanWalkways } from "./factoryLayout";
+import { animateAsano, animateLoft, animateRobot, buildAsano, buildFacility, buildLoftArea, buildQcLine, buildRobotStation, buildRollStorage, type AsanoRig, type LoftRig, type RobotRig } from "./factoryModels";
+import { animateDataFlows, buildDataFlows } from "./factoryDataFlow";
 import "./factory-map.css";
 
-type FactoryView = "overview" | "top" | "line-1" | "line-2" | "loft";
+type FactoryView = "overview" | "top" | "line-1" | "line-2" | "loft" | "office";
 
 function FactoryScene({ selected, onSelect, view, moving }: { selected: string | null; onSelect: (id: string) => void; view: { mode: FactoryView; revision: number }; moving: boolean }) {
   const host = useRef<HTMLDivElement>(null);
@@ -23,7 +24,8 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     renderer.domElement.setAttribute("aria-label", "Sendayan factory 3D overview. Use the equipment list to select an asset with a keyboard.");
     renderer.domElement.tabIndex = 0;
     renderer.domElement.setAttribute("aria-keyshortcuts", "Space");
-    const scene = new THREE.Scene(); scene.background = new THREE.Color("#111e2b");
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const scene = new THREE.Scene(); scene.background = new THREE.Color("#f1f5f2");
     const camera = new THREE.PerspectiveCamera(43, 1, .1, 700);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.maxPolarAngle = Math.PI / 2.05; controls.minDistance = 12; controls.maxDistance = 240;
@@ -40,15 +42,21 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     const keyUp = (event: KeyboardEvent) => { if (event.code === "Space" && spacePanning) { event.preventDefault(); resetSpace(); } };
     window.addEventListener("keydown", keyDown); window.addEventListener("keyup", keyUp); window.addEventListener("blur", resetSpace);
     const render = () => renderer.render(scene, camera);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x35485a, 2.3));
-    const sun = new THREE.DirectionalLight(0xffefd1, 3); sun.position.set(-30, 70, 20); scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xa4b5ab, 1.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.5); sun.position.set(-30, 70, 20); sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.left = -75; sun.shadow.camera.right = 75; sun.shadow.camera.top = 75; sun.shadow.camera.bottom = -75; sun.shadow.camera.far = 180; sun.shadow.normalBias = .08; scene.add(sun);
     const floorPlan = new THREE.Group(); floorPlan.scale.z = firePlanDepthScale; scene.add(floorPlan);
     const mesh = (parent: THREE.Object3D, w: number, h: number, d: number, color: string, x = 0, y = h / 2, z = 0) => {
       const object = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, roughness: .65, metalness: .15 }));
-      object.position.set(x, y, z); parent.add(object); return object;
+      object.position.set(x, y, z); object.receiveShadow = true; parent.add(object); return object;
     };
-    mesh(floorPlan, 110, .35, 80, "#293947", 0, -.3, 0);
-    const grid = new THREE.GridHelper(110, 55, 0x405260, 0x30424f); grid.position.y = -.1; floorPlan.add(grid);
+    mesh(floorPlan, 120, .35, 80, "#e3eae5", 3, -.3, 0);
+    const grid = new THREE.GridHelper(120, 60, 0xd2ddd6, 0xdce5df); grid.position.set(3, -.1, 0); floorPlan.add(grid);
+    for (const road of sendayanRoads) {
+      mesh(floorPlan, road.width, .02, road.depth, "#b9c5c0", road.x, -.06, road.z);
+      const vertical = road.depth > road.width, length = vertical ? road.depth : road.width;
+      for (let offset = -length / 2 + 2; offset < length / 2 - 2; offset += 4) mesh(floorPlan, vertical ? .1 : 1.5, .008, vertical ? 1.5 : .1, "#eef2ef", road.x + (vertical ? 0 : offset), -.043, road.z + (vertical ? offset : 0));
+    }
     // Traced filled lanes preserve the fire plan's wide aisles and narrow branches.
     for (const lane of sendayanWalkways) {
       const path = mesh(floorPlan, lane.width, .025, lane.depth, "#26964f", lane.x, .035, lane.z);
@@ -63,11 +71,11 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
     const lofts: LoftRig[] = [];
     const formingLines: AsanoRig[] = [];
     for (const asset of sendayanAssets) {
-      const root = new THREE.Group(); root.position.set(asset.x, 0, asset.z); root.userData.assetId = asset.id;
+      const root = new THREE.Group(); root.position.set(asset.x, asset.elevation ?? 0, asset.z); root.userData.assetId = asset.id;
       floorPlan.add(root); roots.set(asset.id, root);
       const { width: w, depth: d } = asset; const color = assetColors[asset.kind];
       // Asano has an irregular footprint; a full square plinth would cover its aisle.
-      if (asset.kind !== "forming") mesh(root, w, .18, d, color);
+      if (!["forming", "sensor", "edge", "entrance"].includes(asset.kind)) mesh(root, w, .18, d, color);
       if (asset.kind === "forming") {
         formingLines.push(buildAsano(root, asset));
       } else if (asset.kind === "rolls") {
@@ -78,6 +86,8 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
         buildQcLine(root, asset);
       } else if (asset.id === "loft") {
         lofts.push(buildLoftArea(root, asset));
+      } else if (buildFacility(root, asset)) {
+        // Dedicated geometry for facilities, entrances, sensors and edge devices.
       } else if (asset.kind === "rack") {
         const height = 2.6;
         for (const x of [-w / 2 + .2, w / 2 - .2]) for (const z of [-d / 2 + .2, d / 2 - .2]) mesh(root, .22, height, .22, "#566b80", x, height / 2, z);
@@ -89,7 +99,19 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
         const height = asset.kind === "room" ? 1.3 : 1.9;
         mesh(root, w * .9, height, d * .9, color);
       }
+      root.traverse(object => {
+        if (!(object instanceof THREE.Mesh)) return;
+        object.castShadow = true; object.receiveShadow = true;
+        if (!isSystemAsset(asset)) {
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach(material => { if (material instanceof THREE.MeshStandardMaterial) {
+            const dark = material.color.r + material.color.g + material.color.b < .35;
+            material.color.set(dark ? "#b1bcba" : "#f5f8f6"); material.emissive.set(0); material.emissiveIntensity = 0; material.roughness = .8; material.metalness = .05;
+          } });
+        }
+      });
     }
+    const dataFlows = buildDataFlows(floorPlan);
     floorPlan.updateMatrixWorld(true);
     const highlight = new THREE.BoxHelper(roots.get("asano-upper")!, 0x78e6d1); highlight.visible = false; scene.add(highlight);
     let selectedRoot: THREE.Group | undefined;
@@ -99,6 +121,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       robots.forEach(robot => animateRobot(robot, elapsed));
       lofts.forEach(loft => animateLoft(loft, elapsed));
       formingLines.forEach(line => animateAsano(line, elapsed));
+      animateDataFlows(dataFlows, elapsed);
       if (selectedRoot) highlight.setFromObject(selectedRoot);
       render(); frame = requestAnimationFrame(tick);
     };
@@ -111,12 +134,14 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       select(id) { selectedRoot = id ? roots.get(id) : undefined; highlight.visible = !!selectedRoot; if (selectedRoot) highlight.setFromObject(selectedRoot); render(); },
       view(mode) {
         setHover(null);
-        if (mode === "loft") {
+        if (mode === "office") {
+          controls.target.set(39, 1, 20 * firePlanDepthScale); camera.position.set(65, 38, 54 * firePlanDepthScale);
+        } else if (mode === "loft") {
           controls.target.set(-38, 3, -13 * firePlanDepthScale); camera.position.set(-35, 15, 17 * firePlanDepthScale);
         } else if (mode === "line-1" || mode === "line-2") {
           const z = mode === "line-1" ? 20 : -19.2;
           controls.target.set(-12, 0, z * firePlanDepthScale); camera.position.set(7, 28, (z + 32) * firePlanDepthScale);
-        } else { controls.target.set(0, 0, 0); camera.position.set(...(mode === "top" ? [0, 125, .1] : [78, 86, 105]) as [number, number, number]); }
+        } else { controls.target.set(3, 0, 0); camera.position.set(...(mode === "top" ? [3, Math.max(125, 68 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect)), .1] : [78, 86, 105]) as [number, number, number]); }
         controls.update(); render();
       },
       motion(enabled) { motionEnabled = enabled; syncMotion(); }
@@ -167,7 +192,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
       renderer.domElement.removeEventListener("pointermove", pointerMove); renderer.domElement.removeEventListener("pointerleave", pointerLeave);
       renderer.domElement.removeEventListener("pointercancel", pointerCancel);
       scene.traverse(object => { const drawable = object as THREE.Mesh; drawable.geometry?.dispose(); const materials = drawable.material ? (Array.isArray(drawable.material) ? drawable.material : [drawable.material]) : []; materials.forEach(material => material.dispose()); });
-      renderer.dispose(); renderer.domElement.remove();
+      sun.shadow.dispose(); renderer.dispose(); renderer.domElement.remove();
     };
   }, [onSelect]);
   useEffect(() => controller.current?.select(selected), [selected]);
@@ -178,7 +203,7 @@ function FactoryScene({ selected, onSelect, view, moving }: { selected: string |
 
 export function FactoryMapPage() {
   const [site, setSite] = useState("sendayan");
-  const [selected, setSelected] = useState<string | null>("asano-upper");
+  const [selected, setSelected] = useState<string | null>("line-1-edge");
   const [query, setQuery] = useState("");
   const [moving, setMoving] = useState(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const [view, setView] = useState<{ mode: FactoryView; revision: number }>({ mode: "overview", revision: 0 });
@@ -187,16 +212,17 @@ export function FactoryMapPage() {
   return <div className="factory-page">
     <div className="page-header"><div><h1>3D Factory Map</h1><p>Explore your sites, equipment and working areas.</p></div><label className="factory-site">Site<select value={site} onChange={event => setSite(event.target.value)}><option value="sendayan">Sendayan</option><option value="port-klang">Port Klang</option></select></label></div>
     {site === "port-klang" ? <section className="factory-placeholder"><span>PORT KLANG</span><h2>Your next factory view</h2><p>The Port Klang layout has not been added yet.</p><button type="button" className="btn" onClick={() => setSite("sendayan")}>Explore Sendayan</button></section> : <>
-      <div className="factory-notice"><strong>Sendayan · layout preview</strong><span>Line 1 (lower) · Line 2 (upper, opposite mould-change side) · Green walkways · Approximate scale · Illustrative motion · No live readings.</span></div>
+      <div className="factory-notice"><strong>Sendayan · connected systems</strong><span>White = factory context · Colour = system equipment · 3 sensors per line → Raspberry Pi inside each control panel · Illustrative flow, no live readings.</span></div>
       <div className="factory-workspace"><section className="factory-viewport" aria-label="Interactive factory map">
         <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" onClick={() => { setSelected("loft"); setView(previous => ({ mode: "loft", revision: previous.revision + 1 })); }}>Loft area</button><button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause motion" : "Animate motion"}</button></div></div>
+        <div className="factory-system-strip"><span><b>EDGE DATA FLOW</b> 6 sensors <span aria-hidden="true">→</span> 2 Raspberry Pi</span><button type="button" onClick={() => { setSelected("attendance"); setView(previous => ({ mode: "office", revision: previous.revision + 1 })); }}>Office & attendance ↗</button></div>
         <FactoryScene selected={selected} onSelect={setSelected} view={view} moving={moving} />
-        <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Asano <i /> ABB / UR <i /> QC lighting <i className="factory-walkway-key" /> Walkway</span></div>
+        <div className="factory-map-footer"><span>Desktop: drag to rotate · Hold Space + drag to pan · Scroll to zoom<br />Mobile: one finger to pan · Two fingers to rotate / pinch to zoom · Tap for details</span><span><i /> Equipment <i className="factory-sensor-key" /> Sensor / data <i className="factory-edge-key" /> Raspberry Pi <i className="factory-walkway-key" /> Walkway <i className="factory-road-key" /> Road</span></div>
       </section><aside className="factory-sidebar">
         <section className="factory-detail" aria-live="polite"><small>SELECTED EQUIPMENT / AREA</small><h2>{asset?.name ?? "Select equipment"}</h2>{asset && <><span className="factory-kind">{asset.kind === "forming" ? "Asano forming machine" : asset.kind === "waterjet" ? "ABB robotic waterjet" : asset.kind === "glue" ? "UR auto glue" : asset.kind === "qc" ? "QC inspection & lighting" : asset.kind === "area" ? "Working area" : asset.kind === "room" ? "Facility" : asset.kind}</span><p>{asset.note ?? "Placed using the current Sendayan fire plan. Select another item in the map or equipment list to explore."}</p><div className="factory-data-status"><i />Layout only · no live status</div></>}</section>
         <div className="factory-equipment-heading"><h3>Equipment & areas</h3><span>{items.length}</span></div>
         <label className="factory-search"><span>Find equipment or an area</span><input type="search" placeholder="Search Line 1, ABB, UR, QC…" value={query} onChange={event => setQuery(event.target.value)} /></label>
-        <div className="factory-asset-list">{items.map(item => <button type="button" key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}><i style={{ background: assetColors[item.kind] }} /><span>{item.name}</span><span aria-hidden="true">↗</span></button>)}{!items.length && <p>No matching equipment or areas.</p>}</div>
+        <div className="factory-asset-list">{items.map(item => <button type="button" key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}><i style={{ background: isSystemAsset(item) ? assetColors[item.kind] : "#cbd5cf" }} /><span>{item.name}</span><span aria-hidden="true">↗</span></button>)}{!items.length && <p>No matching equipment or areas.</p>}</div>
       </aside></div>
     </>}
   </div>;
