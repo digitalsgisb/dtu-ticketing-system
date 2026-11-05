@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { assetColors, sendayanAssets } from "./factoryLayout";
+import { animateRobot, buildQcLine, buildRobotStation, type RobotRig } from "./factoryModels";
 import "./factory-map.css";
 
-function FactoryScene({ selected, onSelect, view, labels }: { selected: string | null; onSelect: (id: string) => void; view: { mode: "overview" | "top"; revision: number }; labels: boolean }) {
+type FactoryView = "overview" | "top" | "line-1" | "line-2";
+
+function FactoryScene({ selected, onSelect, view, moving }: { selected: string | null; onSelect: (id: string) => void; view: { mode: FactoryView; revision: number }; moving: boolean }) {
   const host = useRef<HTMLDivElement>(null);
-  const controller = useRef<{ select: (id: string | null) => void; view: (mode: string) => void; labels: (show: boolean) => void } | null>(null);
+  const controller = useRef<{ select: (id: string | null) => void; view: (mode: string) => void; motion: (enabled: boolean) => void } | null>(null);
   const [error, setError] = useState(false);
+  const [hover, setHover] = useState<{ name: string; x: number; y: number } | null>(null);
   useEffect(() => {
     if (!host.current) return;
     const container = host.current;
@@ -35,16 +39,13 @@ function FactoryScene({ selected, onSelect, view, labels }: { selected: string |
     mesh(scene, 3, .03, 49, "#405d58", 13, .015, 0);
     mesh(scene, 3, .03, 28, "#405d58", -32, .015, -12);
     const roots = new Map<string, THREE.Group>();
-    const labelGroup = new THREE.Group(); scene.add(labelGroup);
-    const textures: THREE.Texture[] = [];
+    const robots: RobotRig[] = [];
     for (const asset of sendayanAssets) {
       const root = new THREE.Group(); root.position.set(asset.x, 0, asset.z); root.userData.assetId = asset.id;
       scene.add(root); roots.set(asset.id, root);
       const { width: w, depth: d } = asset; const color = assetColors[asset.kind];
       mesh(root, w, .18, d, color);
-      let height = .3;
       if (asset.kind === "forming") {
-        height = 6;
         mesh(root, w * .83, .9, d * .8, "#b57e25", 0, .65);
         for (const x of [-w * .32, w * .32]) for (const z of [-d * .3, d * .3]) mesh(root, .8, 4.8, .8, "#c5cdd1", x, 3, z);
         mesh(root, w * .84, 1.1, d * .8, color, 0, 5.4);
@@ -52,81 +53,110 @@ function FactoryScene({ selected, onSelect, view, labels }: { selected: string |
         mesh(root, w * .48, .4, d * .5, "#394854", 0, 2.9);
         mesh(root, 2, 2.3, 2, color, w * .48, 1.2, 0);
         mesh(root, .1, 1, 1.2, "#172d3b", w * .48 + 1.05, 1.7, 0);
+      } else if (asset.kind === "waterjet" || asset.kind === "glue") {
+        robots.push(buildRobotStation(root, asset));
+      } else if (asset.kind === "qc") {
+        buildQcLine(root, asset);
       } else if (asset.kind === "rack") {
-        height = 2.6;
+        const height = 2.6;
         for (const x of [-w / 2 + .2, w / 2 - .2]) for (const z of [-d / 2 + .2, d / 2 - .2]) mesh(root, .22, height, .22, "#566b80", x, height / 2, z);
         for (const y of [.6, 1.5, 2.4]) mesh(root, w, .15, d, color, 0, y);
       } else if (asset.kind === "tank") {
-        height = 2.8;
+        const height = 2.8;
         const tank = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, height, 24), new THREE.MeshStandardMaterial({ color })); tank.position.y = height / 2; root.add(tank);
       } else if (asset.kind !== "area") {
-        height = asset.kind === "room" ? 1.3 : 1.9;
+        const height = asset.kind === "room" ? 1.3 : 1.9;
         mesh(root, w * .9, height, d * .9, color);
-        if (asset.kind === "glue" || asset.kind === "waterjet") mesh(root, w * .65, .12, d * .65, "#344957", 0, height + .07);
-      }
-      const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 80;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.fillStyle = "#102030e8"; ctx.fillRect(0, 0, 512, 80);
-        ctx.font = "600 27px Segoe UI, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#f0f5fa"; ctx.fillText(asset.name, 256, 49, 490);
-        const texture = new THREE.CanvasTexture(canvas); textures.push(texture);
-        const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
-        label.position.set(asset.x, height + 2, asset.z); label.scale.set(12, 1.875, 1); labelGroup.add(label);
       }
     }
     const highlight = new THREE.BoxHelper(roots.get("asano-upper")!, 0x78e6d1); highlight.visible = false; scene.add(highlight);
+    let selectedRoot: THREE.Group | undefined;
+    let frame = 0, elapsed = 0, previousTime = 0, motionEnabled = false;
+    const tick = (now: number) => {
+      elapsed += Math.min((now - previousTime) / 1000, .05); previousTime = now;
+      robots.forEach(robot => animateRobot(robot, elapsed));
+      if (selectedRoot) highlight.setFromObject(selectedRoot);
+      render(); frame = requestAnimationFrame(tick);
+    };
+    const syncMotion = () => {
+      cancelAnimationFrame(frame); frame = 0;
+      if (motionEnabled && !document.hidden) { previousTime = performance.now(); frame = requestAnimationFrame(tick); }
+    };
+    document.addEventListener("visibilitychange", syncMotion);
     controller.current = {
-      select(id) { const root = id ? roots.get(id) : undefined; highlight.visible = !!root; if (root) highlight.setFromObject(root); render(); },
-      view(mode) { controls.target.set(0, 0, 0); camera.position.set(...(mode === "top" ? [0, 125, .1] : [78, 86, 105]) as [number, number, number]); controls.update(); render(); },
-      labels(show) { labelGroup.visible = show; render(); }
+      select(id) { selectedRoot = id ? roots.get(id) : undefined; highlight.visible = !!selectedRoot; if (selectedRoot) highlight.setFromObject(selectedRoot); render(); },
+      view(mode) {
+        setHover(null);
+        if (mode === "line-1" || mode === "line-2") {
+          const z = mode === "line-1" ? 17 : -17;
+          controls.target.set(-12, 0, z); camera.position.set(7, 28, z + 32);
+        } else { controls.target.set(0, 0, 0); camera.position.set(...(mode === "top" ? [0, 125, .1] : [78, 86, 105]) as [number, number, number]); }
+        controls.update(); render();
+      },
+      motion(enabled) { motionEnabled = enabled; syncMotion(); }
     };
     controller.current.view("overview");
     const resize = new ResizeObserver(() => { const { width, height } = container.getBoundingClientRect(); if (!width || !height) return; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height); render(); }); resize.observe(container);
     controls.addEventListener("change", render);
     const ray = new THREE.Raycaster(); let down = { x: 0, y: 0 };
-    const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; };
-    const pointerUp = (event: PointerEvent) => {
-      if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) return;
+    const pointerDown = (event: PointerEvent) => { down = { x: event.clientX, y: event.clientY }; setHover(null); };
+    const pick = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), camera);
       const hit = ray.intersectObjects([...roots.values()], true)[0]; let object: THREE.Object3D | null = hit?.object ?? null;
       while (object && !object.userData.assetId) object = object.parent;
-      if (object) onSelect(object.userData.assetId);
+      return object?.userData.assetId as string | undefined;
     };
+    const pointerUp = (event: PointerEvent) => {
+      if (event.button !== 0 || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5) return;
+      const id = pick(event); if (id) onSelect(id);
+      pointerMove(event);
+    };
+    const pointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch" || event.buttons) { setHover(null); return; }
+      const id = pick(event), asset = sendayanAssets.find(item => item.id === id);
+      renderer.domElement.style.cursor = asset ? "pointer" : "grab";
+      const rect = container.getBoundingClientRect();
+      setHover(asset ? { name: asset.name, x: Math.max(8, Math.min(event.clientX - rect.left + 14, rect.width - 230)), y: Math.max(8, Math.min(event.clientY - rect.top + 14, rect.height - 50)) } : null);
+    };
+    const pointerLeave = () => setHover(null);
     renderer.domElement.addEventListener("pointerdown", pointerDown); renderer.domElement.addEventListener("pointerup", pointerUp);
+    renderer.domElement.addEventListener("pointermove", pointerMove); renderer.domElement.addEventListener("pointerleave", pointerLeave);
     return () => {
+      cancelAnimationFrame(frame); document.removeEventListener("visibilitychange", syncMotion);
       controller.current = null; resize.disconnect(); controls.dispose();
       renderer.domElement.removeEventListener("pointerdown", pointerDown); renderer.domElement.removeEventListener("pointerup", pointerUp);
+      renderer.domElement.removeEventListener("pointermove", pointerMove); renderer.domElement.removeEventListener("pointerleave", pointerLeave);
       scene.traverse(object => { const drawable = object as THREE.Mesh; drawable.geometry?.dispose(); const materials = drawable.material ? (Array.isArray(drawable.material) ? drawable.material : [drawable.material]) : []; materials.forEach(material => material.dispose()); });
-      textures.forEach(texture => texture.dispose()); renderer.dispose(); renderer.domElement.remove();
+      renderer.dispose(); renderer.domElement.remove();
     };
   }, [onSelect]);
   useEffect(() => controller.current?.select(selected), [selected]);
   useEffect(() => controller.current?.view(view.mode), [view]);
-  useEffect(() => controller.current?.labels(labels), [labels]);
-  return <div className="factory-canvas" ref={host}>{error && <div className="factory-render-error" role="alert">3D rendering is unavailable in this browser. You can still explore the equipment list and details.</div>}</div>;
+  useEffect(() => controller.current?.motion(moving), [moving]);
+  return <div className="factory-canvas" ref={host}>{hover && <div className="factory-hover-name" role="tooltip" style={{ left: hover.x, top: hover.y }}>{hover.name}</div>}{error && <div className="factory-render-error" role="alert">3D rendering is unavailable in this browser. You can still explore the equipment list and details.</div>}</div>;
 }
 
 export function FactoryMapPage() {
   const [site, setSite] = useState("sendayan");
   const [selected, setSelected] = useState<string | null>("asano-upper");
   const [query, setQuery] = useState("");
-  const [labels, setLabels] = useState(true);
-  const [view, setView] = useState<{ mode: "overview" | "top"; revision: number }>({ mode: "overview", revision: 0 });
+  const [moving, setMoving] = useState(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [view, setView] = useState<{ mode: FactoryView; revision: number }>({ mode: "overview", revision: 0 });
   const asset = sendayanAssets.find(item => item.id === selected);
   const items = sendayanAssets.filter(item => item.name.toLowerCase().includes(query.toLowerCase()));
   return <div className="factory-page">
     <div className="page-header"><div><h1>3D Factory Map</h1><p>Explore your sites, equipment and working areas.</p></div><label className="factory-site">Site<select value={site} onChange={event => setSite(event.target.value)}><option value="sendayan">Sendayan</option><option value="port-klang">Port Klang</option></select></label></div>
     {site === "port-klang" ? <section className="factory-placeholder"><span>PORT KLANG</span><h2>Your next factory view</h2><p>The Port Klang layout has not been added yet.</p><button type="button" className="btn" onClick={() => setSite("sendayan")}>Explore Sendayan</button></section> : <>
-      <div className="factory-notice"><strong>Sendayan · layout preview</strong><span>Based on your fire plan. Positions and equipment shapes are approximate; dimensions are not to scale. Live readings are not connected.</span></div>
+      <div className="factory-notice"><strong>Sendayan · layout preview</strong><span>Line 1 (lower) and Line 2 (upper) share the same layout. Approximate scale · Illustrative robot motion · No live readings.</span></div>
       <div className="factory-workspace"><section className="factory-viewport" aria-label="Interactive factory map">
-        <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button><label><input type="checkbox" checked={labels} onChange={event => setLabels(event.target.checked)} />Labels</label></div></div>
-        <FactoryScene selected={selected} onSelect={setSelected} view={view} labels={labels} />
-        <div className="factory-map-footer"><span>Drag to rotate · Scroll to zoom · Right-drag to pan · Click equipment</span><span><i /> Forming <i /> Storage <i /> Facilities</span></div>
+        <div className="factory-toolbar"><div><small>SUGIHARA GRAND INDUSTRIES</small><strong>Sendayan / Open floor</strong></div><div className="factory-view-buttons"><button type="button" onClick={() => setView(previous => ({ mode: "overview", revision: previous.revision + 1 }))}>Reset view</button><button type="button" onClick={() => setView(previous => ({ mode: "top", revision: previous.revision + 1 }))}>Top view</button>{([1, 2] as const).map(line => <button type="button" key={line} onClick={() => setView(previous => ({ mode: `line-${line}`, revision: previous.revision + 1 }))}>Line {line}</button>)}<button type="button" aria-pressed={moving} onClick={() => setMoving(previous => !previous)}>{moving ? "Pause robots" : "Animate robots"}</button></div></div>
+        <FactoryScene selected={selected} onSelect={setSelected} view={view} moving={moving} />
+        <div className="factory-map-footer"><span>Hover for names · Drag to rotate · Scroll to zoom · Click or tap for details</span><span><i /> Asano <i /> ABB / UR <i /> QC lighting</span></div>
       </section><aside className="factory-sidebar">
-        <section className="factory-detail" aria-live="polite"><small>SELECTED EQUIPMENT / AREA</small><h2>{asset?.name ?? "Select equipment"}</h2>{asset && <><span className="factory-kind">{asset.kind === "forming" ? "Asano forming machine" : asset.kind === "area" ? "Working area" : asset.kind === "room" ? "Facility" : asset.kind}</span><p>{asset.kind === "forming" ? "Both Asano units are the same type of forming machine. Upper and lower refer to their positions on the supplied plan." : asset.note ?? "Placed using the current Sendayan fire plan. Select another item in the map or equipment list to explore."}</p><div className="factory-data-status"><i />Layout only · no live status</div></>}</section>
+        <section className="factory-detail" aria-live="polite"><small>SELECTED EQUIPMENT / AREA</small><h2>{asset?.name ?? "Select equipment"}</h2>{asset && <><span className="factory-kind">{asset.kind === "forming" ? "Asano forming machine" : asset.kind === "waterjet" ? "ABB robotic waterjet" : asset.kind === "glue" ? "UR auto glue" : asset.kind === "qc" ? "QC inspection & lighting" : asset.kind === "area" ? "Working area" : asset.kind === "room" ? "Facility" : asset.kind}</span><p>{asset.note ?? "Placed using the current Sendayan fire plan. Select another item in the map or equipment list to explore."}</p><div className="factory-data-status"><i />Layout only · no live status</div></>}</section>
         <div className="factory-equipment-heading"><h3>Equipment & areas</h3><span>{items.length}</span></div>
-        <label className="factory-search"><span>Find equipment or an area</span><input type="search" placeholder="Search Asano, office, storage…" value={query} onChange={event => setQuery(event.target.value)} /></label>
+        <label className="factory-search"><span>Find equipment or an area</span><input type="search" placeholder="Search Line 1, ABB, UR, QC…" value={query} onChange={event => setQuery(event.target.value)} /></label>
         <div className="factory-asset-list">{items.map(item => <button type="button" key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}><i style={{ background: assetColors[item.kind] }} /><span>{item.name}</span><span aria-hidden="true">↗</span></button>)}{!items.length && <p>No matching equipment or areas.</p>}</div>
       </aside></div>
     </>}

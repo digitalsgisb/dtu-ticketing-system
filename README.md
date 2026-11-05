@@ -14,7 +14,7 @@ For the AI PC, follow the [pull and deploy steps](#pull-and-deploy-the-update-on
 
 ## What is implemented
 
-- **3D Factory Map** at `/factory-map`: signed-in Sendayan layout preview based on the supplied fire plan, with two simplified Asano forming machines, storage and facilities, searchable equipment selection, labels, orbit/zoom/pan, and top/reset views. Geometry and positions are approximate, not measured. Live telemetry is not connected. The site selector reserves Port Klang for its future layout. Three.js is bundled locally and loaded only when opening the map page.
+- **3D Factory Map** at `/factory-map`: signed-in Sendayan layout preview based on the fire plan and production-line sketch. Line 1 (lower Asano) and Line 2 (upper Asano) have identical layouts and sizes: one forming machine, two ABB robotic waterjet stations, two UR auto-glue stations, and a QC line with repeated overhead/side lighting frames. Names appear on hover; click or tap equipment, or use the searchable list, for details. Robot motion is illustrative, with a pause/resume control; motion starts paused for reduced-motion preferences and stops while the tab is hidden. Includes orbit/zoom/pan and top/reset/line views. Geometry and positions are approximate, not measured. Live telemetry is not connected. The site selector reserves Port Klang for its future layout. Three.js is bundled locally and loaded only when opening the map page.
 
 - Direct MQTT IoT health monitoring for eight Checksheet/OEE systems over Tailscale, live production cards, telemetry details, and task/health wallboard rotation. Configure broker addresses and topics using [the IoT setup guide](docs/IOT_MONITORING.md) and [example configuration](config/iot-monitor.example.json).
 
