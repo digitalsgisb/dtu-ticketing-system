@@ -30,7 +30,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
   }
 
   const user = db.prepare("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND active = 1").get(parsed.data.username) as {
-    id: number; password_hash: string; username: string; name: string; email: string | null; role: string; language: string; must_change_password: number;
+    id: number; password_hash: string; username: string; name: string; email: string | null; role: string; must_change_password: number;
   } | undefined;
   if (!user || !(await verifyPassword(parsed.data.password, user.password_hash))) {
     const nextCount = (attempt?.count ?? 0) + 1;
@@ -44,7 +44,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
   db.prepare("DELETE FROM login_attempts WHERE key = ?").run(key);
   const csrfToken = await createSession(req, res, user.id);
   res.json({
-    user: { id: user.id, username: user.username, name: user.name, email: user.email, role: user.role, language: user.language },
+    user: { id: user.id, username: user.username, name: user.name, email: user.email, role: user.role },
     csrfToken,
     mustChangePassword: Boolean(user.must_change_password)
   });

@@ -16,7 +16,7 @@ const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]
 const wallboardPageSize = 4;
 
 export function WallboardPage() {
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const [data, setData] = useState<any>(null);
   const [now, setNow] = useState(new Date());
   const [newTicketIds, setNewTicketIds] = useState<Set<number>>(() => new Set());
@@ -104,7 +104,7 @@ export function WallboardPage() {
 
   if (!data) return <div className="wallboard"><Loading /></div>;
 
-  const locale = lang === "ms" ? "ms-MY" : "en-MY";
+  const locale = "en-MY";
   const date = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(now);
   const time = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(now);
   const totalLive = data.stats.activeProjects + data.stats.openIssues;
@@ -116,7 +116,6 @@ export function WallboardPage() {
       <div className="wallboard-clock"><strong>{time}</strong><span>{date}</span><small>{t("lastUpdated")}: {new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(data.generatedAt))}</small></div>
       <button type="button" className={`wallboard-sound-toggle${soundEnabled ? " is-on" : ""}`} onClick={() => void toggleSound()} aria-pressed={soundEnabled} title="Play a sound when new work appears">{soundEnabled ? "🔊 Sound on" : "🔇 Enable sound"}</button>
       <Link to="/" className="wallboard-home-link">← Main page</Link>
-      <button className="language-button" onClick={() => setLang(lang === "en" ? "ms" : "en")}>{t("language")}</button>
     </header>
 
     <nav className="iot-view-controls" aria-label="Wallboard pages">

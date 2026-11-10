@@ -44,7 +44,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   if (!token) return res.status(401).json({ error: "Authentication required" });
   const row = db.prepare(`
     SELECT s.id AS session_id, s.csrf_token,
-           u.id, u.username, u.name, u.email, u.role, u.language, u.active
+           u.id, u.username, u.name, u.email, u.role, u.active
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ?
   `).get(tokenHash(token)) as (SessionUser & { session_id: number; csrf_token: string; active: number }) | undefined;
@@ -60,8 +60,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
     username: row.username,
     name: row.name,
     email: row.email,
-    role: row.role,
-    language: row.language
+    role: row.role
   };
   authReq.sessionId = row.session_id;
   authReq.csrfToken = row.csrf_token;

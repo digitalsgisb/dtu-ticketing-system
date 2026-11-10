@@ -1,14 +1,14 @@
 .pg-collection { min-width: 0; display: grid; gap: 28px; }
-.pg-view-controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; color: #7a9087; font-size: 11px; }
+.pg-view-controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; color: #7a9087; font-size: 12px; }
 .pg-view-controls label { display: flex; align-items: center; gap: 10px; }
-.pg-view-controls select { width: auto; padding: 8px 11px; border: 1px solid #d5e4de; border-radius: 7px; background: white; color: #34675f; font-size: 11px; }
+.pg-view-controls select { width: auto; padding: 8px 11px; border: 1px solid #d5e4de; border-radius: 7px; background: white; color: #34675f; font-size: 12px; }
 .pg-group { min-width: 0; padding: 24px; border: 1px solid #cddfd9; border-radius: 17px; background: linear-gradient(135deg, #eff8f4, #f5f9fa); }
 .pg-group-top { display: flex; align-items: flex-start; gap: 20px; }
 .pg-group-heading { flex: 1; min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
-.pg-eyebrow { display: block; color: #6f9f91; font-size: 9px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.pg-eyebrow { display: block; color: #6f9f91; font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
 .pg-group-heading h2 { margin: 8px 0; font-size: 25px; letter-spacing: -.035em; color: #164d4e; overflow-wrap: anywhere; }
 .pg-group-heading p { color: #6c887d; margin: 6px 0 10px; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
-.pg-group-heading small { font-size: 10px; color: #81998e; }
+.pg-group-heading small { font-size: 11px; color: #81998e; }
 .pg-group-position { display: grid; justify-items: end; gap: 9px; padding-top: 2px; flex-shrink: 0; }
 .pg-group-position > strong { font-size: 28px; font-weight: 600; letter-spacing: -.04em; color: #16847b; }
 .pg-collapse { flex-shrink: 0; border: 1px solid #bed7cc; border-radius: 7px; background: white; color: #378573; font-size: 19px; line-height: 1; width: 30px; height: 30px; cursor: pointer; }
@@ -24,7 +24,7 @@
 .pg-context > div > a { display: inline-block; margin-top: 7px; font-size: 18px; }
 .pg-context p { margin: 9px 0 0; color: #7c9386; font-size: 12px; line-height: 1.7; }
 .pg-context nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.pg-context nav a { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border: 1px solid #cddfd5; border-radius: 7px; background: #fff; font-size: 11px; }
+.pg-context nav a { display: flex; gap: 14px; align-items: center; padding: 8px 12px; border: 1px solid #cddfd5; border-radius: 7px; background: #fff; font-size: 12px; }
 .pg-context nav a[aria-current="page"] { background: #0c6b69; border-color: #0c6b69; color: white; }
 .pg-context nav small { opacity: .7; }
 .pg-group-slide { width: 100%; min-width: 0; }

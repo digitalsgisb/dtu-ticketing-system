@@ -1,6 +1,6 @@
 .iot-health { --iot-text:#183844; --iot-muted:#58727d; --iot-panel:#fff; --iot-border:#d6e4e8; color:var(--iot-text); }
 .iot-heading { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:24px 28px; border:1px solid var(--iot-border); border-radius:20px; background:linear-gradient(115deg,#153d57,#117979); color:#f3ffff; margin-bottom:14px; }
-.iot-heading small { font-size:11px; letter-spacing:1.7px; color:#8ce2d6; }
+.iot-heading small { font-size:12px; letter-spacing:1.7px; color:#8ce2d6; }
 .iot-heading h1 { margin:6px 0; font-size:clamp(24px,2.3vw,40px); }
 .iot-heading p { margin:0; color:#b8d6df; }
 .iot-summary { text-align:right; flex-shrink:0; }
@@ -16,17 +16,17 @@
 .iot-status-rail { position:absolute; left:20px; right:20px; bottom:9px; height:3px; border-radius:10px; background:#7895a414; overflow:visible; }
 .iot-status-rail i { display:block; width:100%; height:100%; border-radius:inherit; background:var(--iot-status); opacity:.8; box-shadow:0 0 12px color-mix(in srgb,var(--iot-status) 28%,transparent); transition:background-color .7s ease,box-shadow .7s ease; }
 .iot-status-unconfigured .iot-status-rail i,.iot-status-unknown .iot-status-rail i,.iot-status-waiting .iot-status-rail i { opacity:.3; box-shadow:none; }
-.iot-card-top { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:11px; color:var(--iot-muted); }
+.iot-card-top { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--iot-muted); }
 .iot-card-top b { color:var(--iot-status,var(--iot-muted)); display:flex; gap:6px; align-items:center; transition:color .7s ease; }
 .iot-card-top i { display:inline-block; width:7px; height:7px; background:currentColor; border-radius:50%; }
 .iot-card h2 { font-size:17px; margin:16px 0; line-height:1.35; }
 .iot-machine-state { display:flex; flex-direction:column; gap:4px; padding:10px 12px; background:#638b980a; border-radius:8px; }
-.iot-machine-state small,.iot-counts small,.iot-job small { color:var(--iot-muted); font-size:11px; }
+.iot-machine-state small,.iot-counts small,.iot-job small { color:var(--iot-muted); font-size:12px; }
 .iot-machine-state strong { font-size:13px; }
 .iot-counts { display:grid; grid-template-columns:repeat(3,1fr); margin:16px 0; gap:6px; }
 .iot-counts strong { display:block; font-size:27px; line-height:1.2; font-variant-numeric:tabular-nums; }
 .iot-job { display:flex; flex-direction:column; gap:5px; overflow-wrap:anywhere; font-size:13px; }
-.iot-card footer { display:flex; justify-content:space-between; gap:6px; margin-top:16px; padding-top:12px; border:0; font-size:11px; color:var(--iot-muted); }
+.iot-card footer { display:flex; justify-content:space-between; gap:6px; margin-top:16px; padding-top:12px; border:0; font-size:12px; color:var(--iot-muted); }
 .iot-card-warning { color:#b47111; font-size:12px; line-height:1.5; margin:10px 0 0; }
 .iot-detail-backdrop { position:fixed; inset:0; z-index:250; background:#00141dc4; backdrop-filter:blur(10px); display:flex; align-items:center; justify-content:center; padding:24px; animation:iot-backdrop-in .3s ease both; }
 .iot-detail { background:var(--iot-panel); color:var(--iot-text); border:1px solid var(--iot-border); padding:26px; width:min(760px,100%); max-height:90vh; overflow:auto; border-radius:20px; animation:iot-detail-in .4s cubic-bezier(.2,.75,.25,1) both; }

@@ -7,7 +7,7 @@
 .category-box select, .category-box-label { width: auto; max-width: 100%; min-height: 31px; padding: 6px 9px; border: 1px solid color-mix(in srgb,var(--category-ink) 24%,white); border-radius: 6px; background: var(--category-bg); color: var(--category-ink); font-size: 12px; font-weight: 700; line-height: 1.4; }
 .category-box select { cursor: pointer; padding-right: 22px; min-width: 0; }
 .category-box select:disabled { opacity: .65; cursor: progress; }
-.category-box small { font-size: 11px; line-height: 1.5; color: #536e73; white-space: normal; }
+.category-box small { font-size: 12px; line-height: 1.5; color: #536e73; white-space: normal; }
 .category-box small[role="alert"] { color: #a52c3c; max-width: 200px; }
 .project-card-category { padding: 12px 22px; border-top: 1px solid #e0e9e8; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #536f77; font-size: 12px; }
 .projects-page .project-toolbar-heading { min-height: 0; }

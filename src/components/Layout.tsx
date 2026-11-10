@@ -23,7 +23,7 @@ const roleNames: Record<User["role"], string> = {
 
 export function Layout() {
   const { user, logout, mustChangePassword, refresh } = useAuth();
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const { canInstall, install, isOnline } = usePwa();
   const navigate = useNavigate();
   const location = useLocation();
@@ -114,7 +114,7 @@ export function Layout() {
     : projectSectionActive
       ? t("projects")
       : items.find(([to]) => to === "/" ? location.pathname === "/" : location.pathname.startsWith(to))?.[1] ?? t("dashboard");
-  const today = new Intl.DateTimeFormat(lang === "ms" ? "ms-MY" : "en-MY", { weekday: "short", day: "2-digit", month: "short" }).format(new Date());
+  const today = new Intl.DateTimeFormat("en-MY", { weekday: "short", day: "2-digit", month: "short" }).format(new Date());
 
   return (
     <div className="app-shell">
@@ -172,7 +172,6 @@ export function Layout() {
             <div className="system-status"><span className="status-dot" /><span>Systems nominal</span></div>
             <time>{today}</time>
             {canInstall && <button className="install-button" onClick={() => void install()}>Install app</button>}
-            <button className="language-button" onClick={() => setLang(lang === "en" ? "ms" : "en")}>{t("language")}</button>
             <button className="icon-button notification-button" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`} onClick={() => navigate("/notifications")}>
               <BellIcon />
               {unreadCount > 0 && <span className="notification-count">{unreadCount > 99 ? "99+" : unreadCount}</span>}

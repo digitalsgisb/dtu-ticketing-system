@@ -60,12 +60,11 @@ staffRouter.patch("/profile", (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const parsed = z.object({
     name: z.string().trim().min(2).max(120),
-    email: z.union([z.string().trim().email(), z.null()]),
-    language: z.enum(["en", "ms"])
+    email: z.union([z.string().trim().email(), z.null()])
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Enter a valid name and email address" });
-  db.prepare("UPDATE users SET name = ?, email = ?, language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-    .run(parsed.data.name, parsed.data.email, parsed.data.language, authReq.user.id);
+  db.prepare("UPDATE users SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(parsed.data.name, parsed.data.email, authReq.user.id);
   audit(authReq.user, "profile_updated", "user", authReq.user.id, { emailChanged: parsed.data.email !== authReq.user.email }, req.ip);
   res.json({ ok: true });
 });
@@ -1694,7 +1693,7 @@ staffRouter.post("/requests/:id/comments", requireRole("admin", "lead"), (req, r
 });
 
 staffRouter.get("/users", (_req, res) => {
-  res.json(db.prepare("SELECT id, username, name, email, role, language, active, created_at FROM users ORDER BY active DESC, name").all());
+  res.json(db.prepare("SELECT id, username, name, email, role, active, created_at FROM users ORDER BY active DESC, name").all());
 });
 
 staffRouter.post("/users", requireRole("admin"), async (req, res) => {
@@ -1704,16 +1703,15 @@ staffRouter.post("/users", requireRole("admin"), async (req, res) => {
     name: z.string().trim().min(2).max(120),
     email: z.string().email().nullable().optional(),
     role: z.enum(["admin", "lead", "member"]),
-    language: z.enum(["en", "ms"]).default("en"),
     password: staffPassword
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid user details", details: parsed.error.flatten() });
   const hash = await argon2.hash(parsed.data.password, { type: argon2.argon2id });
   try {
     const result = db.prepare(`
-      INSERT INTO users(username, name, email, password_hash, role, language, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, 1)
-    `).run(parsed.data.username, parsed.data.name, parsed.data.email ?? null, hash, parsed.data.role, parsed.data.language);
+      INSERT INTO users(username, name, email, password_hash, role, must_change_password)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(parsed.data.username, parsed.data.name, parsed.data.email ?? null, hash, parsed.data.role);
     const id = Number(result.lastInsertRowid);
     audit(authReq.user, "user_created", "user", id, { username: parsed.data.username, role: parsed.data.role }, req.ip);
     res.status(201).json({ id });
@@ -1726,15 +1724,14 @@ staffRouter.patch("/users/:id", requireRole("admin"), (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const userId = Number(req.params.id);
   if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: "Invalid user" });
-  const existing = db.prepare("SELECT id, name, email, role, language, active FROM users WHERE id = ?").get(userId) as {
-    id: number; name: string; email: string | null; role: "admin" | "lead" | "member"; language: "en" | "ms"; active: number;
+  const existing = db.prepare("SELECT id, name, email, role, active FROM users WHERE id = ?").get(userId) as {
+    id: number; name: string; email: string | null; role: "admin" | "lead" | "member"; active: number;
   } | undefined;
   if (!existing) return res.status(404).json({ error: "User not found" });
   const parsed = z.object({
     name: z.string().trim().min(2).max(120).optional(),
     email: z.string().email().nullable().optional(),
     role: z.enum(["admin", "lead", "member"]).optional(),
-    language: z.enum(["en", "ms"]).optional(),
     active: z.boolean().optional()
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid user details", details: parsed.error.flatten() });
@@ -1748,14 +1745,14 @@ staffRouter.patch("/users/:id", requireRole("admin"), (req, res) => {
     if (activeAdmins.count <= 1) return res.status(400).json({ error: "At least one active administrator is required" });
   }
   db.prepare(`
-    UPDATE users SET name = ?, email = ?, role = ?, language = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+    UPDATE users SET name = ?, email = ?, role = ?, active = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(parsed.data.name ?? existing.name, parsed.data.email === undefined ? existing.email : parsed.data.email,
-    nextRole, parsed.data.language ?? existing.language, nextActive ? 1 : 0, userId);
+    nextRole, nextActive ? 1 : 0, userId);
   if (!nextActive) db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
   audit(authReq.user, "user_updated", "user", userId, {
     name: parsed.data.name, emailChanged: parsed.data.email !== undefined, role: parsed.data.role,
-    language: parsed.data.language, active: parsed.data.active
+    active: parsed.data.active
   }, req.ip);
   res.json({ ok: true });
 });

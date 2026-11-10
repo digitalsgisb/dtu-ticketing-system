@@ -2,12 +2,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, json } from "../api";
 import { useAuth } from "../auth";
 import { ErrorNotice, PageHeader, PasswordInput } from "../components/UI";
-import { useI18n } from "../i18n";
 
 export function ProfilePage() {
   const { user, refresh } = useAuth();
-  const { setLang } = useI18n();
-  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", language: user?.language || "en" });
+  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "" });
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -16,8 +14,8 @@ export function ProfilePage() {
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   useEffect(() => {
-    if (user) setForm({ name: user.name, email: user.email || "", language: user.language });
-  }, [user?.id, user?.name, user?.email, user?.language]);
+    if (user) setForm({ name: user.name, email: user.email || "" });
+  }, [user?.id, user?.name, user?.email]);
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -25,7 +23,6 @@ export function ProfilePage() {
     try {
       await api("/api/staff/profile", json("PATCH", { ...form, email: form.email.trim() || null }));
       await refresh();
-      setLang(form.language);
       setSaved(true);
     } catch (err) { setError((err as Error).message); }
     finally { setSaving(false); }
@@ -54,7 +51,6 @@ export function ProfilePage() {
           <label>Username<input value={user?.username || ""} disabled /><small>Ask an administrator to change your username.</small></label>
           <label>Full name<input required minLength={2} maxLength={120} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
           <label>Email<input type="email" maxLength={254} value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /><small>Notifications sent by email will use this address.</small></label>
-          <label>Language<select value={form.language} onChange={event => setForm({ ...form, language: event.target.value as "en" | "ms" })}><option value="en">English</option><option value="ms">Bahasa Melayu</option></select></label>
           <button className="button button-primary" disabled={saving}>{saving ? "Saving…" : "Save profile"}</button>
         </form>
       </section>

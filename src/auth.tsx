@@ -8,7 +8,6 @@ export type User = {
   name: string;
   email: string | null;
   role: "admin" | "lead" | "member";
-  language: "en" | "ms";
 };
 
 type AuthValue = {

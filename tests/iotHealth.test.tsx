@@ -9,7 +9,7 @@ import { api } from "../src/api";
 import { useLiveRefresh } from "../src/live";
 vi.mock("../src/api", async original => ({ ...await original<typeof import("../src/api")>(), api: vi.fn() }));
 vi.mock("../src/live", () => ({ useLiveRefresh: vi.fn() }));
-vi.mock("../src/i18n", () => ({ useI18n: () => ({ t: (key: string) => key, lang: "en", setLang: vi.fn() }) }));
+vi.mock("../src/i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 let root: Root;
 let host: HTMLDivElement;
 const snapshot = () => ({ generatedAt: new Date().toISOString(), receiverRunning: true, configurationError: false,

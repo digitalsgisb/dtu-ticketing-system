@@ -34,7 +34,7 @@ export function AdminPage() {
 }
 
 function UsersPanel({ users, currentUserId, onChanged }: { users: any[]; currentUserId: number; onChanged: () => void }) {
-  const [form, setForm] = useState({ username: "", name: "", email: "", role: "member", language: "en", password: "" });
+  const [form, setForm] = useState({ username: "", name: "", email: "", role: "member", password: "" });
   const [createdPassword, setCreatedPassword] = useState("");
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<any | null>(null);
@@ -45,7 +45,7 @@ function UsersPanel({ users, currentUserId, onChanged }: { users: any[]; current
     try {
       await api("/api/staff/users", json("POST", { ...form, email: form.email || null }));
       setCreatedPassword(form.password);
-      setForm({ username: "", name: "", email: "", role: "member", language: "en", password: "" });
+      setForm({ username: "", name: "", email: "", role: "member", password: "" });
       onChanged();
     } catch (err) {
       setError((err as Error).message);
@@ -76,7 +76,6 @@ function UsersPanel({ users, currentUserId, onChanged }: { users: any[]; current
           <label>Email<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
           <div className="form-grid">
             <label>Role<select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}><option>member</option><option>lead</option><option>admin</option></select></label>
-            <label>Language<select value={form.language} onChange={event => setForm({ ...form, language: event.target.value })}><option value="en">English</option><option value="ms">Bahasa Melayu</option></select></label>
           </div>
           <label>Temporary password<PasswordInput required minLength={12} value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} autoComplete="new-password" /><small>At least 12 characters with upper, lower, and numeric characters. User must change it after first sign-in.</small></label>
           <button className="button button-primary">Create account</button>
@@ -88,7 +87,7 @@ function UsersPanel({ users, currentUserId, onChanged }: { users: any[]; current
 }
 
 function UserEditor({ user, isCurrentUser, onClose, onSaved }: { user: any; isCurrentUser: boolean; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: user.name, email: user.email || "", role: user.role, language: user.language, active: Boolean(user.active) });
+  const [form, setForm] = useState({ name: user.name, email: user.email || "", role: user.role, active: Boolean(user.active) });
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -126,7 +125,6 @@ function UserEditor({ user, isCurrentUser, onClose, onSaved }: { user: any; isCu
       <label>Email<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
       <div className="form-grid">
         <label>Role<select disabled={isCurrentUser} value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}><option>member</option><option>lead</option><option>admin</option></select></label>
-        <label>Language<select value={form.language} onChange={event => setForm({ ...form, language: event.target.value })}><option value="en">English</option><option value="ms">Bahasa Melayu</option></select></label>
       </div>
       <label className="checkbox-row"><input type="checkbox" disabled={isCurrentUser} checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} /><span>Account active</span></label>
       {isCurrentUser && <small className="muted">For safety, you cannot disable your own account or change your own role here.</small>}

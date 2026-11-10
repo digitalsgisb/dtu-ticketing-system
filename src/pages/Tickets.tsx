@@ -9,6 +9,35 @@ import { useLiveRefresh } from "../live";
 import { useAuth } from "../auth";
 import { AssigneePicker } from "../components/AssigneePicker";
 
+type Queue = "open" | "mine" | "all";
+type WorkType = "" | "task" | "issue";
+type WorkSort = "priority" | "due" | "updated" | "newest";
+const workPreferencesKey = "dtu-work-preferences";
+const workViewKey = "dtu-work-view";
+const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+function savedWorkPreferences(): { search?: string; queue?: Queue; type?: WorkType; priority?: string; sort?: WorkSort } {
+  try { return JSON.parse(sessionStorage.getItem(workPreferencesKey) || "{}") || {}; }
+  catch { return {}; }
+}
+
+function savedWorkView(): "list" | "cards" {
+  try { return localStorage.getItem(workViewKey) === "cards" ? "cards" : "list"; }
+  catch { return "list"; }
+}
+
+function dueTime(item: any) {
+  const time = item.due_date ? new Date(`${item.due_date}T00:00:00`).getTime() : NaN;
+  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+}
+
+function compareWork(left: any, right: any, sort: WorkSort) {
+  if (sort === "newest") return right.id - left.id;
+  if (sort === "updated") return String(right.updated_at ?? "").localeCompare(String(left.updated_at ?? "")) || right.id - left.id;
+  if (sort === "due") return dueTime(left) - dueTime(right) || (priorityRank[left.priority] ?? 9) - (priorityRank[right.priority] ?? 9) || right.id - left.id;
+  return (priorityRank[left.priority] ?? 9) - (priorityRank[right.priority] ?? 9) || dueTime(left) - dueTime(right) || right.id - left.id;
+}
+
 export function TicketsPage() {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -16,9 +45,21 @@ export function TicketsPage() {
   const [tickets, setTickets] = useState<any[] | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
-  const [queue, setQueue] = useState<"open" | "mine" | "all">(params.get("queue") === "mine" || user?.role === "member" ? "mine" : "open");
-  const [type, setType] = useState<"" | "task" | "issue">("");
+  const saved = useMemo(savedWorkPreferences, []);
+  const [search, setSearch] = useState(saved.search ?? "");
+  const [queue, setQueue] = useState<Queue>(params.get("queue") === "mine" ? "mine" : saved.queue ?? (user?.role === "member" ? "mine" : "open"));
+  const [type, setType] = useState<WorkType>(saved.type ?? "");
+  const [priority, setPriority] = useState(saved.priority ?? "");
+  const [sort, setSort] = useState<WorkSort>(saved.sort ?? "priority");
+  const [view, setView] = useState<"list" | "cards">(savedWorkView);
+  const chooseView = (next: "list" | "cards") => {
+    setView(next);
+    try { localStorage.setItem(workViewKey, next); } catch { /* preference is optional */ }
+  };
+  useEffect(() => {
+    try { sessionStorage.setItem(workPreferencesKey, JSON.stringify({ search, queue, type, priority, sort })); } catch { /* preference is optional */ }
+  }, [search, queue, type, priority, sort]);
+  const hasFilters = Boolean(search.trim()) || Boolean(type) || Boolean(priority);
   const [showCreate, setShowCreate] = useState(false);
   const load = () => {
     const projectId = params.get("projectId");
@@ -30,14 +71,18 @@ export function TicketsPage() {
     (queue !== "open" || !workIsComplete(item)) &&
     (queue !== "mine" || item.assignees?.some((assignee: { id: number }) => assignee.id === user?.id)) &&
     (!type || item.type === type) &&
-    `${item.ticket_no} ${item.title} ${item.project_name || ""}`.toLowerCase().includes(search.toLowerCase())
-  ), [tickets, search, queue, type, user?.id]);
+    (!priority || item.priority === priority) &&
+    `${item.ticket_no} ${item.title} ${item.project_name || ""} ${item.assignee_name || ""}`.toLowerCase().includes(search.trim().toLowerCase())
+  ).sort((left, right) => compareWork(left, right, sort)), [tickets, search, queue, type, priority, sort, user?.id]);
   if (!tickets) return <Loading />;
 
   return <>
     <PageHeader eyebrow="Operations queue" title={t("tickets")} description="Triage, assign, and resolve every piece of delivery and support work." actions={<button className="button button-primary" onClick={() => setShowCreate(true)}><PlusIcon />{t("newTicket")}</button>} />
     <div className="toolbar">
-      <div className="search-box"><SearchIcon /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={`${t("search")} work…`} /></div>
+      <div className="search-box"><SearchIcon /><input aria-label="Search work" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search title, number, project or assignee…" /></div>
+      <select className="filter-select" aria-label="Filter by priority" value={priority} onChange={e => setPriority(e.target.value)}><option value="">Any priority</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+      <select className="filter-select" aria-label="Sort work" value={sort} onChange={e => setSort(e.target.value as WorkSort)}><option value="priority">Sort: highest priority</option><option value="due">Sort: due soonest</option><option value="updated">Sort: recently updated</option><option value="newest">Sort: newest first</option></select>
+      <div className="work-view-switch" role="group" aria-label="Work display"><button type="button" aria-pressed={view === "list"} onClick={() => chooseView("list")}>List</button><button type="button" aria-pressed={view === "cards"} onClick={() => chooseView("cards")}>Cards</button></div>
       <div className="result-count">{filtered.length} items</div>
     </div>
     <div className="status-filter-bar" aria-label="Work queue">
@@ -48,8 +93,9 @@ export function TicketsPage() {
       {([['', 'Tasks & issues'], ['task', 'Tasks'], ['issue', 'Issues']] as const).map(([value, label]) =>
         <button type="button" key={value || 'both'} className={type === value ? "active" : ""} onClick={() => setType(value)}><i />{label}</button>
       )}
+      {hasFilters && <button type="button" className="work-filter-reset" onClick={() => { setSearch(""); setType(""); setPriority(""); }}>Clear filters</button>}
     </div>
-    {filtered.length ? <WorkItems items={filtered} user={user} personal={queue === "mine"} /> : <Empty title="No matching work items" />}
+    {filtered.length ? <WorkItems items={filtered} user={user} personal={queue === "mine"} view={view} /> : <Empty title="No matching work items" />}
     {showCreate && <CreateTicket projects={projects} users={users} defaultProject={params.get("projectId") || ""} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
   </>;
 }

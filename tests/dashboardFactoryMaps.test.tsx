@@ -10,17 +10,21 @@ vi.mock("../src/i18n",()=>({useI18n:()=>({t:(key:string)=>key})}));
 vi.mock("../src/live",()=>({useLiveRefresh:()=>{}}));
 vi.mock("../src/components/DashboardProjectSearch",()=>({DashboardProjectSearch:()=>null}));
 vi.mock("../src/api",async original=>({...await original<typeof import("../src/api")>(),api:vi.fn().mockResolvedValue({stats:{personalOpen:0,activeProjects:36,openIssues:2,overdue:2,untriaged:9},myUpcoming:[],upcoming:[],workload:[],myWork:[],activity:[]})}));
-it("places Port Klang then Sendayan below the hero and above all dashboard status cards",async()=>{
+it("places status cards and personal work above the Port Klang and Sendayan maps, which can be hidden",async()=>{
   vi.stubGlobal("React",React);vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);vi.stubGlobal("matchMedia",()=>({matches:false}));
   const host=document.createElement("div");document.body.append(host);const root=createRoot(host);
   try {
     await act(async()=>root.render(<MemoryRouter><DashboardPage/></MemoryRouter>));
     await act(async()=>{await vi.dynamicImportSettled();});
     const hero=host.querySelector(".dashboard-hero")!,maps=host.querySelector(".dashboard-factory-section")!,stats=host.querySelector(".dashboard-stat-grid")!;
-    expect(maps).not.toBeNull();expect(hero.compareDocumentPosition(maps)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(maps.compareDocumentPosition(stats)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const work=host.querySelector(".dashboard-grid")!;
+    expect(maps).not.toBeNull();expect(hero.compareDocumentPosition(stats)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(stats.compareDocumentPosition(work)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(work.compareDocumentPosition(maps)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const cards=maps.querySelectorAll(".dashboard-factory-card");expect(cards).toHaveLength(2);
     expect(cards[0].querySelector(".factory-toolbar strong")?.textContent).toContain("Port Klang");expect(cards[1].querySelector(".factory-toolbar strong")?.textContent).toBe("Sendayan");
     expect(cards[0].querySelector("a")?.getAttribute("href")).toBe("/factory-map?site=port-klang");expect(cards[1].querySelector("a")?.getAttribute("href")).toBe("/factory-map?site=sendayan");
     expect(maps.querySelector(".factory-sidebar")).toBeNull();expect(maps.querySelector('[aria-label="Find a project"]')).toBeNull();
+    const toggle=host.querySelector<HTMLButtonElement>(".dashboard-maps-bar button")!;expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await act(async()=>toggle.click());
+    expect(host.querySelector(".dashboard-factory-section")).toBeNull();expect(localStorage.getItem("dtu-dashboard-maps")).toBe("hidden");localStorage.removeItem("dtu-dashboard-maps");
   } finally {act(()=>root.unmount());host.remove();vi.unstubAllGlobals();}
 });

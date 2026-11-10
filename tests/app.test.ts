@@ -96,13 +96,13 @@ describe("DTU Control Centre API", () => {
   it("lets a signed-in user update their own profile", async () => {
     const changed = await request(app).patch("/api/staff/profile")
       .set("Cookie", cookie).set("x-csrf-token", csrf)
-      .send({ name: "DTU Administrator", email: "admin.updated@example.com", language: "ms" });
+      .send({ name: "DTU Administrator", email: "admin.updated@example.com" });
     expect(changed.status).toBe(200);
     const profile = await request(app).get("/api/auth/me").set("Cookie", cookie);
-    expect(profile.body.user).toMatchObject({ name: "DTU Administrator", email: "admin.updated@example.com", language: "ms" });
+    expect(profile.body.user).toMatchObject({ name: "DTU Administrator", email: "admin.updated@example.com" });
     const invalid = await request(app).patch("/api/staff/profile")
       .set("Cookie", cookie).set("x-csrf-token", csrf)
-      .send({ name: "DTU Administrator", email: "invalid", language: "en" });
+      .send({ name: "DTU Administrator", email: "invalid" });
     expect(invalid.status).toBe(400);
   });
 
@@ -141,7 +141,6 @@ describe("DTU Control Centre API", () => {
         name: "Managed User",
         email: "managed@example.com",
         role: "member",
-        language: "en",
         password: "Temporary123!"
       });
     expect(created.status).toBe(201);

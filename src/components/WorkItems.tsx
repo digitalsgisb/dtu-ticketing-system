@@ -35,11 +35,26 @@ export function PendingWorkCards({ items, user }: { items: any[]; user: WorkUser
   </article>)}</div>;
 }
 
-export function WorkItems({ items, user, personal = false }: { items: any[]; user: WorkUser; personal?: boolean }) {
+export function PendingWorkList({ items, user }: { items: any[]; user: WorkUser }) {
+  return <div className="work-list" role="list">{items.map(item => {
+    const late = overdue(item);
+    return <article role="listitem" className={`work-list-row work-list-row--${item.priority}${late ? " is-overdue" : ""}`} key={item.id}>
+      <Link className="work-list-main" to={`/tickets/${item.id}`}>
+        <span className="work-list-title"><strong>{item.title}</strong><small><span className="mono">{item.ticket_no}</span> · {item.project_name || "General DTU work"}</small></span>
+        <span className="work-list-badges"><Badge value={item.priority} kind="priority" /><Badge value={item.status} /><Badge value={item.type} kind="type" /></span>
+        <span className="work-list-people"><small>Assignee</small>{item.assignee_name || "Unassigned"}{item.assignee_total > 1 && item.completion_mode !== "group" ? ` · ${item.assignee_completed ?? 0}/${item.assignee_total} done` : ""}</span>
+        <span className={`work-list-due${late ? " date-overdue" : ""}`}><small>Due</small>{item.due_date ? formatDate(item.due_date) : "No due date"}{late ? " · Overdue" : ""}</span>
+      </Link>
+      <div className="work-list-action">{canCompleteWork(item, user) && <Link className="button button-primary" to={`/tickets/${item.id}?complete=1`}>{completionLabel(item, user)}</Link>}</div>
+    </article>;
+  })}</div>;
+}
+
+export function WorkItems({ items, user, personal = false, view = "list" }: { items: any[]; user: WorkUser; personal?: boolean; view?: "list" | "cards" }) {
   const pending = items.filter(item => !workIsComplete(item, personal ? user?.id : undefined));
   const completed = items.filter(item => workIsComplete(item, personal ? user?.id : undefined));
   return <div className="work-sections">
-    <section aria-label="Pending work"><div className="work-section-heading"><h2>Pending work</h2><span>{pending.length} items</span></div>{pending.length ? <PendingWorkCards items={pending} user={user} /> : <Empty title="No pending work" />}</section>
+    <section aria-label="Pending work"><div className="work-section-heading"><h2>Pending work</h2><span>{pending.length} items</span></div>{pending.length ? (view === "cards" ? <PendingWorkCards items={pending} user={user} /> : <PendingWorkList items={pending} user={user} />) : <Empty title="No pending work" />}</section>
     <section aria-label="Completed work"><div className="work-section-heading"><h2>{personal ? "Completed by you" : "Completed work"}</h2><span>{completed.length} items</span></div>{completed.length ? <div className="panel panel-flush completed-work-table" tabIndex={0} role="region" aria-label="Completed work table"><div className="data-table tickets-table">
       <div className="table-head"><span>Reference</span><span>Work item</span><span>Project</span><span>Assignee</span><span>Due date</span><span>Status</span></div>
       {completed.map(item => <Link className="table-row" to={`/tickets/${item.id}`} key={item.id}>

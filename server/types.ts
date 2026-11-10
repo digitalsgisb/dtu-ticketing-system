@@ -8,7 +8,6 @@ export interface SessionUser {
   name: string;
   email: string | null;
   role: Role;
-  language: "en" | "ms";
 }
 
 export interface AuthenticatedRequest extends Request {

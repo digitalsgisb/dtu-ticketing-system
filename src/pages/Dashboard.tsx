@@ -7,13 +7,28 @@ import { AlertIcon, CheckIcon, ClockIcon, ProjectIcon } from "../components/Icon
 import { Badge, Empty, Loading, StatCard } from "../components/UI";
 import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
-import { PendingWorkCards } from "../components/WorkItems";
+import { PendingWorkList } from "../components/WorkItems";
 const DashboardFactoryMaps = lazy(() => import("./DashboardFactoryMaps"));
+
+const mapsPreferenceKey = "dtu-dashboard-maps";
+
+function initialMapsVisible() {
+  try {
+    const saved = localStorage.getItem(mapsPreferenceKey);
+    if (saved === "shown" || saved === "hidden") return saved === "shown";
+  } catch { /* fall through to the screen-size default */ }
+  return typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 760px)").matches;
+}
 
 export function DashboardPage() {
   const { user } = useAuth();
   const { t } = useI18n();
   const [data, setData] = useState<any>(null);
+  const [showMaps, setShowMaps] = useState(initialMapsVisible);
+  const toggleMaps = () => setShowMaps(current => {
+    try { localStorage.setItem(mapsPreferenceKey, current ? "hidden" : "shown"); } catch { /* preference is optional */ }
+    return !current;
+  });
   const load = () => api("/api/staff/dashboard").then(setData);
   useEffect(() => { void load(); }, []);
   useLiveRefresh(load);
@@ -24,19 +39,16 @@ export function DashboardPage() {
   const roleContent = {
     admin: {
       kicker: "Administrator overview",
-      intro: "Your operational picture is live. Monitor delivery, demand, team capacity, and system governance from one place.",
       primary: { to: "/admin", label: "Manage control centre" },
       secondary: { to: "/wallboard", label: "Launch wallboard ↗", external: true }
     },
     lead: {
       kicker: "Delivery lead overview",
-      intro: "Keep delivery moving with team priorities, portfolio pressure, new demand, and management-ready progress in one view.",
       primary: { to: "/briefing", label: "Open progress briefing" },
       secondary: { to: "/requests", label: "Review project requests", external: false }
     },
     member: {
       kicker: "My workday",
-      intro: "Focus on what needs your attention today: assigned work, approaching deadlines, and the projects you own.",
       primary: { to: "/tickets?queue=mine", label: "Open my work queue" },
       secondary: { to: "/my-projects", label: "View my projects", external: false }
     }
@@ -46,40 +58,17 @@ export function DashboardPage() {
   return (
     <div className="dashboard-page">
       <DashboardProjectSearch />
-      <section className="dashboard-hero">
+      <section className="dashboard-hero dashboard-hero-compact">
         <div className="hero-grid-lines" />
         <div className="dashboard-hero-copy">
           <div className="hero-kicker"><span className="live-beacon" />{roleContent.kicker} · {today}</div>
           <h1>{t("welcome")}, <em>{firstName}.</em></h1>
-          <p>{roleContent.intro}</p>
-          <div className="hero-actions">
-            <Link to={roleContent.primary.to} className="button button-hero">{roleContent.primary.label} <span>→</span></Link>
-            <Link to={roleContent.secondary.to} target={roleContent.secondary.external ? "_blank" : undefined} className="hero-text-link">{roleContent.secondary.label}</Link>
-          </div>
-          <div className="hero-facts">
-            <div><small>Assigned to you</small><strong>{data.stats.personalOpen}</strong></div>
-            <div><small>Your deadlines</small><strong>{data.myUpcoming.length}</strong></div>
-            <div><small>{role === "member" ? "Projects you own" : "Team members"}</small><strong>{role === "member" ? data.stats.ownedProjects : data.workload.length}</strong></div>
-          </div>
         </div>
-        <aside className="operations-pulse">
-          <header><div><span>{role === "member" ? "Personal pulse" : "Operational pulse"}</span><small>{role === "member" ? "Your live workload" : "Live portfolio signal"}</small></div><b><i /> Online</b></header>
-          <div className="pulse-visual">
-            <div className="pulse-ring pulse-ring-one" />
-            <div className="pulse-ring pulse-ring-two" />
-            <div className="pulse-ring pulse-ring-three" />
-            <div className="pulse-core"><span>{role === "member" ? "My open work" : "Open work"}</span><strong>{role === "member" ? data.stats.personalOpen : data.stats.openIssues}</strong><small>{role === "member" ? "items assigned" : "issues in motion"}</small></div>
-            <div className="pulse-satellite satellite-one" />
-            <div className="pulse-satellite satellite-two" />
-          </div>
-          <div className="pulse-readings">
-            <div><span>{role === "member" ? "Projects" : "Delivery"}</span><strong>{role === "member" ? data.stats.ownedProjects : data.stats.activeProjects}</strong><i className="reading-blue" /></div>
-            <div><span>Attention</span><strong>{role === "member" ? data.stats.personalOverdue : data.stats.overdue}</strong><i className="reading-red" /></div>
-            <div><span>{role === "member" ? "Alerts" : "Intake"}</span><strong>{role === "member" ? data.stats.unreadNotifications : data.stats.untriaged}</strong><i className="reading-green" /></div>
-          </div>
-        </aside>
+        <div className="hero-actions">
+          <Link to={roleContent.primary.to} className="button button-hero">{roleContent.primary.label} <span>→</span></Link>
+          <Link to={roleContent.secondary.to} target={roleContent.secondary.external ? "_blank" : undefined} className="hero-text-link">{roleContent.secondary.label}</Link>
+        </div>
       </section>
-      <Suspense fallback={<div className="dashboard-maps-loading" role="status">Loading factory maps…</div>}><DashboardFactoryMaps /></Suspense>
       <section className="stat-grid dashboard-stat-grid">
         {role === "member" ? <>
           <StatCard label="My open work" value={data.stats.personalOpen} tone="blue" note="Assigned to you" index={0} icon={<CheckIcon />} />
@@ -96,7 +85,7 @@ export function DashboardPage() {
       <div className="dashboard-grid">
         <section className="panel panel-span-2">
           <div className="panel-heading"><div><span className="eyebrow">Personal queue · Pending</span><h2>{t("myWork")}</h2></div><Link to="/tickets?queue=mine" className="text-link">View all & completed →</Link></div>
-          {data.myWork.length ? <PendingWorkCards items={data.myWork} user={user} /> : <Empty body="Assigned work will appear here." />}
+          {data.myWork.length ? <PendingWorkList items={data.myWork} user={user} /> : <Empty body="Assigned work will appear here." />}
         </section>
         {role !== "member" && <section className="panel">
           <div className="panel-heading"><div><span className="eyebrow">Capacity</span><h2>{t("workload")}</h2></div></div>
@@ -121,6 +110,8 @@ export function DashboardPage() {
           <div className="timeline">{data.activity.map((event: any) => <div className="timeline-item" key={event.id}><i /><div><strong>{event.actor_name}</strong><span>{event.action.replaceAll("_", " ")}</span><small>{formatDate(event.created_at, true)}</small></div></div>)}</div>
         </section>}
       </div>
+      <div className="dashboard-maps-bar"><div><span className="eyebrow">Our plants</span><strong>Factory maps</strong></div><button type="button" className="button button-secondary" aria-expanded={showMaps} onClick={toggleMaps}>{showMaps ? "Hide factory maps" : "Show factory maps"}</button></div>
+      {showMaps && <Suspense fallback={<div className="dashboard-maps-loading" role="status">Loading factory maps…</div>}><DashboardFactoryMaps /></Suspense>}
     </div>
   );
 }

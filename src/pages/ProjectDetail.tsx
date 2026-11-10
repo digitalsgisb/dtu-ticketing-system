@@ -348,7 +348,7 @@ function EditProject({ project, users, links: projectLinks, onClose, onSaved }: 
 function QrModal({ qr, onClose }: { qr: any; onClose: () => void }) {
   const print = () => window.print();
   return <Modal title="Printable project QR label" onClose={onClose}>
-    <div className="qr-label" id="qr-label"><div className="qr-company"><CompanyLogo /><span>Digital Transformation Unit</span></div><img className="qr-code" src={qr.dataUrl} alt="Project issue reporting QR code" /><h2>{qr.project.name}</h2><strong>{qr.project.project_no}</strong><p>Report Issue / Lapor Masalah</p><small>{qr.url}</small></div>
+    <div className="qr-label" id="qr-label"><div className="qr-company"><CompanyLogo /><span>Digital Transformation Unit</span></div><img className="qr-code" src={qr.dataUrl} alt="Project issue reporting QR code" /><h2>{qr.project.name}</h2><strong>{qr.project.project_no}</strong><p>Report an issue</p><small>{qr.url}</small></div>
     <div className="form-actions"><button className="button button-secondary" onClick={onClose}>Close</button><button className="button button-primary" onClick={print}>Print label</button></div>
   </Modal>;
 }
