@@ -9,8 +9,9 @@ import { useI18n } from "../i18n";
 import { useLiveRefresh } from "../live";
 import { TaskProgress } from "../components/TaskProgress";
 
-import { GroupedProjectCollection, ProjectGroupControls } from "../components/ProjectGroups";
-import { flattenProjectGroups } from "../projectGroups";
+import { GroupedProjectCollection, GroupSystemLinks, ProjectGroupControls } from "../components/ProjectGroups";
+import { applyGroupOverrides, useGroupEditing } from "../groupEditing";
+import { flattenProjectGroups, type GroupLink } from "../projectGroups";
 
 const completeLikeProjectStatuses = new Set(["complete_monitoring", "completed"]);
 const projectStatusFilters = [["all", "All"], ["in_progress", "In progress"], ["complete_monitoring", "Monitoring"], ["on_hold", "On hold"], ["planned", "Planned"], ["completed", "Completed"], ["cancelled", "Cancelled"]] as const;
@@ -145,7 +146,6 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
       {groupFilter && <Link className="text-link" to="/projects">← All project groups</Link>}
       {filtered.length ? <GroupedProjectCollection projects={filtered} grouped={grouped} onGroupingChange={setGrouped} gridClassName="project-grid" startExpanded={Boolean(groupFilter)} imageFor={(project: any) => project.latest_image_id ? `/api/staff/projects/progress-images/${project.latest_image_id}` : undefined} renderProject={project => {
         const displayedProgress = projectProgress(project);
-        const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
         return <article className="project-card" key={project.id}>
           <Link to={`/projects/${project.id}`} className="project-card-main" onClick={rememberProjectContext}>
           <div className="project-card-image">{project.latest_image_id ? <img src={`/api/staff/projects/progress-images/${project.latest_image_id}`} alt={`Latest progress for ${project.name}`} /> : <div><span>{project.project_no}</span><small>Add a photo with a progress update</small></div>}</div>
@@ -157,12 +157,22 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
           </div>
           </Link>
           <div className="project-card-category"><span>Category</span><CategoryBox id={project.id} name={project.name} category={project.reporting_category} onSaved={load} /></div>
-          {canUpdateProgress && <Link to={`/projects/${project.id}?update=1`} className="project-card-quick-update" onClick={rememberProjectContext}><span><PlusIcon />Quick update</span><strong>{displayedProgress}% <i>→</i></strong></Link>}
+          <ProjectCardSystem project={project} onOpenProject={rememberProjectContext} />
         </article>;
       }} /> : <Empty title={myProjectsOnly ? "No owned projects match this view" : "No matching projects"} />}
       {showCreate && <ProjectCreateModal users={users} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); void load(); }} />}
     </div>
   );
+}
+
+/** The card's main action: open the project's own system, else its group's, else point to where links are added. */
+function ProjectCardSystem({ project, onOpenProject }: { project: any; onOpenProject: () => void }) {
+  const { overrides } = useGroupEditing();
+  const [withGroup] = applyGroupOverrides([project], overrides);
+  const own = (project.links ?? []) as GroupLink[];
+  const links = own.length ? own : withGroup.group_links ?? [];
+  if (links.length) return <div className="project-card-system"><GroupSystemLinks links={links} groupName={own.length ? project.name : withGroup.group_name ?? project.name} /></div>;
+  return <Link to={`/projects/${project.id}#system-links`} className="project-card-system-empty" onClick={onOpenProject}>No system link yet · <span>Add one</span></Link>;
 }
 
 function ProjectCreateModal({ users, onClose, onCreated }: { users: any[]; onClose: () => void; onCreated: () => void }) {

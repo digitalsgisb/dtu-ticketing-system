@@ -12,9 +12,14 @@
 .project-card-category { padding: 12px 22px; border-top: 1px solid #e0e9e8; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #536f77; font-size: 12px; }
 .projects-page .project-toolbar-heading { min-height: 0; }
 .projects-page .project-toolbar-actions { width: 100%; }
-.projects-page .project-card-quick-update { margin: 0 16px 16px; padding: 14px 16px; min-height: 52px; border: 1px solid #0c7778; border-radius: 10px; background: #087b7b; color: white; font-size: 14px; box-shadow: 0 5px 12px #075f651a; }
-.projects-page .project-card-quick-update:hover { background: #056362; }
-.projects-page .project-card-quick-update:focus-visible { outline: 3px solid #48c7be; outline-offset: 3px; }
-.projects-page .project-card-quick-update > span { display: flex; align-items: center; gap: 9px; }
-.projects-page .project-card-quick-update svg { width: 18px; height: 18px; }
-.projects-page .project-card-quick-update strong { font-size: 14px; }
+/* The card's main action opens its system (own links first, then the group's), sized like the old full-width button. */
+.projects-page .project-card-system { margin-top: auto; padding: 0 16px 16px; }
+.projects-page .project-card-system .pg-systems { margin: 0; animation: none; }
+.projects-page .project-card-system .pg-system-primary { width: 100%; min-height: 52px; border-radius: 10px; }
+.projects-page .project-card-system .pg-system-copy small { color: #b9e6dc; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.projects-page .project-card-system .pg-system-chip { flex: 1 1 0; max-width: none; justify-content: center; }
+.projects-page .project-card-system-empty { margin: auto 16px 16px; min-height: 52px; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px dashed #c6d9d2; border-radius: 10px; color: #6f8a80; font-size: 13px; text-decoration: none; transition: border-color .25s cubic-bezier(.65, 0, .35, 1), color .25s cubic-bezier(.65, 0, .35, 1); }
+.projects-page .project-card-system-empty span { color: #16847b; font-weight: 700; }
+.projects-page .project-card-system-empty:hover { border-color: #7fb8a6; color: #3f6a5d; }
+.projects-page .project-card-system-empty:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.projects-page .project-card-system-empty:focus-visible { outline: 3px solid #48c7be; outline-offset: 3px; }

@@ -105,11 +105,21 @@ it("keeps My Projects scoped before grouping and shows a collapsed group as a ca
   expect(host.querySelectorAll(".project-card")).toHaveLength(1);
 });
 
-it("shows Quick update for members on projects owned by other people", async () => {
+it("opens each card's own system, falls back to its group's, and offers to add one when neither exists", async () => {
   localStorage.setItem("dtu-expanded-project-groups", "[10]");
+  const groupLinks = [{ id: 5, title: "CMMS", url: "https://cmms.sugidigital.org/" }];
+  vi.mocked(api).mockImplementation(async url => url === "/api/staff/projects" ? [
+    { ...projects[0], links: [{ id: 9, title: "Hattoo", url: "https://hattoo.example.com/" }], group_links: groupLinks },
+    { ...projects[1], links: [], group_links: groupLinks },
+    { ...projects[2], links: [] }
+  ] : []);
   await act(async () => root.render(<MemoryRouter><ProjectsPage /></MemoryRouter>));
-  expect(host.querySelectorAll(".project-card-quick-update")).toHaveLength(3);
-  expect(host.querySelector('a.project-card-quick-update[href="/projects/2?update=1"]')).not.toBeNull();
+  expect(host.querySelector(".project-card-quick-update")).toBeNull();
+  const cards = [...host.querySelectorAll(".project-card")];
+  const action = (name: string) => cards.find(card => card.textContent?.includes(name))!;
+  expect(action("Hayari Hattoo").querySelector(".pg-system-primary")?.getAttribute("href")).toBe("https://hattoo.example.com/");
+  expect(action("Red Tag").querySelector(".pg-system-primary")?.textContent).toContain("Open CMMS");
+  expect(action("Energy").querySelector('a.project-card-system-empty[href="/projects/3#system-links"]')).not.toBeNull();
 });
 it("opens group and search links as filtered project lists", async () => {
   await act(async () => root.render(<MemoryRouter initialEntries={["/projects?group=10&search=red"]}><ProjectsPage /></MemoryRouter>));

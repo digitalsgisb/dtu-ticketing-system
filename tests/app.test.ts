@@ -915,6 +915,7 @@ describe("DTU Control Centre API", () => {
       expect(detail.body.links).toEqual([]);
       const listed = await request(app).get('/api/staff/projects').set('Cookie', cookie);
       expect(listed.body.find((project: any) => project.id === second).group_links).toEqual(expectedLinks);
+      expect(listed.body.find((project: any) => project.id === second).links).toEqual([]);
       const report = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
       expect(report.body.groups.find((group: { id: number }) => group.id === groupId).links).toEqual(expectedLinks);
 

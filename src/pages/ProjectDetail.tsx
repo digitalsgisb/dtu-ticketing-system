@@ -185,7 +185,7 @@ function SystemLinks({ links, project: loaded, canEditGroup }: { links: any[]; p
   const [{ group_name: groupName, group_links: groupLinks = [] }] = applyGroupOverrides([loaded], overrides);
   const slots = projectLinkSlots(links);
   const hasGroupLinks = Boolean(groupName && groupLinks.length);
-  return <section className="system-links-panel">
+  return <section className="system-links-panel" id="system-links">
     <div className="panel-heading"><div><span className="eyebrow">System access</span><h2>System links</h2></div></div>
     {hasGroupLinks && <div className="system-link-group">
       <div className="system-link-subheading"><strong>{groupName}</strong><small>Shared by every project in this group{canEditGroup ? " · use Edit on the group above to change them" : ""}</small></div>

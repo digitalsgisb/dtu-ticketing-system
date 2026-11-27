@@ -628,6 +628,10 @@ staffRouter.get("/dashboard", (req, res) => {
 });
 
 staffRouter.get("/projects", (_req, res) => {
+  // Each card opens its own system, so the list carries every project's links in one query.
+  const links = db.prepare("SELECT id, project_id, title, url FROM project_links ORDER BY sort_order, id").all() as Array<{ id: number; project_id: number; title: string; url: string }>;
+  const linksByProject = new Map<number, Array<{ id: number; title: string; url: string }>>();
+  for (const { project_id: projectId, ...link } of links) linksByProject.set(projectId, [...(linksByProject.get(projectId) ?? []), link]);
   res.json(withProjectGroups(withTaskProgress(db.prepare(`
     SELECT p.*, u.name AS owner_name,
       (SELECT pui.id FROM project_update_images pui
@@ -637,7 +641,7 @@ staffRouter.get("/projects", (_req, res) => {
       SUM(CASE WHEN w.status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS open_count
     FROM projects p LEFT JOIN users u ON u.id = p.owner_id LEFT JOIN work_items w ON w.project_id = p.id
     GROUP BY p.id ORDER BY p.updated_at DESC
-  `).all() as Array<{ id: number }>)));
+  `).all() as Array<{ id: number }>).map(project => ({ ...project, links: linksByProject.get(project.id) ?? [] }))));
 });
 
 staffRouter.get("/project-links", (_req, res) => {
