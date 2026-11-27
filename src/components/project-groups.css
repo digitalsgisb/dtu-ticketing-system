@@ -39,3 +39,22 @@
 @media (prefers-reduced-motion: reduce) { .pg-group-body { transition: none; } }
 
 .pg-wall-label{color:#54d8cb}.wallboard-full-panel .pg-group{background:#12383f;color:#e0f7f3;border-color:#2a6268}.wallboard-full-panel .pg-group-heading p,.wallboard-full-panel .pg-group-heading small{color:#a6cbcb}
+
+/* Group-owned systems: one primary "Open" action plus up to three companion chips. */
+.pg-systems { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 14px; }
+.pg-system-primary { display: inline-flex; align-items: center; gap: 11px; min-width: 0; max-width: 100%; padding: 7px 16px 7px 7px; border-radius: 11px; background: #0c6b69; color: #fff; text-decoration: none; box-shadow: 0 6px 16px rgba(12, 107, 105, .22); transition: background .18s ease, box-shadow .18s ease; }
+.pg-system-primary:hover { background: #095a58; box-shadow: 0 8px 22px rgba(12, 107, 105, .3); }
+.pg-system-primary:focus-visible, .pg-system-chip:focus-visible { outline: 3px solid #8fd3c4; outline-offset: 2px; }
+.pg-system-glyph { flex-shrink: 0; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: rgba(255, 255, 255, .14); }
+.pg-system-glyph svg { width: 17px; height: 17px; }
+.pg-system-copy { min-width: 0; display: grid; line-height: 1.25; }
+.pg-system-copy strong { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-group-heading .pg-system-copy small, .pg-context .pg-system-copy small { color: #b9e6dc; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-system-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 220px; padding: 9px 12px; border: 1px solid #bed7cc; border-radius: 9px; background: #fff; color: #23675c; font-size: 12px; font-weight: 650; text-decoration: none; transition: border-color .18s ease, background .18s ease; }
+.pg-system-chip span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-system-chip svg { flex-shrink: 0; width: 13px; height: 13px; opacity: .65; }
+.pg-system-chip:hover { border-color: #7fb8a6; background: #f3faf7; }
+.pg-context .pg-systems { margin-bottom: 0; }
+.wallboard-full-panel .pg-system-chip { background: #184a50; border-color: #2a6268; color: #e0f7f3; }
+@media (max-width: 650px) { .pg-system-primary { width: 100%; } .pg-system-chip { max-width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .pg-system-primary, .pg-system-chip { transition: none; } }

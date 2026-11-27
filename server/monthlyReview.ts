@@ -5,6 +5,8 @@ import { requireRole } from "./security.js";
 import { malaysiaDate } from "./time.js";
 import { audit } from "./services.js";
 import type { AuthenticatedRequest } from "./types.js";
+import { groupLinksFor, replaceGroupLinks } from "./projectGroups.js";
+import { maxSystemLinks, parseSystemLinks, systemLinkSchema } from "./systemLinks.js";
 
 export const monthlyReviewRouter = Router();
 monthlyReviewRouter.use(requireRole("admin", "lead"));
@@ -56,13 +58,16 @@ monthlyReviewRouter.get("/", (req, res) => {
   const portfolio = (db.prepare(`SELECT p.*, owner.name AS owner_name FROM projects p
     LEFT JOIN users owner ON owner.id = p.owner_id ORDER BY p.name COLLATE NOCASE, p.id`).all() as { id: number; group_id: number | null }[])
     .map(project => ({ ...project, links: links.filter(link => link.project_id === project.id), photos: photos.filter(photo => photo.project_id === project.id) }));
-  const groups = (db.prepare("SELECT id, name, summary FROM project_groups ORDER BY name COLLATE NOCASE, id").all() as { id: number }[])
-    .map(group => ({ ...group, project_ids: portfolio.filter(project => project.group_id === group.id).map(project => project.id) }));
+  const groupRows = db.prepare("SELECT id, name, summary FROM project_groups ORDER BY name COLLATE NOCASE, id").all() as { id: number }[];
+  const groupLinks = groupLinksFor(groupRows.map(group => group.id));
+  const groups = groupRows
+    .map(group => ({ ...group, links: groupLinks.get(group.id) ?? [], project_ids: portfolio.filter(project => project.group_id === group.id).map(project => project.id) }));
   res.json({ month, projects, currentProjects, plans, requests, requestPortfolio, portfolio, groups });
 });
 
 const groupSchema = z.object({ name: z.string().trim().min(1).max(120), summary: z.string().trim().max(3000).default(""),
-  projectIds: z.array(z.number().int().positive()).min(1).max(1000).refine(ids => new Set(ids).size === ids.length, "Choose each project once") });
+  projectIds: z.array(z.number().int().positive()).min(1).max(1000).refine(ids => new Set(ids).size === ids.length, "Choose each project once"),
+  links: z.array(systemLinkSchema).max(maxSystemLinks).optional() });
 
 monthlyReviewRouter.post("/groups", (req, res) => saveGroup(req as unknown as AuthenticatedRequest, res));
 monthlyReviewRouter.patch("/groups/:id", (req, res) => saveGroup(req as unknown as AuthenticatedRequest, res, Number(req.params.id)));
@@ -74,6 +79,8 @@ function saveGroup(req: AuthenticatedRequest, res: import("express").Response, i
   const parsed = groupSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Enter a group name and choose at least one project" });
   const { name, summary, projectIds } = parsed.data;
+  const parsedLinks = parsed.data.links === undefined ? undefined : parseSystemLinks(parsed.data.links);
+  if (parsedLinks && !parsedLinks.ok) return res.status(400).json({ error: parsedLinks.error });
   if (db.prepare("SELECT id FROM project_groups WHERE name = ? COLLATE NOCASE AND id != ?").get(name, id ?? 0)) {
     return res.status(409).json({ error: "A project group with this name already exists" });
   }
@@ -90,9 +97,10 @@ function saveGroup(req: AuthenticatedRequest, res: import("express").Response, i
       db.prepare("UPDATE projects SET group_id = NULL WHERE group_id = ?").run(id);
     }
     db.prepare(`UPDATE projects SET group_id = ? WHERE id IN (${placeholders})`).run(resultId, ...projectIds);
+    if (parsedLinks) replaceGroupLinks(resultId, parsedLinks.links);
     return resultId;
   })();
-  audit(req.user, id === undefined ? "project_group_created" : "project_group_updated", "project_group", groupId, { name, projectIds }, req.ip);
+  audit(req.user, id === undefined ? "project_group_created" : "project_group_updated", "project_group", groupId, { name, projectIds, ...(parsedLinks ? { links: parsedLinks.links.length } : {}) }, req.ip);
   res.status(id === undefined ? 201 : 200).json({ id: groupId });
 }
 
@@ -101,7 +109,7 @@ monthlyReviewRouter.delete("/groups/:id", (req, res) => {
   if (!Number.isSafeInteger(id) || id <= 0) return res.status(404).json({ error: "Project group not found" });
   const group = db.prepare("SELECT name FROM project_groups WHERE id = ?").get(id) as { name: string } | undefined;
   if (!group) return res.status(404).json({ error: "Project group not found" });
-  // ON DELETE SET NULL returns every child to the individual portfolio.
+  // ON DELETE SET NULL returns every child to the individual portfolio; ON DELETE CASCADE removes the group's own system links.
   db.prepare("DELETE FROM project_groups WHERE id = ?").run(id);
   audit((req as unknown as AuthenticatedRequest).user, "project_group_removed", "project_group", id, group, req.ip);
   res.json({ ok: true });

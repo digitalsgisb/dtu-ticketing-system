@@ -7,7 +7,10 @@ import { Badge, Empty, ErrorNotice } from "../components/UI";
 import type { Item } from "./MonthlyReview";
 import "./monthly-review.css";
 
-export type ProjectGroup = { id: number; name: string; summary: string; project_ids: number[] };
+export type ProjectGroup = { id: number; name: string; summary: string; project_ids: number[]; links?: { id?: number; title: string; url: string }[] };
+type GroupLinkSlot = { title: string; url: string };
+const groupLinkSlotCount = 4;
+const groupLinkSlots = (links: GroupLinkSlot[] = []): GroupLinkSlot[] => [...links.slice(0, groupLinkSlotCount).map(({ title, url }) => ({ title, url })), ...Array.from({ length: Math.max(0, groupLinkSlotCount - links.length) }, () => ({ title: "", url: "" }))];
 export type PortfolioSelection = { kind: "project" | "group"; id: number };
 type PortfolioRow = { key: string; name: string; summary: string; category: string; department: string; progress: number | null; status: string | null; members: Item[]; group?: ProjectGroup };
 
@@ -121,31 +124,42 @@ export function ProjectGroupManager({ portfolio, groups, onSaved, onClose }: { p
   const [name, setName] = useState("");
   const [summary, setSummary] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [links, setLinks] = useState<GroupLinkSlot[]>(groupLinkSlots());
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const reset = () => { setEditing(null); setName(""); setSummary(""); setSelected(new Set()); setSearch(""); };
-  const edit = (group: ProjectGroup) => { setEditing(group.id); setName(group.name); setSummary(group.summary); setSelected(new Set(group.project_ids)); setSearch(""); setError(""); setNotice(""); };
+  const reset = () => { setEditing(null); setName(""); setSummary(""); setSelected(new Set()); setLinks(groupLinkSlots()); setSearch(""); };
+  const edit = (group: ProjectGroup) => { setEditing(group.id); setName(group.name); setSummary(group.summary); setSelected(new Set(group.project_ids)); setLinks(groupLinkSlots(group.links)); setSearch(""); setError(""); setNotice(""); };
   const save = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError(""); setNotice("");
     try {
-      await api(`/api/staff/monthly-review/groups${editing ? `/${editing}` : ""}`, json(editing ? "PATCH" : "POST", { name: name.trim(), summary: summary.trim(), projectIds: [...selected] }));
+      await api(`/api/staff/monthly-review/groups${editing ? `/${editing}` : ""}`, json(editing ? "PATCH" : "POST", { name: name.trim(), summary: summary.trim(), projectIds: [...selected], links }));
       await onSaved(); reset(); setNotice("Project group saved.");
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
+  const updateLink = (index: number, patch: Partial<GroupLinkSlot>) => setLinks(current => current.map((link, at) => at === index ? { ...link, ...patch } : link));
+  const moveLinkUp = (index: number) => setLinks(current => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; });
   const ungroup = async (group: ProjectGroup) => {
     setBusy(true); setError(""); setNotice("");
-    try { await api(`/api/staff/monthly-review/groups/${group.id}`, json("DELETE")); await onSaved(); if (editing === group.id) reset(); setNotice("Group removed. All child projects and their history are preserved."); }
+    try { await api(`/api/staff/monthly-review/groups/${group.id}`, json("DELETE")); await onSaved(); if (editing === group.id) reset(); setNotice("Group removed, along with its group system links. All child projects, their own links, and their history are preserved."); }
     catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
   return <PortfolioDialog title="Group related projects" onClose={onClose}>
-    <p className="mr-group-help">Present related work under one name, for example Safety Digital with Hayari Hattoo and Red Tag. Projects keep their own links, progress, and history.</p>
+    <p className="mr-group-help">Present related work under one name, for example Safety Digital with Hayari Hattoo and Red Tag. Projects keep their own links, progress, and history. Group system links open from the group and from every project inside it.</p>
     <ErrorNotice message={error} />{notice && <p role="status" className="mr-group-notice">{notice}</p>}
     {groups.length > 0 && <div className="mr-existing-groups">{groups.map(group => <article key={group.id}><div><strong>{group.name}</strong><small>{group.project_ids.length} projects</small></div><button disabled={busy} onClick={() => edit(group)} aria-label={`Edit group ${group.name}`}>Edit</button><button disabled={busy} onClick={() => void ungroup(group)} aria-label={`Ungroup ${group.name}`}>Ungroup</button></article>)}</div>}
     <form className="form-stack" onSubmit={event => void save(event)}><h3>{editing ? "Edit group" : "Create a group"}</h3>
       <label>Group name<input required maxLength={120} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Safety Digital" disabled={busy} /></label>
       <label>Group summary<textarea maxLength={3000} value={summary} onChange={event => setSummary(event.target.value)} placeholder="What these projects deliver together" disabled={busy} /></label>
+      <fieldset className="mr-group-links" disabled={busy}>
+        <legend>Group system links <small>Up to {groupLinkSlotCount}. The first link is the main "Open" button.</small></legend>
+        {links.map((link, index) => <div className="mr-group-link-row" key={index}>
+          <label>Title<input maxLength={80} value={link.title} onChange={event => updateLink(index, { title: event.target.value })} placeholder={index === 0 ? "e.g. CMMS" : `Link ${index + 1}`} /></label>
+          <label>URL<input inputMode="url" maxLength={1000} value={link.url} onChange={event => updateLink(index, { url: event.target.value })} placeholder={index === 0 ? "cmms.sugidigital.org" : "https://example.com"} /></label>
+          <button type="button" className="mr-group-link-move" disabled={index === 0} onClick={() => moveLinkUp(index)} aria-label={`Move link ${index + 1} up`} title="Move up">↑</button>
+        </div>)}
+      </fieldset>
       <label>Find projects to combine<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search project name or department…" /></label>
       <div className="mr-group-selection-heading"><strong>Choose projects</strong><span>{selected.size} selected</span></div>
       <div className="mr-group-project-picker">{portfolio.filter(item => `${item.name} ${item.project_no} ${item.department_name}`.toLowerCase().includes(search.toLowerCase())).map(item => {

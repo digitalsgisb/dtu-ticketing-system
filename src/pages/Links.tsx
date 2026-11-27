@@ -1,4 +1,4 @@
-import { GroupedProjectCollection } from "../components/ProjectGroups";
+import { GroupedProjectCollection, GroupSystemLinks } from "../components/ProjectGroups";
 import type { GroupableProject } from "../projectGroups";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -25,8 +25,17 @@ type LinkProject = GroupableProject & {
   links: SystemLink[];
 };
 
+type LinkGroup = {
+  id: number;
+  name: string;
+  summary: string;
+  total: number;
+  links: SystemLink[];
+};
+
 type LinksResponse = {
   projects: LinkProject[];
+  groups?: LinkGroup[];
   linkCount: number;
 };
 
@@ -56,11 +65,15 @@ export function LinksPage() {
   }, []);
   useLiveRefresh(load);
 
+  const query = search.trim().toLowerCase();
+  const groupText = (group: LinkGroup) => `${group.name} ${group.summary} ${group.links.map(link => `${link.title} ${link.url}`).join(" ")}`.toLowerCase();
+  const groupsById = useMemo(() => new Map((data?.groups ?? []).map(group => [group.id, group])), [data]);
+
   const visibleProjects = useMemo(() => {
-    const query = search.trim().toLowerCase();
     const projects = (data?.projects ?? []).flatMap(project => {
       if (projectId !== "all" && String(project.id) !== projectId) return [];
-      const projectMatches = `${project.group_name ?? ""} ${project.project_no} ${project.name} ${project.department_name}`.toLowerCase().includes(query);
+      const group = project.group_id ? groupsById.get(project.group_id) : undefined;
+      const projectMatches = `${group ? groupText(group) : project.group_name ?? ""} ${project.project_no} ${project.name} ${project.department_name}`.toLowerCase().includes(query);
       const links = query && !projectMatches
         ? project.links.filter(link => `${link.title} ${link.url}`.toLowerCase().includes(query))
         : project.links;
@@ -73,17 +86,26 @@ export function LinksPage() {
       if (sort === "links_desc") return right.links.length - left.links.length || compareProjectNumbers(left, right);
       return compareProjectNumbers(left, right);
     });
-  }, [data, projectId, search, sort]);
+  }, [data, groupsById, projectId, query, sort]);
+
+  // Groups whose shared links should appear even though none of their projects have visible links of their own.
+  const standaloneGroups = useMemo(() => (data?.groups ?? []).filter(group => {
+    if (visibleProjects.some(project => project.group_id === group.id)) return false;
+    if (projectId !== "all" && data?.projects.find(project => String(project.id) === projectId)?.group_id !== group.id) return false;
+    return !query || groupText(group).includes(query);
+  }), [data, projectId, query, visibleProjects]);
 
   if (!data && !error) return <Loading />;
 
-  const visibleLinkCount = visibleProjects.reduce((total, project) => total + project.links.length, 0);
+  const visibleGroupIds = new Set([...visibleProjects.flatMap(project => project.group_id ? [project.group_id] : []), ...standaloneGroups.map(group => group.id)]);
+  const visibleLinkCount = visibleProjects.reduce((total, project) => total + project.links.length, 0)
+    + [...visibleGroupIds].reduce((total, id) => total + (groupsById.get(id)?.links.length ?? 0), 0);
 
   return <>
     <PageHeader
       eyebrow="Shared directory"
       title="System Links"
-      description="Open every system link saved in the project portfolio. Links are grouped by project and visible to all signed-in staff."
+      description="Open every system link saved in the project portfolio. Shared group systems appear first, followed by each project's own links. Visible to all signed-in staff."
     />
     <ErrorNotice message={error} />
     {data && <>
@@ -94,7 +116,15 @@ export function LinksPage() {
         <span className="links-result-count"><strong>{visibleLinkCount}</strong> of {data.linkCount} links - <strong>{visibleProjects.length}</strong> projects</span>
       </section>
 
-      {visibleProjects.length ? <GroupedProjectCollection projects={visibleProjects} gridClassName="links-project-list" renderProject={project => <section className="links-project-group" key={project.id}>
+      {standaloneGroups.length > 0 && <div className="pg-collection links-standalone-groups">{standaloneGroups.map(group => <section className="pg-group" key={group.id} aria-label={group.name}>
+        <div className="pg-group-heading"><div>
+          <span className="pg-eyebrow">Project group</span><h2>{group.name}</h2>{group.summary && <p>{group.summary}</p>}
+          <GroupSystemLinks links={group.links} groupName={group.name} />
+          <small>{group.total} {group.total === 1 ? "project" : "projects"} · No project-specific links</small>
+        </div></div>
+      </section>)}</div>}
+
+      {visibleProjects.length ? <GroupedProjectCollection projects={visibleProjects} definitions={data.groups?.map(group => ({ id: group.id, name: group.name, summary: group.summary, links: group.links }))} gridClassName="links-project-list" renderProject={project => <section className="links-project-group" key={project.id}>
           <header className="links-project-summary">
             <Link className={`links-project-image${project.latest_image_id ? " has-image" : ""}`} to={`/projects/${project.id}`} aria-label={`Open ${project.name}`}>
               {project.latest_image_id
@@ -115,7 +145,7 @@ export function LinksPage() {
               <span className="links-directory-open" aria-hidden="true"><ArrowIcon /></span>
             </a>)}
           </div>
-        </section>} /> : <section className="panel"><Empty title="No links found" body={data.linkCount ? "Try another project or search term." : "System links added to projects will appear here."} /></section>}
+        </section>} /> : !standaloneGroups.length && <section className="panel"><Empty title="No links found" body={data.linkCount ? "Try another project or search term." : "System links added to projects or project groups will appear here."} /></section>}
     </>}
   </>;
 }

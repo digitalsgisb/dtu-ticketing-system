@@ -17,8 +17,9 @@ import { addLiveClient } from "../liveUpdates.js";
 import { assigneesFor, reconcileTaskStatus, replaceAssignees, taskAssigneeProgress, validAssignees, withAssignees } from "../assignees.js";
 import { pushConfigured, pushSubscriptionCount, sendTestPush } from "../push.js";
 import { withTaskProgress } from "../projectTasks.js";
-import { withProjectGroups, projectGroupMembers } from "../projectGroups.js";
+import { groupLinksFor, withProjectGroups, projectGroupMembers } from "../projectGroups.js";
 import { monthlyReviewRouter } from "../monthlyReview.js";
+import { maxSystemLinks as maxProjectLinks, parseSystemLinks as parseProjectLinks, systemLinkSchema as projectLinkSchema, normalizeSystemUrl as normalizeProjectUrl, type SystemLinkInput as ProjectLinkInput } from "../systemLinks.js";
 
 export const staffRouter = Router();
 staffRouter.use("/monthly-review", monthlyReviewRouter);
@@ -80,7 +81,6 @@ const activeProjectStatuses = ["planned", "in_progress", "on_hold", "complete_mo
 const mutableProjectStatuses = ["planned", "in_progress", "on_hold", "complete_monitoring", "completed"] as const;
 const completeLikeProjectStatuses = new Set<string>(["complete_monitoring", "completed"]);
 const staffPassword = z.string().min(12).max(200).regex(/[A-Z]/).regex(/[a-z]/).regex(/[0-9]/);
-const maxProjectLinks = 4;
 
 function normalizeImageUploads(files: Express.Multer.File[]) {
   for (const file of files) {
@@ -91,15 +91,6 @@ function normalizeImageUploads(files: Express.Multer.File[]) {
   return true;
 }
 
-const projectLinkSchema = z.object({
-  title: z.string().trim().max(80).optional().default(""),
-  url: z.string().trim().max(1000).optional().default("")
-});
-
-type ProjectLinkInput = {
-  title: string;
-  url: string;
-};
 
 type RequestEmailRecipient = {
   id: number;
@@ -161,34 +152,6 @@ function emailProjectRequester(projectId: number, input: {
   });
 }
 
-function normalizeProjectUrl(value: string) {
-  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
-  const url = new URL(candidate);
-  if (!["http:", "https:"].includes(url.protocol) || !url.hostname) {
-    throw new Error("Use a valid http or https link");
-  }
-  const normalized = url.toString();
-  if (normalized.length > 1000) throw new Error("System link URLs must be 1000 characters or fewer");
-  return normalized;
-}
-
-function parseProjectLinks(value: unknown) {
-  const parsed = z.array(projectLinkSchema).max(maxProjectLinks).safeParse(value ?? []);
-  if (!parsed.success) return { ok: false as const, error: "Add up to 4 system links" };
-  const links: ProjectLinkInput[] = [];
-  try {
-    for (const link of parsed.data) {
-      const title = cleanText(link.title, 80);
-      const rawUrl = cleanText(link.url, 1000);
-      if (!title && !rawUrl) continue;
-      if (!title || !rawUrl) return { ok: false as const, error: "Each system link needs both a title and URL" };
-      links.push({ title, url: normalizeProjectUrl(rawUrl) });
-    }
-  } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : "Check the system links" };
-  }
-  return { ok: true as const, links };
-}
 
 function projectLinks(projectId: number | string) {
   return db.prepare(`
@@ -714,7 +677,16 @@ staffRouter.get("/project-links", (_req, res) => {
     });
   }
 
-  res.json({ projects: withProjectGroups([...projects.values()].map(project => ({ ...project, id: Number(project.id) }))), linkCount: rows.length });
+  const groupRows = db.prepare(`SELECT g.id, g.name, g.summary, (SELECT COUNT(*) FROM projects p WHERE p.group_id = g.id) AS total
+    FROM project_groups g WHERE EXISTS (SELECT 1 FROM project_group_links gl WHERE gl.group_id = g.id)
+    ORDER BY g.name COLLATE NOCASE, g.id`).all() as Array<{ id: number; name: string; summary: string; total: number }>;
+  const groupLinks = groupLinksFor(groupRows.map(group => group.id));
+  const groups = groupRows.map(group => ({ ...group, links: groupLinks.get(group.id) ?? [] }));
+  res.json({
+    projects: withProjectGroups([...projects.values()].map(project => ({ ...project, id: Number(project.id) }))),
+    groups,
+    linkCount: rows.length + groups.reduce((total, group) => total + group.links.length, 0)
+  });
 });
 
 staffRouter.post("/projects", requireRole("admin", "lead"), (req, res) => {

@@ -894,6 +894,55 @@ describe("DTU Control Centre API", () => {
     } finally { db.prepare('DELETE FROM projects WHERE id IN (?, ?, ?)').run(id, planned, quiet); }
   });
 
+  it("binds system links to a project group, shows them to staff only, and removes them on ungroup", async () => {
+    const projectIds = [1, 2].map(number => Number(db.prepare(`INSERT INTO projects(project_no, name, department_name, qr_token, progress, status)
+      VALUES (?, ?, 'Maintenance', ?, 50, 'in_progress')`).run(`PRJ-GLINK-${number}`, `CMMS child ${number}`, `group-link-token-${number}`).lastInsertRowid));
+    const [first, second] = projectIds;
+    let groupId = 0;
+    try {
+      const tooMany = await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'CMMS Test', projectIds, links: Array.from({ length: 5 }, (_, index) => ({ title: `L${index}`, url: `l${index}.example.com` })) });
+      expect(tooMany.status).toBe(400);
+      expect((await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'CMMS Test', projectIds, links: [{ title: 'CMMS', url: '' }] })).status).toBe(400);
+      const create = await request(app).post('/api/staff/monthly-review/groups').set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'CMMS Test', projectIds, links: [{ title: 'CMMS', url: 'cmms.sugidigital.org' }, { title: '', url: '' }, { title: 'Admin', url: 'https://cmms.sugidigital.org/admin' }] });
+      expect(create.status).toBe(201); groupId = create.body.id;
+      const expectedLinks = [expect.objectContaining({ title: 'CMMS', url: 'https://cmms.sugidigital.org/' }), expect.objectContaining({ title: 'Admin', url: 'https://cmms.sugidigital.org/admin' })];
+
+      const detail = await request(app).get(`/api/staff/projects/${first}`).set('Cookie', cookie);
+      expect(detail.body.project.group_links).toEqual(expectedLinks);
+      expect(detail.body.links).toEqual([]);
+      const listed = await request(app).get('/api/staff/projects').set('Cookie', cookie);
+      expect(listed.body.find((project: any) => project.id === second).group_links).toEqual(expectedLinks);
+      const report = await request(app).get('/api/staff/monthly-review?month=2026-10').set('Cookie', cookie);
+      expect(report.body.groups.find((group: { id: number }) => group.id === groupId).links).toEqual(expectedLinks);
+
+      const directory = await request(app).get('/api/staff/project-links').set('Cookie', cookie);
+      expect(directory.body.groups.find((group: { id: number }) => group.id === groupId)).toMatchObject({ name: 'CMMS Test', total: 2, links: expectedLinks });
+      expect(directory.body.projects.some((project: { id: number }) => projectIds.includes(project.id))).toBe(false);
+
+      const wallboard = await request(app).get('/api/wallboard');
+      const publicChild = wallboard.body.projects.find((project: any) => project.id === first);
+      expect(publicChild).toBeDefined();
+      expect(publicChild).not.toHaveProperty('group_links');
+
+      const reordered = await request(app).patch(`/api/staff/monthly-review/groups/${groupId}`).set('Cookie', cookie).set('x-csrf-token', csrf)
+        .send({ name: 'CMMS Test', projectIds, links: [{ title: 'Admin', url: 'https://cmms.sugidigital.org/admin' }, { title: 'CMMS', url: 'cmms.sugidigital.org' }] });
+      expect(reordered.status).toBe(200);
+      expect(db.prepare('SELECT title FROM project_group_links WHERE group_id = ? ORDER BY sort_order').all(groupId)).toEqual([{ title: 'Admin' }, { title: 'CMMS' }]);
+      await request(app).patch(`/api/staff/monthly-review/groups/${groupId}`).set('Cookie', cookie).set('x-csrf-token', csrf).send({ name: 'CMMS Test', projectIds });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM project_group_links WHERE group_id = ?').get(groupId)).toEqual({ count: 2 });
+
+      expect((await request(app).delete(`/api/staff/monthly-review/groups/${groupId}`).set('Cookie', cookie).set('x-csrf-token', csrf)).status).toBe(200);
+      expect(db.prepare('SELECT COUNT(*) AS count FROM project_group_links WHERE group_id = ?').get(groupId)).toEqual({ count: 0 });
+      groupId = 0;
+    } finally {
+      db.prepare('DELETE FROM projects WHERE id IN (?, ?)').run(...projectIds);
+      if (groupId) db.prepare('DELETE FROM project_groups WHERE id = ?').run(groupId);
+    }
+  });
+
   it("groups related projects without merging their data, and safely edits or ungroups them", async () => {
     const projectIds = [1, 2, 3].map(number => Number(db.prepare(`INSERT INTO projects(project_no, name, department_name, qr_token, progress, status)
       VALUES (?, ?, 'Safety', ?, ?, 'in_progress')`).run(`PRJ-GROUP-TEST-${number}`, `Safety child ${number}`, `group-test-token-${number}`, number * 20).lastInsertRowid));

@@ -81,9 +81,29 @@ it("edits group membership without changing any project details", async () => {
   await act(async () => { redTag.click(); energy.click(); });
   await click("Save group", dialog);
   const call = vi.mocked(api).mock.calls.find(([url, options]) => url.endsWith('/groups/10') && options?.method === 'PATCH')!;
-  expect(JSON.parse(String(call[1]?.body))).toEqual({ name: "Safety Digital", summary: "Digital tools for safer work", projectIds: [1, 3] });
+  expect(JSON.parse(String(call[1]?.body))).toEqual({ name: "Safety Digital", summary: "Digital tools for safer work", projectIds: [1, 3], links: Array.from({ length: 4 }, () => ({ title: "", url: "" })) });
   expect(document.querySelector('[data-review-dialog]')?.textContent).toContain("Project group saved.");
   expect(children[0].progress).toBe(40);
+});
+
+it("saves ordered group system links, with the first link as the main system", async () => {
+  await render(); await click("Group projects");
+  const dialog = document.querySelector<HTMLElement>('[data-review-dialog]')!;
+  await click("Edit group Safety Digital", dialog);
+  const type = async (input: HTMLInputElement, value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const rows = [...dialog.querySelectorAll<HTMLElement>(".mr-group-link-row")];
+  expect(rows).toHaveLength(4);
+  const [firstTitle, firstUrl] = [...rows[0].querySelectorAll("input")];
+  const [secondTitle, secondUrl] = [...rows[1].querySelectorAll("input")];
+  await type(firstTitle, "Admin"); await type(firstUrl, "cmms.example.com/admin");
+  await type(secondTitle, "CMMS"); await type(secondUrl, "cmms.example.com");
+  await click("Move link 2 up", dialog);
+  await click("Save group", dialog);
+  const call = vi.mocked(api).mock.calls.find(([url, options]) => url.endsWith('/groups/10') && options?.method === 'PATCH')!;
+  expect(JSON.parse(String(call[1]?.body)).links.slice(0, 2)).toEqual([{ title: "CMMS", url: "cmms.example.com" }, { title: "Admin", url: "cmms.example.com/admin" }]);
 });
 
 it("opens the same overview table in presentation mode and closes only the detail popup on Escape", async () => {

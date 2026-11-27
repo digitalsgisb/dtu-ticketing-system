@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { groupProjectItems, flattenProjectGroups } from "../src/projectGroups";
+import { ProjectGroupSummary } from "../src/components/ProjectGroups";
 import { DashboardProjectSearch, searchDashboardProjects } from "../src/components/DashboardProjectSearch";
 import { ReviewPresentation } from "../src/pages/MonthlyReviewExperience";
 import type { Item } from "../src/pages/MonthlyReview";
@@ -29,6 +30,19 @@ it("groups only visible members and preserves unknown progress", () => {
   expect(groupProjectItems([projects[0]])[0]).toMatchObject({ progress: 40, status: "in_progress" });
   expect(groupProjectItems([{ ...projects[0], progress: null }])[0].progress).toBeNull();
   expect(flattenProjectGroups([projects[2], projects[0], projects[1]]).map(p => p.id)).toEqual([1, 2, 3]);
+});
+it("shows a group's first system link as its main Open action and the rest as chips", async () => {
+  const links = [{ id: 1, title: "CMMS", url: "https://cmms.sugidigital.org/" }, { id: 2, title: "Admin", url: "https://cmms.sugidigital.org/admin" }];
+  const [entry] = groupProjectItems(projects.slice(0, 2).map(project => ({ ...project, group_links: links })));
+  await act(async () => root.render(<MemoryRouter><ProjectGroupSummary entry={entry} /></MemoryRouter>));
+  const primary = host.querySelector<HTMLAnchorElement>(".pg-system-primary")!;
+  expect(primary.textContent).toContain("Open CMMS");
+  expect(primary.textContent).toContain("cmms.sugidigital.org");
+  expect(primary.getAttribute("href")).toBe("https://cmms.sugidigital.org/");
+  expect(primary.target).toBe("_blank");
+  expect([...host.querySelectorAll(".pg-system-chip")].map(chip => chip.textContent)).toEqual(["Admin"]);
+  await act(async () => root.render(<MemoryRouter><ProjectGroupSummary entry={groupProjectItems(projects.slice(0, 2))[0]} /></MemoryRouter>));
+  expect(host.querySelector(".pg-systems")).toBeNull();
 });
 it("searches project identifiers, departments, owners, and parent names without case sensitivity", () => {
   expect(searchDashboardProjects(projects, " safety DIGITAL ").map(p => p.id)).toEqual([1, 2]);

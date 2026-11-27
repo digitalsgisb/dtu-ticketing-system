@@ -1851,6 +1851,16 @@ input:hover, select:hover, textarea:hover { border-color: #b8cfd4; }
 .system-link-card small { color: #8b9da7; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .system-link-card strong { min-width: 0; color: var(--navy); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .system-link-card span { min-width: 0; color: #607989; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.system-link-group { margin-bottom: 20px; }
+.system-link-subheading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 10px; }
+.system-link-subheading strong { color: #164d4e; font-size: 13px; }
+.system-link-subheading small { color: #7a9087; font-size: 11px; }
+.system-link-card-group { border-color: #bed7cc; background: #f3faf7; }
+.system-link-card-group.is-primary { border-color: #0c6b69; background: #0c6b69; }
+.system-link-card-group.is-primary:hover { background: #095a58; border-color: #095a58; }
+.system-link-card-group.is-primary small { color: #a9dccf; }
+.system-link-card-group.is-primary strong { color: #fff; }
+.system-link-card-group.is-primary span { color: #cdeee6; }
 .system-link-placeholder { border-style: dashed; color: #93a4ae; background: #fbfcfd; }
 .system-link-placeholder:hover { transform: none; border-color: #dbe7eb; background: #fbfcfd; }
 .system-link-placeholder strong, .system-link-placeholder span { color: #9aabb4; }
@@ -4108,3 +4118,4 @@ body.wall-work-open { overflow: hidden; }
   .dashboard-grid .work-list-main { grid-template-columns: minmax(0, 1fr); }
   .dashboard-grid .work-list-people { display: flex; }
 }
+.links-standalone-groups { margin-bottom: 28px; }

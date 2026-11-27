@@ -1,6 +1,7 @@
-export type GroupableProject = { id: number; name?: string; progress?: number | null; status?: string | null; group_id?: number | null; group_name?: string | null; group_summary?: string | null; group_total?: number };
-export type GroupDefinition = { id: number; name: string; summary?: string; project_ids?: number[] };
-export type ProjectEntry<T> = { key: string; projects: T[]; group?: { id: number; name: string; summary: string; total: number }; progress: number | null; status: string | null };
+export type GroupLink = { id?: number; title: string; url: string };
+export type GroupableProject = { id: number; name?: string; progress?: number | null; status?: string | null; group_id?: number | null; group_name?: string | null; group_summary?: string | null; group_total?: number; group_links?: GroupLink[] };
+export type GroupDefinition = { id: number; name: string; summary?: string; project_ids?: number[]; links?: GroupLink[] };
+export type ProjectEntry<T> = { key: string; projects: T[]; group?: { id: number; name: string; summary: string; total: number; links: GroupLink[] }; progress: number | null; status: string | null };
 
 export function groupProjectItems<T extends GroupableProject>(projects: T[], definitions: GroupDefinition[] = [], grouped = true): ProjectEntry<T>[] {
   const groups = new Map(definitions.map(group => [group.id, group]));
@@ -9,7 +10,7 @@ export function groupProjectItems<T extends GroupableProject>(projects: T[], def
   for (const project of projects) {
     const definition = project.group_id ? groups.get(project.group_id) : undefined;
     const name = definition?.name || project.group_name;
-    const group = grouped && project.group_id && name ? { id: project.group_id, name, summary: definition?.summary || project.group_summary || "", total: definition?.project_ids?.length ?? project.group_total ?? projects.filter(item => item.group_id === project.group_id).length } : undefined;
+    const group = grouped && project.group_id && name ? { id: project.group_id, name, summary: definition?.summary || project.group_summary || "", total: definition?.project_ids?.length ?? project.group_total ?? projects.filter(item => item.group_id === project.group_id).length, links: definition?.links ?? project.group_links ?? [] } : undefined;
     if (group && added.has(group.id)) continue;
     const members = group ? projects.filter(item => item.group_id === group.id) : [project];
     const recorded = members.filter(item => item.progress != null && Number.isFinite(Number(item.progress)));
@@ -29,5 +30,5 @@ export function flattenProjectGroups<T extends GroupableProject>(projects: T[], 
 }
 
 export function definitionsFromProjects(projects: GroupableProject[]) {
-  return groupProjectItems(projects).flatMap(entry => entry.group ? [{ id: entry.group.id, name: entry.group.name, summary: entry.group.summary, project_ids: entry.projects.map(item => item.id) }] : []);
+  return groupProjectItems(projects).flatMap(entry => entry.group ? [{ id: entry.group.id, name: entry.group.name, summary: entry.group.summary, links: entry.group.links, project_ids: entry.projects.map(item => item.id) }] : []);
 }

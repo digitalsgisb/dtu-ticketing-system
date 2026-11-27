@@ -147,7 +147,7 @@ export function ProjectDetailPage() {
     </section>
     </div>
     {canUpdateProgress && <button type="button" className="mobile-progress-action" onClick={() => setUpdatingProgress(true)}><span><small>Project progress</small><strong>{displayedProgress}%</strong></span><b>Update now <i>→</i></b></button>}
-    <SystemLinks links={links} />
+    <SystemLinks links={links} groupName={project.group_name} groupLinks={project.group_links} canEditGroup={user?.role === "admin" || user?.role === "lead"} />
     <section className="project-update-panel">
       <div className="project-update-heading">
         <div><span className="eyebrow">Team update</span><h2>Current progress</h2></div>
@@ -179,10 +179,21 @@ export function ProjectDetailPage() {
   </>;
 }
 
-function SystemLinks({ links }: { links: any[] }) {
+function SystemLinks({ links, groupName, groupLinks = [], canEditGroup }: { links: any[]; groupName?: string | null; groupLinks?: any[]; canEditGroup?: boolean }) {
   const slots = projectLinkSlots(links);
+  const hasGroupLinks = Boolean(groupName && groupLinks.length);
   return <section className="system-links-panel">
     <div className="panel-heading"><div><span className="eyebrow">System access</span><h2>System links</h2></div></div>
+    {hasGroupLinks && <div className="system-link-group">
+      <div className="system-link-subheading"><strong>{groupName}</strong><small>Shared by every project in this group{canEditGroup ? " · edit in Manage groups" : ""}</small></div>
+      <div className="system-link-grid">
+        {groupLinks.map((link, index) => <a className={`system-link-card system-link-card-group${index === 0 ? " is-primary" : ""}`} href={link.url} target="_blank" rel="noreferrer" key={link.id ?? index}>
+          <small>{index === 0 ? "Main system" : "Group link"}</small><strong>{link.title}</strong><span>{shortUrl(link.url)}</span>
+        </a>)}
+      </div>
+    </div>}
+    {hasGroupLinks && !links.length ? null : <>
+    {hasGroupLinks && <div className="system-link-subheading"><strong>This project</strong></div>}
     <div className="system-link-grid">
       {slots.map((link, index) => link.url
         ? <a className="system-link-card" href={link.url} target="_blank" rel="noreferrer" key={index}>
@@ -191,7 +202,7 @@ function SystemLinks({ links }: { links: any[] }) {
         : <div className="system-link-card system-link-placeholder" key={index}>
           <small>System link {index + 1}</small><strong>Not set</strong><span>Placeholder</span>
         </div>)}
-    </div>
+    </div></>}
   </section>;
 }
 
