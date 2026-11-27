@@ -58,3 +58,47 @@
 .wallboard-full-panel .pg-system-chip { background: #184a50; border-color: #2a6268; color: #e0f7f3; }
 @media (max-width: 650px) { .pg-system-primary { width: 100%; } .pg-system-chip { max-width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .pg-system-primary, .pg-system-chip { transition: none; } }
+
+/* ── Liquid glass + ease-in-out motion for group editing ─────────────────────────────── */
+:root {
+  --pg-ease: cubic-bezier(.65, 0, .35, 1);
+}
+.pg-group { position: relative; overflow: hidden; transition: border-color .45s var(--pg-ease), box-shadow .45s var(--pg-ease), opacity .45s var(--pg-ease); }
+.pg-group-tools { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+/* Edit and collapse are quiet text actions: teal text only, no box, border, or shadow. */
+.pg-edit, .pg-collapse { border: 0; background: none; box-shadow: none; padding: 4px 2px; border-radius: 4px; color: #16847b; font-weight: 700; cursor: pointer; transition: color .25s var(--pg-ease); }
+.pg-edit { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.pg-edit svg { width: 14px; height: 14px; }
+.pg-collapse { width: auto; height: auto; min-width: 18px; font-size: 20px; line-height: 1; }
+.pg-edit:hover:not(:disabled), .pg-collapse:hover { color: #0a5a55; }
+.pg-edit:hover:not(:disabled) span { text-decoration: underline; text-underline-offset: 3px; }
+.pg-edit:focus-visible, .pg-collapse:focus-visible { outline: 2px solid #8fd3c4; outline-offset: 2px; }
+.pg-edit:disabled { cursor: progress; color: #7aa499; }
+.pg-edit.is-compact { font-size: 11px; }
+
+/* Optimistic state: the group already shows its new content; a slow glass sheen says it is still confirming. */
+.pg-group.is-saving, .pg-context.is-saving { border-color: #a9d3c5; }
+.pg-group.is-saving::after, .pg-context.is-saving::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .55) 50%, transparent 70%); transform: translateX(-100%); animation: pg-sheen 1.6s var(--pg-ease) infinite; }
+.pg-context { position: relative; overflow: hidden; transition: border-color .45s var(--pg-ease); }
+.pg-context-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.pg-group-heading h2, .pg-group-heading p, .pg-context strong { transition: color .45s var(--pg-ease); }
+.pg-systems { animation: pg-settle .42s var(--pg-ease) both; }
+@keyframes pg-sheen { to { transform: translateX(100%); } }
+@keyframes pg-settle { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.pg-group-body { transition: grid-template-rows 380ms var(--pg-ease), opacity 260ms var(--pg-ease); }
+
+/* Save-status toast: frosted glass pill, bottom centre, eased in. */
+.pg-toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); z-index: 1600; display: flex; align-items: center; gap: 12px; max-width: min(560px, calc(100vw - 32px)); padding: 11px 12px 11px 16px; border: 1px solid rgba(255, 255, 255, .7); border-radius: 16px; color: #173f39; font-size: 13px; background: linear-gradient(140deg, rgba(255, 255, 255, .82), rgba(240, 250, 246, .6)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), 0 18px 50px rgba(6, 46, 52, .22); -webkit-backdrop-filter: blur(22px) saturate(180%); backdrop-filter: blur(22px) saturate(180%); transform: translateX(-50%); animation: pg-toast-in .36s var(--pg-ease) both; }
+.pg-toast-mark { flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; background: #16a085; box-shadow: 0 0 0 4px rgba(22, 160, 133, .16); }
+.pg-toast.is-progress .pg-toast-mark { background: none; border: 2px solid #9ccfc2; border-top-color: #0c6b69; box-shadow: none; animation: pg-spin .9s linear infinite; }
+.pg-toast.is-error { color: #6b2121; background: linear-gradient(140deg, rgba(255, 255, 255, .86), rgba(253, 238, 236, .7)); }
+.pg-toast.is-error .pg-toast-mark { background: #d1453b; box-shadow: 0 0 0 4px rgba(209, 69, 59, .16); }
+.pg-toast-message { min-width: 0; line-height: 1.45; }
+.pg-toast button { flex-shrink: 0; border: 1px solid rgba(12, 107, 105, .25); border-radius: 999px; padding: 6px 12px; background: rgba(255, 255, 255, .7); color: #0c6b69; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .25s var(--pg-ease); }
+.pg-toast.is-error button { color: #9b2c25; border-color: rgba(155, 44, 37, .25); }
+.pg-toast button:hover { background: #fff; }
+.pg-toast .pg-toast-close { border: 0; background: none; padding: 4px 8px; font-size: 18px; line-height: 1; color: inherit; opacity: .6; }
+@keyframes pg-toast-in { from { opacity: 0; transform: translate(-50%, 14px) scale(.97); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+@keyframes pg-spin { to { transform: rotate(360deg); } }
+@media (max-width: 650px) { .pg-group-top { flex-wrap: wrap; } .pg-group-tools { order: -1; width: 100%; justify-content: flex-end; } .pg-toast { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+@media (prefers-reduced-motion: reduce) { .pg-group.is-saving::after, .pg-context.is-saving::after { animation: none; transform: none; opacity: .5; } .pg-systems, .pg-toast { animation: none; } .pg-edit, .pg-collapse, .pg-group, .pg-group-body { transition: none; } }

@@ -1,4 +1,5 @@
-import { GroupedProjectCollection, GroupSystemLinks } from "../components/ProjectGroups";
+import { GroupedProjectCollection, GroupEditButton, GroupSystemLinks } from "../components/ProjectGroups";
+import { applyDefinitionOverrides, applyGroupOverrides, useGroupEditing } from "../groupEditing";
 import type { GroupableProject } from "../projectGroups";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -31,6 +32,7 @@ type LinkGroup = {
   summary: string;
   total: number;
   links: SystemLink[];
+  project_ids?: number[];
 };
 
 type LinksResponse = {
@@ -53,7 +55,9 @@ function compareProjectNumbers(left: LinkProject, right: LinkProject) {
 }
 
 export function LinksPage() {
-  const [data, setData] = useState<LinksResponse | null>(null);
+  const [loadedData, setData] = useState<LinksResponse | null>(null);
+  const { overrides } = useGroupEditing();
+  const data = useMemo(() => loadedData && overrides.size ? { ...loadedData, projects: applyGroupOverrides(loadedData.projects, overrides), groups: (applyDefinitionOverrides(loadedData.groups, overrides) ?? []).map(group => ({ ...group, total: group.project_ids?.length ?? group.total ?? 0, links: (group.links ?? []) as SystemLink[] })) } : loadedData, [loadedData, overrides]);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [projectId, setProjectId] = useState("all");
@@ -117,11 +121,11 @@ export function LinksPage() {
       </section>
 
       {standaloneGroups.length > 0 && <div className="pg-collection links-standalone-groups">{standaloneGroups.map(group => <section className="pg-group" key={group.id} aria-label={group.name}>
-        <div className="pg-group-heading"><div>
+        <div className="pg-group-top"><div className="pg-group-heading"><div>
           <span className="pg-eyebrow">Project group</span><h2>{group.name}</h2>{group.summary && <p>{group.summary}</p>}
           <GroupSystemLinks links={group.links} groupName={group.name} />
           <small>{group.total} {group.total === 1 ? "project" : "projects"} · No project-specific links</small>
-        </div></div>
+        </div></div><div className="pg-group-tools"><GroupEditButton id={group.id} name={group.name} /></div></div>
       </section>)}</div>}
 
       {visibleProjects.length ? <GroupedProjectCollection projects={visibleProjects} definitions={data.groups?.map(group => ({ id: group.id, name: group.name, summary: group.summary, links: group.links }))} gridClassName="links-project-list" renderProject={project => <section className="links-project-group" key={project.id}>

@@ -2,9 +2,10 @@ import { CategoryBox } from "../components/CategoryBox";
 import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { api, formatDate, json } from "../api";
-import { Badge, Empty, ErrorNotice } from "../components/UI";
+import { formatDate } from "../api";
+import { Badge, Empty } from "../components/UI";
 import type { Item } from "./MonthlyReview";
+import { saveGroup, ungroupGroup, type GroupDraft } from "../groupEditing";
 import "./monthly-review.css";
 
 export type ProjectGroup = { id: number; name: string; summary: string; project_ids: number[]; links?: { id?: number; title: string; url: string }[] };
@@ -57,7 +58,7 @@ export function ProjectOverviewTable({ items, groups, onOpen }: { items: Item[];
   </section>;
 }
 
-export function PortfolioDialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function PortfolioDialog({ title, children, onClose, variant, closing = false }: { title: string; children: ReactNode; onClose: () => void; variant?: "glass"; closing?: boolean }) {
   const headingId = useId();
   const dialog = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -78,7 +79,7 @@ export function PortfolioDialog({ title, children, onClose }: { title: string; c
     window.addEventListener("keydown", key, true);
     return () => { document.body.style.overflow = overflow; window.removeEventListener("keydown", key, true); queueMicrotask(() => { if (previous?.isConnected) previous.focus(); }); };
   }, []);
-  return createPortal(<div className="mr-portfolio-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="mr-portfolio-dialog" data-review-dialog ref={dialog} role="dialog" aria-modal="true" aria-labelledby={headingId}><header><div><span className="mr-kicker">DTU · PROJECT PORTFOLIO</span><h2 id={headingId}>{title}</h2></div><button ref={closeButton} className="icon-button" onClick={onClose} aria-label="Close project dialog">×</button></header><div className="mr-dialog-body">{children}</div></section></div>, document.body);
+  return createPortal(<div className={`mr-portfolio-backdrop${variant === "glass" ? " is-glass" : ""}${closing ? " is-closing" : ""}`} onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className={`mr-portfolio-dialog${variant === "glass" ? " is-glass" : ""}${closing ? " is-closing" : ""}`} data-review-dialog ref={dialog} role="dialog" aria-modal="true" aria-labelledby={headingId}><header><div><span className="mr-kicker">DTU · PROJECT PORTFOLIO</span><h2 id={headingId}>{title}</h2></div><button ref={closeButton} className="icon-button" onClick={onClose} aria-label="Close project dialog">×</button></header><div className="mr-dialog-body">{children}</div></section></div>, document.body);
 }
 
 export function ProjectPhotos({ projects }: { projects: Item[] }) {
@@ -119,40 +120,48 @@ export function ProjectDetailsDialog({ selection, portfolio, groups, onSelect, o
   </PortfolioDialog>;
 }
 
-export function ProjectGroupManager({ portfolio, groups, onSaved, onClose }: { portfolio: Item[]; groups: ProjectGroup[]; onSaved: () => Promise<void>; onClose: () => void }) {
-  const [editing, setEditing] = useState<number | null>(null);
-  const [name, setName] = useState("");
-  const [summary, setSummary] = useState("");
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [links, setLinks] = useState<GroupLinkSlot[]>(groupLinkSlots());
+export function ProjectGroupManager({ portfolio, groups, focusGroupId = null, initialDraft, onClose, closing = false }: { portfolio: Item[]; groups: ProjectGroup[]; focusGroupId?: number | null; initialDraft?: GroupDraft; onClose: () => void; closing?: boolean }) {
+  const focusGroup = focusGroupId == null ? undefined : groups.find(group => group.id === focusGroupId);
+  const start = initialDraft ?? (focusGroup ? { ...focusGroup, links: focusGroup.links ?? [] } : undefined);
+  const [focused, setFocused] = useState(Boolean(start));
+  const [editing, setEditing] = useState<number | null>(start?.id ?? null);
+  const [name, setName] = useState(start?.name ?? "");
+  const [summary, setSummary] = useState(start?.summary ?? "");
+  const [selected, setSelected] = useState<Set<number>>(new Set(start?.project_ids ?? []));
+  const [links, setLinks] = useState<GroupLinkSlot[]>(groupLinkSlots(start?.links));
   const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const reset = () => { setEditing(null); setName(""); setSummary(""); setSelected(new Set()); setLinks(groupLinkSlots()); setSearch(""); };
-  const edit = (group: ProjectGroup) => { setEditing(group.id); setName(group.name); setSummary(group.summary); setSelected(new Set(group.project_ids)); setLinks(groupLinkSlots(group.links)); setSearch(""); setError(""); setNotice(""); };
-  const save = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError(""); setNotice("");
-    try {
-      await api(`/api/staff/monthly-review/groups${editing ? `/${editing}` : ""}`, json(editing ? "PATCH" : "POST", { name: name.trim(), summary: summary.trim(), projectIds: [...selected], links }));
-      await onSaved(); reset(); setNotice("Project group saved.");
-    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  const [confirmUngroup, setConfirmUngroup] = useState<number | null>(null);
+  const reset = () => { setEditing(null); setName(""); setSummary(""); setSelected(new Set()); setLinks(groupLinkSlots()); setSearch(""); setConfirmUngroup(null); };
+  const edit = (group: ProjectGroup) => { setEditing(group.id); setName(group.name); setSummary(group.summary); setSelected(new Set(group.project_ids)); setLinks(groupLinkSlots(group.links)); setSearch(""); setConfirmUngroup(null); };
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    // Optimistic: every page shows the result at once; the toast confirms it or rolls it back.
+    void saveGroup({ ...(editing ? { id: editing } : {}), name: name.trim(), summary: summary.trim(), project_ids: [...selected], links });
+    if (focused) onClose(); else reset();
+  };
+  const ungroup = (group: ProjectGroup) => {
+    if (confirmUngroup !== group.id) { setConfirmUngroup(group.id); return; }
+    setConfirmUngroup(null);
+    void ungroupGroup(group);
+    if (editing === group.id) { if (focused) onClose(); else reset(); }
   };
   const updateLink = (index: number, patch: Partial<GroupLinkSlot>) => setLinks(current => current.map((link, at) => at === index ? { ...link, ...patch } : link));
   const moveLinkUp = (index: number) => setLinks(current => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; });
-  const ungroup = async (group: ProjectGroup) => {
-    setBusy(true); setError(""); setNotice("");
-    try { await api(`/api/staff/monthly-review/groups/${group.id}`, json("DELETE")); await onSaved(); if (editing === group.id) reset(); setNotice("Group removed, along with its group system links. All child projects, their own links, and their history are preserved."); }
-    catch (err) { setError((err as Error).message); } finally { setBusy(false); }
-  };
-  return <PortfolioDialog title="Group related projects" onClose={onClose}>
-    <p className="mr-group-help">Present related work under one name, for example Safety Digital with Hayari Hattoo and Red Tag. Projects keep their own links, progress, and history. Group system links open from the group and from every project inside it.</p>
-    <ErrorNotice message={error} />{notice && <p role="status" className="mr-group-notice">{notice}</p>}
-    {groups.length > 0 && <div className="mr-existing-groups">{groups.map(group => <article key={group.id}><div><strong>{group.name}</strong><small>{group.project_ids.length} projects</small></div><button disabled={busy} onClick={() => edit(group)} aria-label={`Edit group ${group.name}`}>Edit</button><button disabled={busy} onClick={() => void ungroup(group)} aria-label={`Ungroup ${group.name}`}>Ungroup</button></article>)}</div>}
-    <form className="form-stack" onSubmit={event => void save(event)}><h3>{editing ? "Edit group" : "Create a group"}</h3>
-      <label>Group name<input required maxLength={120} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Safety Digital" disabled={busy} /></label>
-      <label>Group summary<textarea maxLength={3000} value={summary} onChange={event => setSummary(event.target.value)} placeholder="What these projects deliver together" disabled={busy} /></label>
-      <fieldset className="mr-group-links" disabled={busy}>
+  const editingGroup = groups.find(group => group.id === editing);
+  const ungroupLabel = (group: ProjectGroup) => confirmUngroup === group.id ? "Confirm ungroup" : "Ungroup";
+  return <PortfolioDialog title={focused && editing ? `Edit ${name || "group"}` : "Group related projects"} onClose={onClose} variant="glass" closing={closing}>
+    {focused
+      ? <button type="button" className="mr-group-back" onClick={() => { setFocused(false); reset(); }}>← All groups</button>
+      : <p className="mr-group-help">Present related work under one name, for example Safety Digital with Hayari Hattoo and Red Tag. Projects keep their own links, progress, and history. Group system links open from the group and from every project inside it.</p>}
+    {!focused && groups.length > 0 && <div className="mr-existing-groups">{groups.map(group => <article key={group.id} className={editing === group.id ? "is-editing" : undefined}>
+      <div><strong>{group.name}</strong><small>{group.project_ids.length} projects{group.links?.length ? ` · ${group.links.length} system ${group.links.length === 1 ? "link" : "links"}` : ""}</small></div>
+      <button disabled={group.id < 0} onClick={() => edit(group)} aria-label={`Edit group ${group.name}`}>Edit</button>
+      <button disabled={group.id < 0} className={confirmUngroup === group.id ? "is-confirming" : undefined} onClick={() => ungroup(group)} aria-label={`${ungroupLabel(group)} ${group.name}`}>{ungroupLabel(group)}</button>
+    </article>)}</div>}
+    <form className="form-stack" onSubmit={save}>{!focused && <h3>{editing ? "Edit group" : "Create a group"}</h3>}
+      <label>Group name<input required maxLength={120} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Safety Digital" /></label>
+      <label>Group summary<textarea maxLength={3000} value={summary} onChange={event => setSummary(event.target.value)} placeholder="What these projects deliver together" /></label>
+      <fieldset className="mr-group-links">
         <legend>Group system links <small>Up to {groupLinkSlotCount}. The first link is the main "Open" button.</small></legend>
         {links.map((link, index) => <div className="mr-group-link-row" key={index}>
           <label>Title<input maxLength={80} value={link.title} onChange={event => updateLink(index, { title: event.target.value })} placeholder={index === 0 ? "e.g. CMMS" : `Link ${index + 1}`} /></label>
@@ -165,10 +174,14 @@ export function ProjectGroupManager({ portfolio, groups, onSaved, onClose }: { p
       <div className="mr-group-project-picker">{portfolio.filter(item => `${item.name} ${item.project_no} ${item.department_name}`.toLowerCase().includes(search.toLowerCase())).map(item => {
         const assignedElsewhere = item.group_id != null && item.group_id !== editing;
         const parentName = assignedElsewhere ? groups.find(group => group.id === item.group_id)?.name : null;
-        return <label key={item.id} className={assignedElsewhere ? "is-unavailable" : ""}><input type="checkbox" aria-label={`Include ${item.name}`} checked={selected.has(item.id)} disabled={busy || assignedElsewhere} onChange={event => setSelected(previous => { const next = new Set(previous); event.target.checked ? next.add(item.id) : next.delete(item.id); return next; })} /><span><strong>{item.name}</strong><small>{item.project_no} · {item.department_name}{parentName ? ` · Already in ${parentName}` : ""}</small></span></label>;
+        return <label key={item.id} className={assignedElsewhere ? "is-unavailable" : ""}><input type="checkbox" aria-label={`Include ${item.name}`} checked={selected.has(item.id)} disabled={assignedElsewhere} onChange={event => setSelected(previous => { const next = new Set(previous); event.target.checked ? next.add(item.id) : next.delete(item.id); return next; })} /><span><strong>{item.name}</strong><small>{item.project_no} · {item.department_name}{parentName ? ` · Already in ${parentName}` : ""}</small></span></label>;
       })}</div>
-      <p className="mr-table-note">A project can belong to one group. Ungrouping returns its children to the individual overview.</p>
-      <div className="mr-group-form-actions"><button className="button button-primary" disabled={busy || !name.trim() || !selected.size}>{busy ? "Saving…" : editing ? "Save group" : "Create group"}</button>{editing && <button type="button" className="button button-secondary" disabled={busy} onClick={reset}>Create another group</button>}</div>
+      <p className="mr-table-note">A project can belong to one group. Ungrouping returns its projects to the individual overview and removes the group's system links.</p>
+      <div className="mr-group-form-actions">
+        <button className="button button-primary" disabled={!name.trim() || !selected.size}>{editing ? "Save group" : "Create group"}</button>
+        {focused && editingGroup && <button type="button" className={`button button-secondary${confirmUngroup === editingGroup.id ? " is-confirming" : ""}`} onClick={() => ungroup(editingGroup)}>{ungroupLabel(editingGroup)}</button>}
+        {!focused && editing && <button type="button" className="button button-secondary" onClick={reset}>Create another group</button>}
+      </div>
     </form>
   </PortfolioDialog>;
 }

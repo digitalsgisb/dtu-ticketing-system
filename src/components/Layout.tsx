@@ -8,6 +8,7 @@ import { api, json } from "../api";
 import { ErrorNotice, Modal, PasswordInput } from "./UI";
 import { showDeviceNotification, usePwa } from "../pwa";
 import { useLiveRefresh } from "../live";
+import { GroupEditorHost } from "./ProjectGroups";
 
 type NavItem = readonly [to: string, label: string, icon: ReactNode];
 type NotificationSummary = {
@@ -180,6 +181,7 @@ export function Layout() {
         </header>
         <div className="content"><Outlet /></div>
       </main>
+      <GroupEditorHost />
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         <NavLink to="/" end><GridIcon /><span>Home</span></NavLink>
         <NavLink to="/projects" className={projectSectionActive ? "active" : ""}><ProjectIcon /><span>Projects</span></NavLink>

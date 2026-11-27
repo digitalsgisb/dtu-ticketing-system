@@ -1,13 +1,14 @@
 import { MonthlyRequestDetails } from "./MonthlyRequestDetails";
 import { RequestStageFilter, RequestStageSections, RequestOverviewTable, RequestViewSwitch } from "../components/RequestDashboard";
 import { GroupedProjectCollection } from "../components/ProjectGroups";
+import { applyDefinitionOverrides, applyGroupOverrides, openGroupEditor, useGroupEditing } from "../groupEditing";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, formatDate, json } from "../api";
 import { Badge, Empty, ErrorNotice } from "../components/UI";
 import { useLiveRefresh } from "../live";
 import "./monthly-review.css";
-import { ProjectDetailsDialog, ProjectGroupManager, ProjectOverviewTable, type PortfolioSelection, type ProjectGroup } from "./MonthlyReviewPortfolio";
+import { ProjectDetailsDialog, ProjectOverviewTable, type PortfolioSelection, type ProjectGroup } from "./MonthlyReviewPortfolio";
 
 import { reviewCategories as categories, ReviewAnalysis, ReviewMotion, ReviewPresentation, ReviewSkeleton } from "./MonthlyReviewExperience";
 export type Item = { id: number; created_project_id?: number | null; project_status?: string | null; project_progress?: number | null; photos?: { id: number; created_at: string; body?: string }[]; group_id?: number | null; links?: { id: number; title: string; url: string }[]; project_no?: string; request_no?: string; name?: string; title?: string; description?: string;
@@ -24,7 +25,10 @@ export function MonthlyReviewPage() {
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(params.get("month") || "") ? params.get("month")! : currentMonth();
   const tab = ["portfolio", "progress", "current", "requests", "plans"].includes(params.get("view") || "") ? params.get("view")! : "progress";
   const category = ["all", ...categories].includes(params.get("category") || "") ? params.get("category")! : "all";
-  const [data, setData] = useState<Report | null>(null);
+  const [loadedData, setData] = useState<Report | null>(null);
+  const { overrides } = useGroupEditing();
+  // Pending group edits show here immediately, before the server confirms them.
+  const data = loadedData && overrides.size ? { ...loadedData, portfolio: applyGroupOverrides(loadedData.portfolio ?? [], overrides), projects: applyGroupOverrides(loadedData.projects ?? [], overrides), currentProjects: applyGroupOverrides(loadedData.currentProjects ?? [], overrides), plans: applyGroupOverrides(loadedData.plans ?? [], overrides), groups: applyDefinitionOverrides(loadedData.groups, overrides) ?? [] } : loadedData;
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [requestStage, setRequestStage] = useState("");
@@ -32,7 +36,6 @@ export function MonthlyReviewPage() {
   const [scope, setScope] = useState("activity");
   const [presenting, setPresenting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showGroups, setShowGroups] = useState(false);
   const [selection, setSelection] = useState<PortfolioSelection | { kind: "request"; id: number } | null>(null);
   const [layout, setLayout] = useState("cards");
   const generation = useRef(0);
@@ -78,9 +81,9 @@ export function MonthlyReviewPage() {
   const completedProjects = overallProjects.filter(project => project.progress === 100).length;
   const overallRequests = data?.requestPortfolio ?? data?.requests ?? [];
 
-  return <div className={`monthly-review${presenting ? " is-presenting" : ""}`}><div inert={presenting || showGroups || selection !== null}>
+  return <div className={`monthly-review${presenting ? " is-presenting" : ""}`}><div inert={presenting || selection !== null}>
     <header className="mr-heading"><div><span className="mr-kicker">DTU / MANAGEMENT MEETING</span><h1>Monthly Review<span>.</span></h1><p>The work behind the progress. The plan for what’s next.</p></div>
-      <div className="mr-actions"><button className="button button-secondary" disabled={!ready} onClick={() => setShowGroups(true)}>Group projects</button><button ref={presentButton} className="button button-primary" disabled={!ready} onClick={() => setPresenting(true)}>Present review ↗</button></div>
+      <div className="mr-actions"><button className="button button-secondary" disabled={!ready} onClick={() => openGroupEditor(null)}>Group projects</button><button ref={presentButton} className="button button-primary" disabled={!ready} onClick={() => setPresenting(true)}>Present review ↗</button></div>
     </header>
     <ErrorNotice message={error} />
     <section className="mr-hero"><div><span className="mr-kicker">THE MONTH IN MOTION</span><h2>{label}</h2><p>A clear view of delivery, new demand, and the road ahead.</p><label className="mr-month">Reporting month <input aria-label="Reporting month" type="month" min="2000-01" max="2099-12" value={month} onChange={e => e.target.value && change("month", e.target.value)} /></label></div>
@@ -102,7 +105,6 @@ export function MonthlyReviewPage() {
     {presenting && ready && <ReviewPresentation groups={data!.groups ?? []} blocked={selection !== null} sections={{ portfolio: data!.portfolio ?? [], progress: monthProjects, current: data!.currentProjects ?? [], plans: data!.plans, requests: data!.requestPortfolio ?? data!.requests }} initialTab={tab} label={label} initialCategory={category} onClose={() => setPresenting(false)} renderRequestTable={requests => <RequestOverviewTable items={requests} onOpen={id => setSelection({ kind: "request", id })} onProject={id => setSelection({ kind: "project", id })} />} renderTable={(projects) => <ProjectOverviewTable items={projects} groups={data!.groups ?? []} onOpen={setSelection} />} renderItem={(item, number, section) => <ReviewCard item={item} tab={section} number={number} onProject={id => setSelection({ kind: "project", id })} onOpen={() => setSelection({ kind: section === "requests" ? "request" : "project", id: item.id })} groupName={item.group_id ? groupNames.get(item.group_id) : undefined} />} />}
     {selection?.kind === "request" && <MonthlyRequestDetails id={selection.id} portfolio={data?.portfolio ?? []} onProject={id => setSelection({ kind: "project", id })} onClose={() => setSelection(null)} />}
     {selection && selection.kind !== "request" && <ProjectDetailsDialog selection={selection} portfolio={data?.portfolio ?? []} groups={data?.groups ?? []} onSelect={setSelection} onClose={() => setSelection(null)} />}
-    {showGroups && <ProjectGroupManager portfolio={data?.portfolio ?? []} groups={data?.groups ?? []} onSaved={load} onClose={() => setShowGroups(false)} />}
   </div>;
 }
 

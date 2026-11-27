@@ -4,6 +4,12 @@ type Listener = () => void;
 type Channel = { source: EventSource; listeners: Set<Listener> };
 
 const channels = new Map<string, Channel>();
+const mountedRefreshers = new Set<() => Promise<unknown>>();
+
+/** Run every mounted page refresh now and resolve once they have all settled. */
+export function refreshAllLive() {
+  return Promise.allSettled([...mountedRefreshers].map(refresh => refresh())).then(() => undefined);
+}
 
 function subscribe(endpoint: string, listener: Listener) {
   let channel = channels.get(endpoint);
@@ -49,6 +55,8 @@ export function useLiveRefresh(refresh: () => unknown, endpoint = "/api/staff/li
         }
       });
     };
+    const direct = () => Promise.resolve(refreshRef.current()).catch(() => undefined);
+    mountedRefreshers.add(direct);
     const onVisibility = () => { if (document.visibilityState === "visible") run(); };
     const unsubscribe = typeof EventSource === "undefined" ? () => undefined : subscribe(endpoint, run);
     window.addEventListener("focus", run);
@@ -58,6 +66,7 @@ export function useLiveRefresh(refresh: () => unknown, endpoint = "/api/staff/li
     return () => {
       active = false;
       queuedRef.current = false;
+      mountedRefreshers.delete(direct);
       unsubscribe();
       window.removeEventListener("focus", run);
       window.removeEventListener("online", run);

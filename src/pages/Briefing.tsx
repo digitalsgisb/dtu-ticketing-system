@@ -108,7 +108,7 @@ export function ProgressBriefingPage() {
   if (!data) return <Loading />;
 
   return <>
-    <PageHeader eyebrow="Executive reporting" title="Progress Briefing" description="A presentation-ready view of every DTU project, its latest progress, evidence, and delivery position." actions={<ProjectGroupControls onChanged={load} />} />
+    <PageHeader eyebrow="Executive reporting" title="Progress Briefing" description="A presentation-ready view of every DTU project, its latest progress, evidence, and delivery position." actions={<ProjectGroupControls />} />
     <section className="briefing-hero">
       <div><span>Portfolio pulse</span><h2>{data.stats.active} projects actively moving</h2><p>Select any project to present its update history, progress photos, and current work.</p></div>
       <div className="briefing-storage"><small>Progress photo storage</small><strong>{formatBytes(data.stats.imageBytes)}</strong><span>{data.stats.imageCount} progress images · {formatBytes(data.stats.freeBytes)} free locally</span></div>

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MonthlyReviewPage, type Item } from "../src/pages/MonthlyReview";
 import { portfolioRows, type ProjectGroup } from "../src/pages/MonthlyReviewPortfolio";
 import { api } from "../src/api";
+import { GroupEditorHost } from "../src/components/ProjectGroups";
+import { resetGroupEditing } from "../src/groupEditing";
 
 vi.mock("../src/auth", () => ({ useAuth: () => ({ user: { id: 1, role: "admin" } }) }));
 vi.mock("../src/api", async original => ({ ...await original<typeof import("../src/api")>(), api: vi.fn() }));
@@ -20,12 +22,15 @@ let host: HTMLDivElement;
 beforeEach(() => {
   vi.useFakeTimers(); vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
-  vi.mocked(api).mockReset().mockResolvedValue({ month: "2026-10", portfolio: structuredClone(children), groups: structuredClone(groups), projects: [], currentProjects: children.slice(0, 2), plans: [], requests: [] });
+  const report = { month: "2026-10", portfolio: structuredClone(children), groups: structuredClone(groups), projects: [], currentProjects: children.slice(0, 2), plans: [], requests: [] };
+  // The shared group editor loads the staff project list, which carries group names and links.
+  const staffProjects = children.map(child => ({ ...child, group_name: child.group_id ? "Safety Digital" : null, group_summary: child.group_id ? "Digital tools for safer work" : null, group_links: [] }));
+  vi.mocked(api).mockReset().mockImplementation(async url => url === "/api/staff/projects" ? structuredClone(staffProjects) : url.includes("/groups") ? { id: 10 } : structuredClone(report));
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => { root.unmount(); resetGroupEditing(); }); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 async function settle() { await act(async () => vi.advanceTimersByTime(170)); }
-async function render() { await act(async () => root.render(<MemoryRouter initialEntries={["/monthly-review?view=portfolio&month=2026-10"]}><MonthlyReviewPage /></MemoryRouter>)); await settle(); }
+async function render() { await act(async () => root.render(<MemoryRouter initialEntries={["/monthly-review?view=portfolio&month=2026-10"]}><MonthlyReviewPage /><GroupEditorHost /></MemoryRouter>)); await settle(); }
 async function click(label: string, scope: ParentNode = document) {
   const button = [...scope.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label || item.getAttribute("aria-label") === label);
   expect(button).toBeTruthy(); await act(async () => { button!.focus(); button!.click(); }); await settle();
@@ -82,7 +87,7 @@ it("edits group membership without changing any project details", async () => {
   await click("Save group", dialog);
   const call = vi.mocked(api).mock.calls.find(([url, options]) => url.endsWith('/groups/10') && options?.method === 'PATCH')!;
   expect(JSON.parse(String(call[1]?.body))).toEqual({ name: "Safety Digital", summary: "Digital tools for safer work", projectIds: [1, 3], links: Array.from({ length: 4 }, () => ({ title: "", url: "" })) });
-  expect(document.querySelector('[data-review-dialog]')?.textContent).toContain("Project group saved.");
+  expect(document.querySelector(".pg-toast")?.textContent).toContain("Safety Digital saved");
   expect(children[0].progress).toBe(40);
 });
 

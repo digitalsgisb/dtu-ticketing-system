@@ -4,7 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { groupProjectItems, flattenProjectGroups } from "../src/projectGroups";
-import { ProjectGroupSummary } from "../src/components/ProjectGroups";
+import { GroupedProjectCollection, ProjectGroupSummary } from "../src/components/ProjectGroups";
+import { resetGroupEditing, saveGroup, ungroupGroup } from "../src/groupEditing";
 import { DashboardProjectSearch, searchDashboardProjects } from "../src/components/DashboardProjectSearch";
 import { ReviewPresentation } from "../src/pages/MonthlyReviewExperience";
 import type { Item } from "../src/pages/MonthlyReview";
@@ -24,7 +25,7 @@ beforeEach(() => {
   sessionStorage.clear(); vi.mocked(api).mockReset().mockImplementation(async url => url.endsWith("/users") ? [] : projects);
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => { root.unmount(); resetGroupEditing(); }); host.remove(); vi.unstubAllGlobals(); });
 it("groups only visible members and preserves unknown progress", () => {
   expect(groupProjectItems(projects)[0]).toMatchObject({ progress: 60, status: "mixed", group: { total: 2 } });
   expect(groupProjectItems([projects[0]])[0]).toMatchObject({ progress: 40, status: "in_progress" });
@@ -43,6 +44,34 @@ it("shows a group's first system link as its main Open action and the rest as ch
   expect([...host.querySelectorAll(".pg-system-chip")].map(chip => chip.textContent)).toEqual(["Admin"]);
   await act(async () => root.render(<MemoryRouter><ProjectGroupSummary entry={groupProjectItems(projects.slice(0, 2))[0]} /></MemoryRouter>));
   expect(host.querySelector(".pg-systems")).toBeNull();
+});
+it("shows a group edit immediately, keeps it while confirming, and rolls it back when the server refuses", async () => {
+  let reject!: (error: Error) => void;
+  vi.mocked(api).mockImplementation(url => url.includes("/groups/") ? new Promise((_, fail) => { reject = fail; }) : Promise.resolve(projects));
+  const view = () => <MemoryRouter><GroupedProjectCollection projects={projects} gridClassName="grid" renderProject={project => <p>{project.name}</p>} /></MemoryRouter>;
+  await act(async () => root.render(view()));
+  expect(host.querySelector(".pg-group h2")?.textContent).toBe("Safety Digital");
+  let pending!: Promise<boolean>;
+  await act(async () => { pending = saveGroup({ id: 10, name: "Safety Platform", summary: "", project_ids: [1, 2, 3], links: [{ title: "Safety", url: "https://safety.example.com/" }] }); });
+  expect(host.querySelector(".pg-group h2")?.textContent).toBe("Safety Platform");
+  expect(host.querySelector(".pg-group")?.classList.contains("is-saving")).toBe(true);
+  expect(host.querySelector(".pg-group")?.textContent).toContain("Energy");
+  expect(host.querySelector(".pg-system-primary")?.textContent).toContain("Open Safety");
+  expect(host.querySelector(".pg-individuals")).toBeNull();
+  await act(async () => { reject(new Error("Server unavailable")); await pending; });
+  expect(host.querySelector(".pg-group h2")?.textContent).toBe("Safety Digital");
+  expect(host.querySelector(".pg-group")?.classList.contains("is-saving")).toBe(false);
+  expect(host.querySelector(".pg-individuals")?.textContent).toContain("Energy");
+});
+it("removes an ungrouped group from view immediately and keeps it gone once confirmed", async () => {
+  let resolve!: () => void;
+  vi.mocked(api).mockImplementation(url => url.includes("/groups/") ? new Promise(done => { resolve = () => done({ ok: true }); }) : Promise.resolve(projects));
+  await act(async () => root.render(<MemoryRouter><GroupedProjectCollection projects={projects} gridClassName="grid" renderProject={project => <p>{project.name}</p>} /></MemoryRouter>));
+  let pending!: Promise<boolean>;
+  await act(async () => { pending = ungroupGroup({ id: 10, name: "Safety Digital" }); });
+  expect(host.querySelector(".pg-group")).toBeNull();
+  await act(async () => { resolve(); await pending; });
+  expect(vi.mocked(api).mock.calls.some(([url, options]) => url === "/api/staff/monthly-review/groups/10" && options?.method === "DELETE")).toBe(true);
 });
 it("searches project identifiers, departments, owners, and parent names without case sensitivity", () => {
   expect(searchDashboardProjects(projects, " safety DIGITAL ").map(p => p.id)).toEqual([1, 2]);
