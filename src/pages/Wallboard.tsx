@@ -329,7 +329,7 @@ function WallboardFullView({ view, data, t, newTicketIds, onBack, onSelectWork }
       </div>
       {projects
         ? data.projects.length
-          ? data.projects.some((project: any) => project.group_name) ? <GroupedProjectCollection projects={data.projects as any[]} controls={false} gridClassName="wallboard-all-projects" renderProject={(project: any) => <WallProject project={project} expanded />} /> : <div className="wallboard-group-list">{projectGroups.map(group => {
+          ? data.projects.some((project: any) => project.group_name) ? <GroupedProjectCollection projects={data.projects as any[]} controls={false} startExpanded gridClassName="wallboard-all-projects" renderProject={(project: any) => <WallProject project={project} expanded />} /> : <div className="wallboard-group-list">{projectGroups.map(group => {
             const items = data.projects.filter((project: any) => group.statuses.includes(project.status));
             return items.length ? <section className="wallboard-group" key={group.title}><h3>{group.title}<span>{items.length}</span></h3><div className="wallboard-all-projects">{items.map((project: any) => <WallProject key={project.id} project={project} expanded />)}</div></section> : null;
           })}</div>

@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal, flushSync } from "react-dom";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -56,9 +56,52 @@ export function ProjectGroupSummary<T>({ entry }: { entry: ProjectEntry<T> }) {
   return <div className="pg-group-heading"><div><span className="pg-eyebrow">Project group</span><h2>{entry.group?.name}</h2>{entry.group?.summary && <p>{entry.group.summary}</p>}<GroupSystemLinks links={entry.group?.links} groupName={entry.group?.name ?? ""} /><small>{entry.projects.length} of {entry.group?.total ?? entry.projects.length} projects shown · Average of recorded progress</small></div><div className="pg-group-position"><strong>{entry.progress == null ? "—" : `${entry.progress}%`}</strong>{entry.status && <Badge value={entry.status} />}</div></div>;
 }
 
-export function GroupedProjectCollection<T extends GroupableProject>({ projects: loaded, definitions: loadedDefinitions, renderProject, gridClassName, grouped: controlled, onGroupingChange, controls = true }: { projects: T[]; definitions?: GroupDefinition[]; renderProject: (project: T) => ReactNode; gridClassName: string; grouped?: boolean; onGroupingChange?: (grouped: boolean) => void; controls?: boolean }) {
+const expandedStorageKey = "dtu-expanded-project-groups";
+function readExpanded() {
+  try { return new Set<number>(JSON.parse(localStorage.getItem(expandedStorageKey) ?? "[]")); } catch { return new Set<number>(); }
+}
+function storeExpanded(ids: Set<number>) {
+  try { localStorage.setItem(expandedStorageKey, JSON.stringify([...ids])); } catch { /* per-viewer convenience only */ }
+}
+const morphEase = "pg-morph";
+/** Morph between card and full-width group with the browser's view transitions (instant where unsupported or reduced motion). */
+function morph(update: () => void) {
+  const doc = document as Document & { startViewTransition?: (callback: () => void) => { finished: Promise<void> } };
+  const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)")?.matches;
+  if (!doc.startViewTransition || reduced) { update(); return; }
+  document.documentElement.classList.add(morphEase);
+  doc.startViewTransition(() => flushSync(update)).finished.finally(() => document.documentElement.classList.remove(morphEase));
+}
+const transitionName = (kind: string, id: number) => ({ viewTransitionName: `pg-${kind}-${id < 0 ? `n${-id}` : id}` }) as CSSProperties;
+
+/** A collapsed group, sized like a project card: a fanned stack of member photos, the group's position, and its main system. */
+function GroupCard<T extends GroupableProject>({ entry, imageFor, saving, onExpand }: { entry: ProjectEntry<T>; imageFor?: (project: T) => string | undefined; saving: boolean; onExpand: () => void }) {
+  const group = entry.group!;
+  const photos = entry.projects.flatMap(project => { const src = imageFor?.(project); return src ? [src] : []; }).slice(0, 3);
+  const shown = entry.projects.length;
+  return <article className={`pg-card${saving ? " is-saving" : ""}`} style={transitionName("group", group.id)} aria-busy={saving}>
+    <button type="button" className={`pg-card-visual${photos.length ? " has-photos" : ""}`} onClick={onExpand} aria-label={`Show ${shown} ${shown === 1 ? "project" : "projects"} in ${group.name}`}>
+      {photos.length ? <span className="pg-card-stack" data-count={photos.length}>{photos.map((src, index) => <img key={src} src={src} alt="" style={{ "--i": index } as CSSProperties} />)}</span> : null}
+      <span className="pg-card-count"><strong>{group.total}</strong>{group.total === 1 ? "project" : "projects"}</span>
+    </button>
+    <div className="pg-card-body">
+      <div className="pg-card-meta"><span className="pg-eyebrow">Project group</span>{entry.status && <Badge value={entry.status} />}</div>
+      <h3>{group.name}</h3>
+      {group.summary && <p className="pg-card-summary">{group.summary}</p>}
+      <div className="pg-card-progress"><span>Average progress</span><strong>{entry.progress == null ? "—" : `${entry.progress}%`}</strong></div>
+      <div className="pg-card-bar" aria-hidden="true"><i style={{ width: `${entry.progress ?? 0}%` }} /></div>
+      <ul className="pg-card-members" aria-label={`Projects in ${group.name}`}>{entry.projects.slice(0, 3).map(project => <li key={project.id}>{project.name}</li>)}{shown > 3 && <li className="is-more">+{shown - 3} more</li>}</ul>
+    </div>
+    <div className="pg-card-actions">
+      <div className="pg-card-row"><button type="button" className="pg-card-expand" onClick={onExpand} aria-label={`Expand ${group.name}`}>Show {shown === 1 ? "project" : `${shown} projects`} <span aria-hidden="true">+</span></button><GroupEditButton id={group.id} name={group.name} /></div>
+      <GroupSystemLinks links={group.links} groupName={group.name} />
+    </div>
+  </article>;
+}
+
+export function GroupedProjectCollection<T extends GroupableProject>({ projects: loaded, definitions: loadedDefinitions, renderProject, gridClassName, grouped: controlled, onGroupingChange, controls = true, imageFor, startExpanded = false }: { projects: T[]; definitions?: GroupDefinition[]; renderProject: (project: T) => ReactNode; gridClassName: string; grouped?: boolean; onGroupingChange?: (grouped: boolean) => void; controls?: boolean; imageFor?: (project: T) => string | undefined; startExpanded?: boolean }) {
   const [localGrouped, setLocalGrouped] = useState(true);
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [expanded, setExpanded] = useState<Set<number>>(() => startExpanded ? new Set() : readExpanded());
   const { overrides } = useGroupEditing();
   const projects = applyGroupOverrides(loaded, overrides);
   const definitions = applyDefinitionOverrides(loadedDefinitions, overrides);
@@ -67,18 +110,26 @@ export function GroupedProjectCollection<T extends GroupableProject>({ projects:
   const hasGroups = groupProjectItems(projects, definitions).some(entry => entry.group);
   // Keep the original single grid when no groups are configured.
   if (!hasGroups) return <div className={gridClassName}>{projects.map(project => <div className="pg-project-slot" key={project.id}>{renderProject(project)}</div>)}</div>;
+  const groupEntries = entries.filter(entry => entry.group);
   const singles = entries.filter(entry => !entry.group).flatMap(entry => entry.projects);
-  const toggle = (id: number) => setCollapsed(previous => { const next = new Set(previous); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  // Views filtered to one group, and the wallboard, always show their projects.
+  const isOpen = (id: number) => startExpanded || expanded.has(id);
+  const toggle = (id: number) => morph(() => setExpanded(previous => { const next = new Set(previous); next.has(id) ? next.delete(id) : next.add(id); storeExpanded(next); return next; }));
+  const slot = (project: T) => <div className="pg-project-slot" key={project.id} style={transitionName("project", project.id)}>{renderProject(project)}</div>;
   return <div className="pg-collection">
     {controls && <div className="pg-view-controls"><span>{projects.length} projects · {entries.length} {grouped ? "entries" : "individual projects"}</span><label>View<select aria-label="Project grouping" value={grouped ? "grouped" : "individual"} onChange={event => { const next = event.target.value === "grouped"; setLocalGrouped(next); onGroupingChange?.(next); }}><option value="grouped">Group related projects</option><option value="individual">Individual projects</option></select></label></div>}
-    {grouped ? <>{entries.filter(entry => entry.group).map(entry => {
-      const group = entry.group!;
-      const saving = group.id < 0 || groupSaveState(group.id, overrides) !== undefined;
-      return <section className={`pg-group${saving ? " is-saving" : ""}`} key={entry.key} aria-busy={saving}>
-        <div className="pg-group-top"><ProjectGroupSummary entry={entry} /><div className="pg-group-tools"><GroupEditButton id={group.id} name={group.name} /><button className="pg-collapse" aria-expanded={!collapsed.has(group.id)} aria-label={`${collapsed.has(group.id) ? "Expand" : "Collapse"} ${group.name}`} onClick={() => toggle(group.id)}>{collapsed.has(group.id) ? "+" : "−"}</button></div></div>
-        <div className={`pg-group-body${collapsed.has(group.id) ? " is-collapsed" : ""}`} inert={collapsed.has(group.id)}><div><div className={gridClassName}>{entry.projects.map(project => <div className="pg-project-slot" key={project.id}>{renderProject(project)}</div>)}</div></div></div>
-      </section>;
-    })}{singles.length > 0 && <section className="pg-individuals"><div className="pg-individual-heading">Individual projects <small>{singles.length}</small></div><div className={gridClassName}>{singles.map(project => <div className="pg-project-slot" key={project.id}>{renderProject(project)}</div>)}</div></section>}</> : <div className={gridClassName}>{projects.map(project => <div className="pg-project-slot" key={project.id}>{renderProject(project)}</div>)}</div>}
+    {grouped ? <>
+      <div className={`${gridClassName} pg-group-grid`}>{groupEntries.map(entry => {
+        const group = entry.group!;
+        const saving = group.id < 0 || groupSaveState(group.id, overrides) !== undefined;
+        if (!isOpen(group.id)) return <div className="pg-project-slot" key={entry.key}><GroupCard entry={entry} imageFor={imageFor} saving={saving} onExpand={() => toggle(group.id)} /></div>;
+        return <section className={`pg-group${saving ? " is-saving" : ""}`} key={entry.key} style={transitionName("group", group.id)} aria-busy={saving}>
+          <div className="pg-group-top"><ProjectGroupSummary entry={entry} /><div className="pg-group-tools"><GroupEditButton id={group.id} name={group.name} />{!startExpanded && <button className="pg-collapse" aria-expanded="true" aria-label={`Collapse ${group.name}`} onClick={() => toggle(group.id)}>−</button>}</div></div>
+          <div className="pg-group-body"><div className={gridClassName}>{entry.projects.map(slot)}</div></div>
+        </section>;
+      })}</div>
+      {singles.length > 0 && <section className="pg-individuals"><div className="pg-individual-heading">Individual projects <small>{singles.length}</small></div><div className={gridClassName}>{singles.map(slot)}</div></section>}
+    </> : <div className={gridClassName}>{projects.map(slot)}</div>}
   </div>;
 }
 

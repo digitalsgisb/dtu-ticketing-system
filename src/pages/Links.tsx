@@ -128,7 +128,7 @@ export function LinksPage() {
         </div></div><div className="pg-group-tools"><GroupEditButton id={group.id} name={group.name} /></div></div>
       </section>)}</div>}
 
-      {visibleProjects.length ? <GroupedProjectCollection projects={visibleProjects} definitions={data.groups?.map(group => ({ id: group.id, name: group.name, summary: group.summary, links: group.links }))} gridClassName="links-project-list" renderProject={project => <section className="links-project-group" key={project.id}>
+      {visibleProjects.length ? <GroupedProjectCollection projects={visibleProjects} definitions={data.groups?.map(group => ({ id: group.id, name: group.name, summary: group.summary, links: group.links }))} gridClassName="links-project-list" imageFor={project => project.latest_image_id ? `/api/staff/projects/progress-images/${project.latest_image_id}` : undefined} renderProject={project => <section className="links-project-group" key={project.id}>
           <header className="links-project-summary">
             <Link className={`links-project-image${project.latest_image_id ? " has-image" : ""}`} to={`/projects/${project.id}`} aria-label={`Open ${project.name}`}>
               {project.latest_image_id

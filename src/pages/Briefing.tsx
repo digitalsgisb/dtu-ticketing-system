@@ -141,7 +141,7 @@ export function ProgressBriefingPage() {
       <div className="briefing-result-summary"><strong>{projects.length}</strong> of {data.stats.total} projects shown</div>
       <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search projects or updates…" />
     </div>
-    {projects.length ? <GroupedProjectCollection projects={projects as any[]} grouped={grouped} onGroupingChange={setGrouped} gridClassName="briefing-project-grid" renderProject={(project: any) => <BriefingProjectCard project={project} presentationOrder={flattenProjectGroups(projects as any[], grouped)} />} /> : <Empty title="No projects match this view" />}
+    {projects.length ? <GroupedProjectCollection projects={projects as any[]} grouped={grouped} onGroupingChange={setGrouped} gridClassName="briefing-project-grid" imageFor={(project: any) => project.latest_image_id ? `/api/staff/briefing/images/${project.latest_image_id}` : undefined} renderProject={(project: any) => <BriefingProjectCard project={project} presentationOrder={flattenProjectGroups(projects as any[], grouped)} />} /> : <Empty title="No projects match this view" />}
   </>;
 }
 

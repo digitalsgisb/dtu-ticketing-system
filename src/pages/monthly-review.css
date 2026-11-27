@@ -232,12 +232,13 @@
 .mr-group-project-picker .is-unavailable { opacity: .5; cursor: default; }
 .mr-group-form-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .mr-group-links { display: grid; gap: 10px; margin: 0; padding: 16px; border: 1px solid #dae8df; border-radius: 10px; background: #f5faf7; min-width: 0; }
-.mr-group-links legend { padding: 0 6px; color: #335e50; font-size: 12px; font-weight: 700; }
+/* Floated legend sits inside the box as an ordinary heading instead of straddling the border. */
+.mr-group-links legend { float: left; width: 100%; margin: 0 0 2px; padding: 0; color: #335e50; font-size: 12px; font-weight: 700; }
 .mr-group-links legend small { margin-left: 6px; color: #85988b; font-weight: 400; }
 .mr-group-link-row { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.4fr) 34px; gap: 10px; align-items: end; }
-.mr-group-link-row:first-of-type label:first-child { color: #0c6b69; }
 .mr-group-link-row + .mr-group-link-row { padding-top: 10px; border-top: 1px dashed #d5e4dc; }
-.mr-group-link-move { height: 38px; border: 1px solid #c9ddd2; border-radius: 7px; background: white; color: #287762; cursor: pointer; font-size: 14px; }
+.mr-group-link-row input { height: 42px; }
+.mr-group-link-move { height: 42px; box-sizing: border-box; border: 1px solid #c9ddd2; border-radius: 7px; background: white; color: #287762; cursor: pointer; font-size: 14px; }
 .mr-group-link-move:disabled { opacity: .3; cursor: default; }
 @media (max-width: 650px) { .mr-group-link-row { grid-template-columns: minmax(0, 1fr) 34px; } .mr-group-link-row label:nth-child(2) { grid-column: 1; } .mr-group-link-row label:first-child { grid-column: 1 / -1; } }
 @keyframes mr-dialog-fade { from { opacity: 0; } to { opacity: 1; } }

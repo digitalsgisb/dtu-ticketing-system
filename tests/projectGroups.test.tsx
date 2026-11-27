@@ -22,7 +22,7 @@ const projects = [
 let root: Root, host: HTMLDivElement;
 beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  sessionStorage.clear(); vi.mocked(api).mockReset().mockImplementation(async url => url.endsWith("/users") ? [] : projects);
+  sessionStorage.clear(); localStorage.clear(); vi.mocked(api).mockReset().mockImplementation(async url => url.endsWith("/users") ? [] : projects);
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => { root.unmount(); resetGroupEditing(); }); host.remove(); vi.unstubAllGlobals(); });
@@ -50,17 +50,17 @@ it("shows a group edit immediately, keeps it while confirming, and rolls it back
   vi.mocked(api).mockImplementation(url => url.includes("/groups/") ? new Promise((_, fail) => { reject = fail; }) : Promise.resolve(projects));
   const view = () => <MemoryRouter><GroupedProjectCollection projects={projects} gridClassName="grid" renderProject={project => <p>{project.name}</p>} /></MemoryRouter>;
   await act(async () => root.render(view()));
-  expect(host.querySelector(".pg-group h2")?.textContent).toBe("Safety Digital");
+  expect(host.querySelector(".pg-card h3")?.textContent).toBe("Safety Digital");
   let pending!: Promise<boolean>;
   await act(async () => { pending = saveGroup({ id: 10, name: "Safety Platform", summary: "", project_ids: [1, 2, 3], links: [{ title: "Safety", url: "https://safety.example.com/" }] }); });
-  expect(host.querySelector(".pg-group h2")?.textContent).toBe("Safety Platform");
-  expect(host.querySelector(".pg-group")?.classList.contains("is-saving")).toBe(true);
-  expect(host.querySelector(".pg-group")?.textContent).toContain("Energy");
+  expect(host.querySelector(".pg-card h3")?.textContent).toBe("Safety Platform");
+  expect(host.querySelector(".pg-card")?.classList.contains("is-saving")).toBe(true);
+  expect(host.querySelector(".pg-card")?.textContent).toContain("Energy");
   expect(host.querySelector(".pg-system-primary")?.textContent).toContain("Open Safety");
   expect(host.querySelector(".pg-individuals")).toBeNull();
   await act(async () => { reject(new Error("Server unavailable")); await pending; });
-  expect(host.querySelector(".pg-group h2")?.textContent).toBe("Safety Digital");
-  expect(host.querySelector(".pg-group")?.classList.contains("is-saving")).toBe(false);
+  expect(host.querySelector(".pg-card h3")?.textContent).toBe("Safety Digital");
+  expect(host.querySelector(".pg-card")?.classList.contains("is-saving")).toBe(false);
   expect(host.querySelector(".pg-individuals")?.textContent).toContain("Energy");
 });
 it("removes an ungrouped group from view immediately and keeps it gone once confirmed", async () => {
@@ -69,7 +69,7 @@ it("removes an ungrouped group from view immediately and keeps it gone once conf
   await act(async () => root.render(<MemoryRouter><GroupedProjectCollection projects={projects} gridClassName="grid" renderProject={project => <p>{project.name}</p>} /></MemoryRouter>));
   let pending!: Promise<boolean>;
   await act(async () => { pending = ungroupGroup({ id: 10, name: "Safety Digital" }); });
-  expect(host.querySelector(".pg-group")).toBeNull();
+  expect(host.querySelector(".pg-card")).toBeNull();
   await act(async () => { resolve(); await pending; });
   expect(vi.mocked(api).mock.calls.some(([url, options]) => url === "/api/staff/monthly-review/groups/10" && options?.method === "DELETE")).toBe(true);
 });
@@ -87,17 +87,26 @@ it("shows immediate dashboard results and opens a project directly", async () =>
   await act(async () => (host.querySelector('.dps-results a') as HTMLAnchorElement).click());
   expect(host.textContent).toContain("Project details opened");
 });
-it("keeps My Projects scoped before grouping and supports collapsing", async () => {
+it("keeps My Projects scoped before grouping and shows a collapsed group as a card that expands and remembers it", async () => {
   await act(async () => root.render(<MemoryRouter><ProjectsPage myProjectsOnly /></MemoryRouter>));
-  expect(host.querySelectorAll(".project-card")).toHaveLength(2);
-  expect(host.querySelector(".pg-group")?.textContent).toContain("40%");
-  expect(host.querySelector(".pg-group")?.textContent).toContain("1 of 2 projects shown");
+  const card = host.querySelector(".pg-card")!;
+  expect(card.querySelector("h3")?.textContent).toBe("Safety Digital");
+  expect(card.textContent).toContain("40%");
+  expect(card.textContent).toContain("Hayari Hattoo");
+  expect(host.querySelectorAll(".project-card")).toHaveLength(1);
   expect(host.textContent).not.toContain("Red Tag");
+  await act(async () => (host.querySelector('[aria-label="Expand Safety Digital"]') as HTMLButtonElement).click());
+  expect(host.querySelector(".pg-card")).toBeNull();
+  expect(host.querySelector(".pg-group")?.textContent).toContain("1 of 2 projects shown");
+  expect(host.querySelectorAll(".project-card")).toHaveLength(2);
+  expect(JSON.parse(localStorage.getItem("dtu-expanded-project-groups")!)).toEqual([10]);
   await act(async () => (host.querySelector('[aria-label="Collapse Safety Digital"]') as HTMLButtonElement).click());
-  expect(host.querySelector('.pg-group-body')?.hasAttribute("inert")).toBe(true);
+  expect(host.querySelector(".pg-card")).not.toBeNull();
+  expect(host.querySelectorAll(".project-card")).toHaveLength(1);
 });
 
 it("shows Quick update for members on projects owned by other people", async () => {
+  localStorage.setItem("dtu-expanded-project-groups", "[10]");
   await act(async () => root.render(<MemoryRouter><ProjectsPage /></MemoryRouter>));
   expect(host.querySelectorAll(".project-card-quick-update")).toHaveLength(3);
   expect(host.querySelector('a.project-card-quick-update[href="/projects/2?update=1"]')).not.toBeNull();

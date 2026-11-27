@@ -143,7 +143,7 @@ export function ProjectsPage({ myProjectsOnly = false }: { myProjectsOnly?: bool
         <div className="project-result-summary" aria-live="polite"><strong>{filtered.length}</strong>{filtered.length !== projects.length ? ` of ${projects.length}` : ""} projects</div>
       </div>
       {groupFilter && <Link className="text-link" to="/projects">← All project groups</Link>}
-      {filtered.length ? <GroupedProjectCollection projects={filtered} grouped={grouped} onGroupingChange={setGrouped} gridClassName="project-grid" renderProject={project => {
+      {filtered.length ? <GroupedProjectCollection projects={filtered} grouped={grouped} onGroupingChange={setGrouped} gridClassName="project-grid" startExpanded={Boolean(groupFilter)} imageFor={(project: any) => project.latest_image_id ? `/api/staff/projects/progress-images/${project.latest_image_id}` : undefined} renderProject={project => {
         const displayedProgress = projectProgress(project);
         const canUpdateProgress = project.status !== "cancelled" && Boolean(user);
         return <article className="project-card" key={project.id}>
